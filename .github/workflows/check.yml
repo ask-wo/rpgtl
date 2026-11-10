@@ -1,0 +1,97 @@
+name: Check
+
+# A run on a pull request can only read caches written for that pull request or on main, so each
+# push to main runs this too, to fill the caches every pull request starts from. It skips the checks.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: check-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container:
+      image: node:26-trixie@sha256:6d2c7d5d074bf72f81ddc252b4fbb5d625bc028eeda49cb4b8c2ff8eda1ee617
+    defaults:
+      run:
+        # As the image's unprivileged user: root passes the permission checks some tests expect to fail.
+        shell: setpriv --reuid node --regid node --init-groups env HOME=/home/node sh -e {0}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read Playwright's version
+        id: playwright
+        shell: sh -e {0}
+        run: echo "version=$(node -p 'require("./apps/web/package.json").devDependencies.playwright')" >>"$GITHUB_OUTPUT"
+      # The libraries Chromium needs for the page's component tests and the end-to-end tests; installing them needs root.
+      # The e2e tests start games in NW.js on a display of their own. This runs in the background
+      # while the next steps install pnpm and the dependencies; a step before the checks waits for it.
+      - name: Start installing Chromium's libraries and xvfb
+        if: github.event_name == 'pull_request'
+        shell: sh -e {0}
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          (
+            set +e
+            npx -y playwright@${{ steps.playwright.outputs.version }} install-deps chromium-headless-shell &&
+              apt-get install -qq -y --no-install-recommends xvfb &&
+              mkdir -m 1777 -p /tmp/.X11-unix
+            echo "$?" >/tmp/apt-status
+          ) >/tmp/apt.log 2>&1 </dev/null &
+      - name: Install pnpm
+        shell: sh -e {0}
+        run: npm install -g --silent pnpm@12.15.0
+      - uses: actions/cache@v4
+        with:
+          path: /home/node/.local/share/pnpm/store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-
+      - uses: actions/cache@v4
+        id: browser
+        with:
+          path: /home/node/.cache/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}
+      - uses: actions/cache@v4
+        id: nwjs
+        with:
+          path: /home/node/.cache/rpgtl/nwjs
+          key: nwjs-${{ hashFiles('apps/server/src/nwjs/Nwjs.ts') }}
+      # The Node.js the Linux download carries, which the e2e tests run.
+      - uses: actions/cache@v4
+        with:
+          path: dist/node-cache
+          key: node-${{ hashFiles('apps/server/src/buildArchive.ts') }}
+      - name: Hand the checkout and caches to the image's user
+        shell: sh -e {0}
+        run: mkdir -p /home/node/.cache /home/node/.local dist && chown -R node:node . /home/node/.cache /home/node/.local
+      - name: Install dependencies
+        # Without --store-dir, pnpm keeps its store on the checkout's filesystem, outside the cached folder.
+        run: pnpm install --frozen-lockfile --silent --store-dir /home/node/.local/share/pnpm/store
+      - name: Download Chromium
+        if: steps.browser.outputs.cache-hit != 'true'
+        run: pnpm --filter @rpgtl/web exec playwright install chromium-headless-shell >/dev/null
+      - name: Download NW.js
+        if: steps.nwjs.outputs.cache-hit != 'true'
+        run: pnpm run -s download-nwjs
+      - name: Finish installing Chromium's libraries and xvfb
+        if: github.event_name == 'pull_request'
+        timeout-minutes: 5
+        run: |
+          until [ -s /tmp/apt-status ]; do sleep 1; done
+          [ "$(cat /tmp/apt-status)" = 0 ] || { cat /tmp/apt.log; exit 1; }
+      - name: Check and test
+        if: github.event_name == 'pull_request'
+        run: sh .githooks/checks.sh --no-format
+      - name: Test the Linux download end to end
+        if: github.event_name == 'pull_request'
+        run: pnpm run -s e2e:archive
+      - name: Build the Linux download, to cache the Node.js it carries
+        if: github.event_name == 'push'
+        run: pnpm run -s build-archive --target linux-x64

@@ -1,0 +1,17 @@
+packages:
+  - .
+  - apps/*
+  - packages/*
+# Claude Code and Codex are the user's own installs, which RPGTL finds on PATH.
+ignoredOptionalDependencies:
+  - "@anthropic-ai/claude-agent-sdk-*"
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@1.4.0
+  vite-plus: 1.4.0
+overrides:
+  vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"

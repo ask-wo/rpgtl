@@ -1,0 +1,6 @@
+[project]
+name = "rpgtl-image-text-convert-ocr"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+# paddle2onnx fails to load with paddlepaddle 3.2 and later on Windows (Paddle2ONNX issue 1615).
+dependencies = ["paddleocr==3.7.0", "paddlepaddle==3.1.1", "paddle2onnx==2.1.0"]

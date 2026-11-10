@@ -1,0 +1,43 @@
+{
+  "name": "rpgtl",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Play Chinese RPG Maker MV and MZ games in English",
+  "license": "MIT",
+  "repository": "github:ask-wo/rpgtl",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env apps/server/src/main.ts",
+    "dev": "RPGTL_DEV=1 node --env-file-if-exists=.env apps/server/src/main.ts",
+    "test": "vp test",
+    "e2e": "playwright test -c e2e",
+    "e2e:archive": "sh scripts/e2e-archive.sh",
+    "download-nwjs": "node apps/server/src/downloadNwjs.ts",
+    "compare": "node apps/server/src/bin.ts compare",
+    "codex": "node apps/server/src/bin.ts codex",
+    "audit": "node apps/server/src/bin.ts audit",
+    "lint": "effect-tsgo --tsrs-lint vp lint",
+    "format": "vp fmt",
+    "check": "sh scripts/static-checks.sh",
+    "prepare": "git config core.hooksPath .githooks",
+    "llama-server": "node apps/server/src/bin.ts llama-server",
+    "build-archive": "node apps/server/src/buildArchive.ts",
+    "checks": "sh .githooks/checks.sh",
+    "typecheck": "effect-tsgo tsrs --noEmit && effect-tsgo tsrs --noEmit -p e2e && vp run --filter './apps/*' --filter './packages/*' --fail-if-no-match typecheck",
+    "effect-docs": "sh scripts/effect-docs.sh",
+    "decode-state": "node apps/server/src/decodeState.ts",
+    "lint:list": "sh scripts/lint-list.sh"
+  },
+  "devDependencies": {
+    "@effect/tsgo": "0.67.5",
+    "@oxlint/plugins": "1.89.0",
+    "@playwright/test": "1.64.1",
+    "@types/node": "^26.6.6",
+    "knip": "^6.44.1",
+    "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=26"
+  },
+  "packageManager": "pnpm@12.15.0"
+}

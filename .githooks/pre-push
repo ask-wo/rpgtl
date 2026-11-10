@@ -1,0 +1,15 @@
+#!/bin/sh
+# Runs checks.sh on each commit being pushed, as it is committed: in this checkout when it is the
+# checked-out commit and nothing else changed, else in the worktree checks-commit.sh keeps.
+# Commits before it on the branch aren't checked one by one.
+set -e
+zero=0000000000000000000000000000000000000000
+while read -r _ local _ _; do
+  [ "$local" = "$zero" ] && continue
+  if [ "$local" = "$(git rev-parse HEAD)" ] && git diff --quiet HEAD -- . ':!*.md' &&
+    [ -z "$(git ls-files --others --exclude-standard -- . ':!*.md')" ]; then
+    .githooks/checks.sh --no-format </dev/null
+  else
+    .githooks/checks-commit.sh "$local" </dev/null
+  fi
+done

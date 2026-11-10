@@ -1,0 +1,39 @@
+name: Release
+
+# A pushed tag such as v0.2.0 builds the portable downloads and attaches them to a draft release,
+# which goes public once someone publishes it on GitHub.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container:
+      image: node:26-trixie@sha256:6d2c7d5d074bf72f81ddc252b4fbb5d625bc028eeda49cb4b8c2ff8eda1ee617
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The release notes list the commits since the previous tag.
+          fetch-depth: 0
+      - run: git config --global --add safe.directory "$PWD"
+      - name: Check the tag against package.json
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "The tag $GITHUB_REF_NAME doesn't match package.json's version $version." >&2; exit 1; }
+      - run: apt-get update -qq && apt-get install -qq -y zip unzip gh >/dev/null
+      - run: npm install -g --silent pnpm@12.15.0
+      - run: pnpm install --frozen-lockfile --silent
+      - run: pnpm run -s build-archive --target linux-x64 && pnpm run -s build-archive --target win-x64
+      - name: Create the draft release and attach the downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          previous=$(git describe --tags --abbrev=0 --match 'v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          git log --no-merges --format='- %s' "${previous:+$previous..}$GITHUB_REF_NAME" > /tmp/notes.md
+          gh release create "$GITHUB_REF_NAME" --draft --title "RPGTL $GITHUB_REF_NAME" --notes-file /tmp/notes.md \
+            dist/*.tar.gz dist/*.zip

@@ -1,0 +1,162 @@
+import { assert, it } from "@effect/vitest";
+import type { Catalog } from "@rpgtl/contracts";
+import {
+  assetNames,
+  bootEngines,
+  entryTranslation,
+  imageNames,
+  imageReferences,
+  inspectedCatalog,
+  mediaWarnings,
+  missingImages,
+  newEntry,
+} from "./index.ts";
+
+it("the engine the boot code loads wins over the other engine's core files", () => {
+  assert.deepStrictEqual(bootEngines('<script src="js/rpg_core.js"></script>', ""), ["MV"]);
+  assert.deepStrictEqual(bootEngines("", 'Utils.RPGMAKER_NAME = "MV"'), ["MV"]);
+  assert.deepStrictEqual(bootEngines("", 'loadScript("js/rmmz_core.js")'), ["MZ"]);
+  assert.deepStrictEqual(bootEngines('<!-- <script src="js/rpg_core.js"> -->', ""), ["MZ", "MV"]);
+});
+
+it("audio and video NW.js can't play are named unless a counterpart it can play is there", () => {
+  const files = ["audio/bgm/Town.m4a", "audio/bgm/Town.ogg", "audio/se/Door.M4A", "movies/Op.mp4"];
+  assert.deepStrictEqual(mediaWarnings(files), [
+    "audio/se/Door.M4A has no .ogg counterpart; NW.js cannot play AAC audio.",
+    "movies/Op.mp4 has no .webm counterpart; NW.js cannot play H.264 video.",
+  ]);
+});
+
+it("an image is missing unless its folder has it, in any case, and faces name the faces asked for", () => {
+  const map = {
+    events: [
+      null,
+      {
+        pages: [
+          {
+            image: { characterName: "Hero" },
+            list: [
+              { code: 101, parameters: ["$Arlene", 3, 0, 2] },
+              { code: 231, parameters: [1, "Title"] },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const actors = [null, { faceName: "$Arlene", faceIndex: 1, characterName: "hero" }];
+  const references = [
+    ...imageReferences("Map001.json", map),
+    ...imageReferences("Actors.json", actors),
+  ];
+  const folders = new Map([
+    ["img/characters/", imageNames(["HERO.png"])],
+    ["img/faces/", imageNames(["Actor1.png", "Actor1.rpgmvp", "notes.txt"])],
+    ["img/pictures/", imageNames(["Title.png_"])],
+  ]);
+  assert.deepStrictEqual(missingImages(references, folders), [
+    { path: "img/faces/$Arlene", files: ["Actors.json", "Map001.json"] },
+  ]);
+});
+
+it("asset names are the paths below img, audio and movies, with and without their folders", () => {
+  assert.deepStrictEqual(
+    [...assetNames(["img/pictures/合成物品.png", "audio/se/a.b.ogg", "js/main.js"])],
+    ["pictures/合成物品", "合成物品", "img/pictures/合成物品", "se/a.b", "a.b", "audio/se/a.b"],
+  );
+});
+
+it("inspecting again keeps the saved translations and settings of the entries still there", () => {
+  const kept = newEntry("Map001.json", ["events", "1", "name"], "客人");
+  const gone = newEntry("Map001.json", ["events", "2", "name"], "旧");
+  const added = newEntry("Map001.json", ["events", "3", "name"], "新");
+  const game = { id: "g", title: "G", engine: "MV" as const };
+  const codex = {
+    translator: "codex",
+    model: "gpt-6.1-terra",
+    glossaryModel: "gpt-6.1-sol",
+  } as const;
+  const previous: Catalog = {
+    version: 1,
+    game,
+    entries: [
+      {
+        ...kept,
+        translation: {
+          guess: { value: "Visitor", run: "2026-10-30T10:00:00.000Z", flag: "x" },
+          user: "Guest",
+        },
+        previous: "Host",
+      },
+      { ...gone, translation: { guess: { value: "Old", run: "2026-10-29T10:00:00.000Z" } } },
+    ],
+    glossary: [
+      { source: "客人", translation: { user: "Guest" }, kind: { guess: { value: "word" } } },
+    ],
+    translate: false,
+    language: "korean",
+    imageFont: "serif",
+    lastRun: "2026-10-30T10:00:00.000Z",
+    runs: { "2026-10-30T10:00:00.000Z": codex, "2026-10-29T10:00:00.000Z": codex },
+  };
+  assert.deepStrictEqual(inspectedCatalog(game, [kept, added], previous), {
+    version: 1,
+    game,
+    entries: [
+      {
+        ...kept,
+        translation: {
+          guess: { value: "Visitor", run: "2026-10-30T10:00:00.000Z", flag: "x" },
+          user: "Guest",
+        },
+        previous: "Host",
+      },
+      added,
+    ],
+    glossary: previous.glossary,
+    translate: false,
+    language: "korean",
+    imageFont: "serif",
+    lastRun: "2026-10-30T10:00:00.000Z",
+    runs: { "2026-10-30T10:00:00.000Z": codex },
+  });
+  assert.deepStrictEqual(inspectedCatalog(game, [kept], undefined).entries, [kept]);
+  assert.isFalse(inspectedCatalog(game, [kept], undefined).translate);
+});
+
+it("inspecting again keeps an image text the user corrected", () => {
+  const game = { id: "0123456789abcdef0123", title: "雨", engine: "MV" as const };
+  const read = { ...newEntry("img/pictures/Sign", ["lines", "0"], "开使"), translation: {} };
+  const previous: Catalog = {
+    version: 1,
+    game,
+    entries: [{ ...read, source: "开始", readerText: "开使", translation: { user: "Start" } }],
+    glossary: [],
+    translate: true,
+  };
+  assert.deepStrictEqual(inspectedCatalog(game, [read], previous).entries, previous.entries);
+});
+
+const line = (index: string, source: string) =>
+  newEntry("Map001.json", ["events", "1", "pages", "0", "list", index], source);
+
+it("a line that moved keeps the English of its Chinese, unless the old lines gave that Chinese different English", () => {
+  const game = { id: "g", title: "G", engine: "MV" as const };
+  const previous: Catalog = {
+    version: 1,
+    game,
+    entries: [
+      { ...line("1", "走吧"), translation: { user: "Let's go" } },
+      { ...line("2", "好"), translation: { user: "OK" } },
+      { ...line("3", "好"), translation: { user: "Fine" } },
+    ],
+    glossary: [],
+    translate: true,
+  };
+  assert.deepStrictEqual(
+    inspectedCatalog(game, [line("2", "走吧"), line("4", "好")], previous).entries.map(
+      entryTranslation,
+    ),
+    ["Let's go", ""],
+  );
+});

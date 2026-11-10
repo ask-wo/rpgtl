@@ -1,0 +1,96 @@
+# Architecture
+
+RPGTL is a local, single-user app: an Effect 4 server on Node 26 that serves a React page, the command-line tools, and the scripts that run inside the game. pnpm runs the workspace, and Vite+ formats, lints, builds and tests it.
+
+## Layout
+
+- `apps/server`: the server and the command-line tools.
+- `apps/web`: the page.
+- `packages/contracts`: the schemas and the API definition, shared by every side.
+- `packages/domain`: pure logic (extraction, applying translations, checks, layout, pronouns).
+- `packages/game`: the scripts inside the game (runtime, map view, NW.js hook).
+
+The server's areas are folders in `apps/server/src`:
+
+- `games/`: the game list, catalogs, the folder listing behind the page's folder browser.
+- `state/`: the state folder.
+- `auth/`: the page's token and the local-request check.
+- `translation/`: translators, runs and their logs.
+- `localModels/`: free memory and llama-server.
+- `imageText/`: reading the text in images.
+- `runs/`: which kind of run may start.
+- `activity/`: one stream of a game's runs, image reading and NW.js for its page.
+- `nwjs/`: the NW.js download and launching games in it.
+- `play/`: the games' files as the browser plays them, translated while the game's translation switch is on.
+- `settings/`: the page's saved choices.
+- `frontend/`: building and serving the page and the game scripts.
+- `audit/`: what to look at in a game's translations and runs.
+- `comparison/`: translator setups run side by side on a sample of a game.
+
+`src/http.ts` puts the routes together, `src/server.ts` the server, which `src/main.ts` starts in a checkout and `src/portable.ts` in the portable download, and `src/bin.ts` the command-line tools, which each area defines in its `cli.ts`.
+
+## Rules the checks enforce
+
+- No `any`, non-null `!` or unchecked `as`; no unused files, exports or dependencies (Knip).
+- In server code: no `async`/`await` or `try`/`catch`, no `Date.now` or `new Date` (read time from `Clock`), no `process.env` (read settings through `Config`).
+- Tests don't sleep or use real timers: they wait on a `Deferred` or `Queue`, or drive time with `TestClock`.
+- `lint/plugin.ts` checks the mechanical Effect conventions (namespace imports, layers exported from their module, tests next to their modules, error messages not copied from a cause, `catchTags`, `Effect.fn`). `@effect/tsgo`'s rules catch mistakes that need types, such as an Effect that is never yielded. The game scripts aren't Effect code; the root `vite.config.ts` lists the rules `packages/game` skips.
+
+## Server
+
+- **Effect services wherever I/O happens.** Files, processes, HTTP, settings, time and logs go through Effect's services, so tests swap them for fakes with layers instead of fake servers or module mocks. Pure logic stays plain functions in `packages/domain`: Effect starts where I/O does.
+- **Effect is pinned exactly** (4.1.2), since its HTTP and AI modules may break in minor releases.
+- **Schemas at every boundary.** Every JSON route is an `HttpApi` endpoint with its schemas in `packages/contracts`; the page, the game scripts and the games' files are plain `HttpRouter` routes. Every state file, request body and model answer is decoded with a schema, so a file that doesn't decode is an error naming it. Each failure is a tagged error, which the API turns into the status and message the page shows.
+- **Storage is JSON files in the state folder.** Each game's state is one document, with no queries across games, so a database would buy nothing. The catalog is also the export and import format, and the NW.js hook reads it without the server. A game's files are in `games/<game id>/` (`gameFiles` names them); `games.json` lists the games.
+- **A guess and the player's value are kept side by side.** An entry's English and a term's English, kind and pronoun are each a `Guessed` value: the `guess` a run or rule gave, and the `user` value that replaces it. Runs write only guesses and the page only user values, so a run never overwrites the player's English and the audit can compare the two. `packages/domain/src/guesses.ts` reads the value in use.
+- **Old state is upgraded when RPGTL starts.** A player updates by unpacking a new download over their old state folder and settings. `version.json` holds each folder's format; opening it runs the steps to the latest format (`state/upgrade.ts`), after copying the files they change to `old/v<n>/`. A step reads plain JSON with schemas of its own, so it keeps working as the contracts change. A folder from a newer RPGTL is refused, because an older RPGTL would drop the fields it doesn't know.
+- **A game keeps the id it got when first opened.** The id names its state folder and its addresses. An id made from the folder path would change when the folder moves, so opening a folder looks it up in `games.json` and a new game gets a random id. A removed game stays in `games.json`, marked, so opening it again finds its state.
+- **The id isn't what makes two folders the same game.** A new folder whose MZ game id, or encryption key and title, matches a saved game is taken for another version of it, and a title alone only suggests it; a different MZ game id rules a match out, since titles repeat. Either way the player chooses whether to replace the saved game, which keeps its id and the translations of unchanged lines, or to keep both. How reliably developers keep these across versions isn't checked against real games.
+- **Opening a listed game doesn't read its folder.** A rescan takes seconds for a large game and games rarely change in place, so only opening the folder again rescans it. The list only checks that each game's `data/System.json` is still there.
+- **Every translator is an Effect AI `LanguageModel`.** A run asks through `generateObject` with the answer's schema, and a translator's own settings (Ollama's `num_ctx`, Claude's or Codex's effort) are provider config set per request. Ollama, Claude and Codex are RPGTL's own providers: the OpenAI-compatible one doesn't carry Ollama's options, and Claude and Codex run on their SDK and CLI to use the player's subscription. llama-server uses `@effect/ai-openai-compat`. Two traps:
+  - An answer that doesn't decode fails as `StructuredOutputError`, not `InvalidOutputError`, so a retry on a bad answer checks that reason.
+  - The OpenAI-compatible provider turns a `Schema.Tuple` into an object with keys `"0"`, `"1"`…, so answer schemas use arrays with a length check.
+- **Runs.**
+  - Each run is one fiber in a `FiberMap` keyed by game, which **Stop** interrupts. Its scope holds the game (so inspecting or importing doesn't write it meanwhile) and the translator's models until it ends. Effect 4's `PartitionedSemaphore` shares one pool of permits across keys, so it can't serve as a lock per game.
+  - A translator's settings become a `Translator`, so the passes, retries and checks are the same code for every translator.
+  - Translation and image reading take turns across all games (`runs/RunKinds`), since both load models into the same memory. Translation runs go on together, except two with a local model: one ending would unload the other's Ollama model, and each llama-server sizes itself as if alone. Images are read in one game at a time, since all games share one image reader process.
+  - A run that can't start yet waits in the order runs were asked for, inside its fiber, so **Stop** ends it like a running one. A waiting run doesn't hold its game, which stays editable, but keeps it from being forgotten. It reads the settings when asked for, since the queue needs to know whether it uses a local model. The queue lives in memory: restarting RPGTL drops waiting runs.
+  - Progress is a `SubscriptionRef`; `Activity` merges runs, image reading and NW.js into the one stream a game's page follows over Server-Sent Events.
+- **Control codes reach a model as placeholders, pauses as `⏸`.** Sending the codes themselves let models change or drop them, and translating the pieces between them broke sentences apart, so codes inside a line go as `{1}`, `{2}`… that the answer must keep. A color at an edge goes too when the line has another inside, so the model sees both ends of a colored span. A placeholder where a pause stood read to models as a missing word, so pauses go as `⏸`, which the prompt calls a pause that shows nothing. Models drop and add markers, so the answer's markers are matched to the pauses by place, and without markers the pauses are placed by lining up punctuation (`packages/domain/src/pauses.ts`).
+- **Image text.**
+  - `ImageReaderSetup` installs the image reader (`apps/image-reader`) when the player asks: a pinned uv installs Python and the packages from its lockfile, with the ONNX Runtime build for the computer's GPU, so players need neither Docker nor Python. Its download bar is exact: the total comes from `uv sync --dry-run`, and the bytes done from a local proxy, since uv reports a download only once it ends.
+  - The reader stays Python because its CUDA build was measured faster than ONNX Runtime from Node, and WebGPU ran out of memory on large images. It runs PaddleOCR's models and LaMa on ONNX Runtime, since Paddle and torch take about 13 GB with CUDA.
+  - Korean needs its own recognizer. Few players need it, so it is added only when a Korean game's images are read.
+  - Erasing inpaints a line's whole box, then erases only the pixels that differ clearly from that guess, so art behind the letters stays; picking letters by color or stroke shape failed on game art.
+  - Tilted and vertical text keeps its direction: the reader gives its block an `angle`, and the lettering draws the English turned by it, which keeps the original's size.
+  - The backup reader is a `LanguageModel` on Ollama or llama-server. `ImageReading` stops the image reader before it starts, so the two never share memory.
+  - An image entry's id hashes its lines and text. A typed correction replaces `source` and keeps the read text as `readerText`, so reading again finds it. When reading again changes an id, the new entry takes the translation of the dropped entry with the same text, or else the one it overlaps most, flagged.
+- **Local processes.** `LlamaServer` starts Ollama's bundled llama-server under a systemd-run memory limit, so it refuses on Windows, which has no such limit. RPGTL places the experts in RAM itself, as llama.cpp's `--fit` would, so it knows the RAM the limit needs and can refuse or wait before anything loads. Its VRAM estimate is measured on one model, so a start that runs out of VRAM tries again with one more layer's experts in RAM. It runs in its run's scope, so it stops when the run ends or RPGTL exits.
+- **NW.js reads the catalog from disk.** In RPGTL's NW.js, the injected hook reads `games/<id>/catalog.json` and translates the data files in the game window; in the browser, the server does. Asking the server would stop the game at its next map change once RPGTL stopped, and writing translated copies at launch would make every change wait for a relaunch. Catalog writes are atomic, so reading is safe. The hook reads it once per window load, so F5 picks up new translations and later maps don't mix old and new English.
+  - So NW.js outlives RPGTL: it writes its own log (`--log-file`), and RPGTL `unref`s it. A game whose last start still runs isn't started again, since that would empty the log and rebuild the app folder; RPGTL knows only of starts since it started.
+  - Effect's spawner hides a child's windows on Windows by default, and NW.js's window then stays blank, so it passes `windowsHide: false`.
+  - Each game gets its own profile folder in RPGTL's state folder (`--user-data-dir`); without one, NW.js makes folders per game in `~/.config` and `~/.cache`.
+- **NW.js opens the game where it is.** The app folder RPGTL writes holds only a `package.json`, whose `main` is the game's `index.html`, and the game's icon, which NW.js loads only from there. The hook moves the process into the game's folder, where plugins read files by relative paths, and points `process.mainModule.filename` at `index.html`, next to which the engine saves. A folder of links to the game's files would need admin rights or Developer Mode on Windows.
+- **Command-line tools.** A handler calls its area's service and fails with its errors, which `bin.ts` prints by message. An `effect/cli` `CliError` from a handler prints a stack trace instead, so options are checked in the flag (`Flag.mapEffect`) or `Command.validate`. A `Flag.Boolean` is required unless it has `Flag.withDefault(false)`.
+- **The portable download is one bundle with its own Node.js.** `src/buildArchive.ts` bundles the server and the tools with every dependency, adds the built page and scripts, a pinned Node.js and a launcher. It doesn't carry Vite: only the Vite layer imports it, dynamically. The launcher sets `RPGTL_DIR`, since a download has no working folder of its own.
+- **Claude Code and Codex are the player's own installs** on `PATH`, not the binaries their npm packages bring, which are 300 to 450 MB per system.
+- **No auth service, database, durable workflows or error tracking.** RPGTL listens on 127.0.0.1 with a per-start token. A stopped or crashed run resumes from its saved batches.
+
+## Page
+
+- A React app with a route per game and section ([TanStack Router](https://tanstack.com/router), with typed search params), so reloading keeps the game, section and filters open.
+- Data through Effect Atom only (`@effect/atom-react`, `AtomHttpApi` from the shared `HttpApi`), no TanStack Query: query atoms keep the endpoints' typed errors, `reactivityKeys` refresh what a save changes, and an atom can hold an SSE stream, so progress and counts derived from the catalog are atoms too.
+- Progress arrives as Server-Sent Events on the same `HttpApi`, not RPC or WebSockets: every push goes from the server to the page, and the command-line tools and verify-rpgtl examples call the same routes. The client reads SSE through `fetch`, so the per-start token header still works.
+- The page follows a game's catalog over SSE (`catalogs.changes`) instead of reading it again after each write: the server sends the whole catalog and its findings first, then only the entries each write changed with what the checks find in the catalog, and the whole catalog again when it has other entries or they moved. The checks run again only on the changed entries while the glossary stays the same. A run writes about every second on a fast translator, and a big game's catalog is 14 MB whose checks take a third of a second, so reading it all again kept the page and the server busy. `Catalogs` keeps the last catalog written of each game in memory to tell what changed, until the last page following it leaves.
+- Components are shadcn/ui on Base UI with Tailwind, with shadcn's own components and theme.
+- The translation switch lives in the catalog file, since NW.js reads the catalog from disk; the runtime and the NW.js hook read it.
+
+## Game scripts
+
+The scripts in `packages/game` are plain TypeScript: they patch the game engine synchronously and do no heavy work while the game starts. The `packages/domain` code they import may use Effect; minified, `Schema` and `Result` add about 80 KB to a bundle and about 5 ms to the game's start. Vite builds each script into one self-contained file with fonts inlined, and minifies the NW.js hook. The server's `frontend/Frontend` builds the page and these scripts on their first request; with `RPGTL_DEV=1` it serves the page through Vite's dev server and builds the scripts again on every request. The portable download serves them as built by `buildArchive.ts`.
+
+**Translated text keeps the game's font size and shrinks only to fit.** English needs more room than the Chinese it replaces. Drawing text smaller everywhere, or giving each message the largest size its own length allows, would make sizes jump between neighbouring messages and make text hard to read. So translated text starts at the size the game uses and gets smaller only when that keeps it on one page or inside its frame, and only by a few pixels (`messageFontShrink` in `packages/game/src/runtime/`). Text that still doesn't fit continues on more pages, its lines shared evenly across them. A new page resets the font and colour in both engines, so each page RPGTL adds starts with the blank rows, font size and colour the message had there. For image text, a tighter character limit asks the translator for shorter words instead of drawing smaller letters.
+
+## Tests
+
+Tests use `@effect/vitest` (`it.effect`, `assert`, `TestClock`). API handlers are tested through `HttpApiTest`, the page through Vitest's browser project (`web`), and the whole app through Playwright (`e2e/`) on games written by `packages/game/src/testUtils/fixture.ts` and `mvGame.ts`, in CI.

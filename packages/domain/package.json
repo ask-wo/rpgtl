@@ -1,0 +1,23 @@
+{
+  "name": "@rpgtl/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./testUtils/gguf": "./src/testUtils/gguf.ts"
+  },
+  "scripts": {
+    "typecheck": "effect-tsgo tsrs --noEmit"
+  },
+  "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "@rpgtl/contracts": "workspace:*",
+    "effect": "4.1.2",
+    "pinyin-pro": "^3.29.4"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.1.2"
+  }
+}

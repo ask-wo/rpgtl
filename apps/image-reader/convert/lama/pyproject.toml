@@ -1,0 +1,13 @@
+[project]
+name = "rpgtl-image-text-convert-lama"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["torch==2.9.0", "onnx==1.23.2", "onnxscript==0.7.2"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

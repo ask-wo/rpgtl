@@ -1,0 +1,62 @@
+name: Bug report
+description: Something in RPGTL doesn't work as it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: RPGTL version
+      description: The version in your download's name, such as 0.1.0, or the commit if you run RPGTL from a checkout.
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: System
+      options: [Windows, Linux]
+    validations:
+      required: true
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Engine
+      description: RPGTL shows it next to the game's title.
+      options: [MV, MZ]
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where it happened
+      options:
+        - Playing with Play (NW.js)
+        - Playing with Play in browser
+        - Translating
+        - Reading image text
+        - Somewhere else on RPGTL's page
+    validations:
+      required: true
+  - type: dropdown
+    id: translator
+    attributes:
+      label: Translator
+      options: [Claude, Codex, Ollama, llama-server, None yet]
+  - type: input
+    id: game
+    attributes:
+      label: Game
+      description: The game's title and where it's from, if you can share it.
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        For a problem while playing with Play, the file `games/<game id>/logs/nwjs.log` in RPGTL's folder (see "Where things are kept" in the README). For a translation run, the newest `translation-*.log` in the same folder. A translation log holds the game's text, so leave out what you don't want public.
+      render: text

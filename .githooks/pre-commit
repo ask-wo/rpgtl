@@ -1,0 +1,10 @@
+#!/bin/sh
+# A branch whose pushed commits are already in main was merged; new work goes on a new branch.
+branch=$(git symbolic-ref --quiet --short HEAD || true)
+if [ -n "$branch" ] && [ "$branch" != main ] &&
+  git rev-parse --quiet --verify "origin/$branch" >/dev/null &&
+  git merge-base --is-ancestor "origin/$branch" origin/main; then
+  echo "pre-commit: $branch is already merged into main; start a new branch for this change." >&2
+  exit 1
+fi
+exec pnpm exec vp staged
