@@ -18,6 +18,7 @@ export const gameFiles = (id: string) => {
     erasedImages: `${folder}/images`,
     /** The entries `pnpm run compare` translates, kept so later comparisons use the same text. */
     samples: `${folder}/samples.json`,
+    playtime: `${folder}/playtime.json`,
     reports: `${folder}/reports`,
     logs: `${folder}/logs`,
     /** The folder NW.js opens, with its `package.json` pointing at the game's index.html. */

@@ -29,6 +29,7 @@ import * as LlamaServer from "./localModels/LlamaServer.ts";
 import * as Launches from "./nwjs/Launches.ts";
 import * as Nwjs from "./nwjs/Nwjs.ts";
 import * as Play from "./play/Play.ts";
+import * as Playtime from "./play/Playtime.ts";
 import * as Settings from "./settings/Settings.ts";
 import * as Frontend from "./frontend/Frontend.ts";
 import * as AgentModels from "./translation/AgentModels.ts";
@@ -47,7 +48,9 @@ const port = Config.schema(
 /** Every service, each built once, with the page and game scripts from `frontend`. */
 const services = <E, R>(frontend: Layer.Layer<Frontend.Frontend, E, R>) =>
   Activity.layer.pipe(
-    Layer.provideMerge(Layer.mergeAll(Runs.layer, ImageReading.layer, Launches.layer, Play.layer)),
+    Layer.provideMerge(
+      Layer.mergeAll(Runs.layer, ImageReading.layer, Launches.layer, Play.layer, Playtime.layer),
+    ),
     Layer.provideMerge(
       Layer.mergeAll(Catalogs.layer, RunLogs.layer, VisionModel.layer, Nwjs.layer, frontend),
     ),

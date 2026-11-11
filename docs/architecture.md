@@ -84,6 +84,7 @@ The server's areas are folders in `apps/server/src`:
 - The page follows a game's catalog over SSE (`catalogs.changes`) instead of reading it again after each write: the server sends the whole catalog and its findings first, then only the entries each write changed with what the checks find in the catalog, and the whole catalog again when it has other entries or they moved. The checks run again only on the changed entries while the glossary stays the same. A run writes about every second on a fast translator, and a big game's catalog is 14 MB whose checks take a third of a second, so reading it all again kept the page and the server busy. `Catalogs` keeps the last catalog written of each game in memory to tell what changed, until the last page following it leaves.
 - Components are shadcn/ui on Base UI with Tailwind, with shadcn's own components and theme.
 - The translation switch lives in the catalog file, since NW.js reads the catalog from disk; the runtime and the NW.js hook read it.
+- Playtime is counted by the game runtime and kept in `games/<id>/playtime.json`. In NW.js the hook adds to that file itself, since the game may outlive RPGTL. In the browser the runtime posts to `/playtime/<id>`, outside the `HttpApi`: the game page gets no token, because the game's own plugins would read it too. That route checks the request's `Origin` instead.
 
 ## Game scripts
 

@@ -202,6 +202,7 @@ const make = Effect.gen(function* () {
       erased: path.join(state.root, gameFiles(game.id).erasedImages),
       images: path.join(state.root, gameFiles(game.id).imageResults),
       log,
+      playtime: path.join(state.root, gameFiles(game.id).playtime),
       root: game.root,
     };
     const built = yield* Effect.all({

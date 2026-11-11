@@ -96,6 +96,10 @@ export interface RpgMaker {
   // Set by RPGTL before this script from the sharp pixels and sharp text settings.
   rpgtlSharpPixels?: boolean;
   rpgtlSharpText?: boolean;
+  // Set by the NW.js hook, which saves playtime itself because NW.js outlives RPGTL.
+  rpgtlRecordPlaytime?: (seconds: number) => void;
+  Input?: { update(): void; _latestButton: string | null };
+  addEventListener(type: string, listener: () => void): void;
   devicePixelRatio?: number;
   requestAnimationFrame(callback: () => void): unknown;
   performance: { now(): number };

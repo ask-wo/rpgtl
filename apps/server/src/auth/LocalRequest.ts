@@ -21,6 +21,8 @@ const hostRefusal = HttpServerResponse.jsonUnsafe(
 );
 
 const ownHost = Effect.map(listeningPort, (port) => `127.0.0.1:${port}`);
+/** The origin of RPGTL's own page and of the games it plays in the browser. */
+export const ownOrigin = Effect.map(ownHost, (host) => `http://${host}`);
 
 /**
  * Refuses every request, the page and the games' files too, whose `Host` isn't RPGTL's own, so a
@@ -42,7 +44,7 @@ export const layer = Layer.effect(
   LocalRequest,
   Effect.gen(function* () {
     const token = yield* SessionToken.SessionToken;
-    const origin = `http://${yield* ownHost}`;
+    const origin = yield* ownOrigin;
     return LocalRequest.of((httpEffect) =>
       Effect.gen(function* () {
         const { headers } = yield* HttpServerRequest.HttpServerRequest;

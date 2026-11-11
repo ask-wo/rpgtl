@@ -5,6 +5,7 @@ import { mountPanel } from "./panel.ts";
 import { gameId, rm } from "./engine.ts";
 import { hookClassNames, hookHiddenText, hookItemNames, hookShortNames } from "./fittedText.ts";
 import { hookImageText, hookMissingImages } from "./images.ts";
+import { hookPlaytime } from "./playtime.ts";
 import { hookSaveText } from "./saveText.ts";
 import { hookSharpPixels, hookSharpText } from "./sharpRendering.ts";
 import { hookSkip } from "./skip.ts";
@@ -33,6 +34,7 @@ function install() {
     hookItemNames();
     hookSkip();
     hookStretch();
+    hookPlaytime();
     return run.apply(this, args);
   };
 

@@ -155,6 +155,7 @@ it.live(
           erased: path.join(state, gameFiles(game.id).erasedImages),
           images: path.join(state, gameFiles(game.id).imageResults),
           log,
+          playtime: path.join(state, gameFiles(game.id).playtime),
           root: game.root,
         })};`,
       );

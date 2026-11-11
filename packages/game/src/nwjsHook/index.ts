@@ -1,4 +1,4 @@
-import { Catalog, ImageReadResults, Plugins } from "@rpgtl/contracts";
+import { Catalog, ImageReadResults, Playtime, Plugins } from "@rpgtl/contracts";
 import {
   applyPluginTranslations,
   applyTranslations,
@@ -6,6 +6,7 @@ import {
   decodeGameFile,
   translatedImageNames,
   imageTextHints,
+  addPlaytime,
 } from "@rpgtl/domain";
 import { Result, Schema, Struct } from "effect";
 import type { HookConfig } from "../scripts.ts";
@@ -39,6 +40,7 @@ const decodeCatalog = Schema.decodeUnknownSync(
   ),
 );
 const decodeImages = Schema.decodeUnknownSync(Schema.fromJsonString(ImageReadResults));
+const decodePlaytime = Schema.decodeUnknownSync(Schema.fromJsonString(Playtime));
 // The game window reads the catalog once, so data files loaded later don't mix old and new
 // English. F5 reads it again.
 let loaded: { catalog: ReturnType<typeof decodeCatalog> | undefined } | undefined;
@@ -74,6 +76,22 @@ window.addEventListener("error", (event) =>
     `${event.message} at ${event.filename}:${event.lineno}:${event.colno}${event.error instanceof Error ? ` ${describe(event.error)}` : ""}`,
   ),
 );
+// RPGTL may not run while the game plays, so the game runtime's playtime goes straight to disk.
+(window as { rpgtlRecordPlaytime?: (seconds: number) => void }).rpgtlRecordPlaytime = (seconds) => {
+  try {
+    const saved = fs.existsSync(rpgtl.playtime)
+      ? decodePlaytime(fs.readFileSync(rpgtl.playtime, "utf8"))
+      : undefined;
+    const temporary = `${rpgtl.playtime}.${Math.random().toString(16).slice(2)}.tmp`;
+    fs.writeFileSync(
+      temporary,
+      JSON.stringify(addPlaytime(saved, seconds, new Date().toISOString()), null, 2),
+    );
+    fs.renameSync(temporary, rpgtl.playtime);
+  } catch (error) {
+    log("RPGTL: playtime could not be saved", describe(error));
+  }
+};
 window.addEventListener("unhandledrejection", (event) =>
   logGameError(`Unhandled rejection: ${describe(event.reason)}`),
 );

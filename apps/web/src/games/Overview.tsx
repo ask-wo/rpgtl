@@ -1,9 +1,14 @@
+import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import type { MissingFile } from "@rpgtl/contracts";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { TriangleAlertIcon } from "lucide-react";
+import { useEffect } from "react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { TranslationCard } from "../translation/TranslationCard.tsx";
+import { playtime } from "./atoms.ts";
 import { useGame } from "./GameContext.ts";
+import { playtimeText } from "./playtimeText.ts";
 
 const tools = [
   {
@@ -28,6 +33,7 @@ export function Overview() {
   const game = useGame();
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
+      <Played id={game.id} />
       <MissingFiles
         files={game.missingImages}
         title={(count) =>
@@ -83,6 +89,18 @@ export function Overview() {
       <TranslationCard />
     </div>
   );
+}
+
+function Played({ id }: { id: string }) {
+  const played = AsyncResult.getOrElse(useAtomValue(playtime(id)), () => null);
+  const refresh = useAtomRefresh(playtime(id));
+  // The game plays in another tab or in NW.js, so coming back to RPGTL reads the time again.
+  useEffect(() => {
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [refresh]);
+  if (!played) return null;
+  return <p className="text-sm text-muted-foreground">{playtimeText(played)}</p>;
 }
 
 function MissingFiles({

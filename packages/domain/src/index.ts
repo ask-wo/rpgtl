@@ -41,3 +41,4 @@ export * from "./audit.ts";
 export * from "./coverage.ts";
 export * from "./llamaPlacement.ts";
 export * from "./samples.ts";
+export * from "./playtime.ts";

@@ -31,3 +31,29 @@ for (const engine of ["MV", "MZ"] as const)
     await game.keyboard.press("F8");
     await expect(game.getByRole("heading", { name: "RPGTL game controls" })).toBeVisible();
   });
+
+test("the time a game is played in the browser shows on its overview", async ({
+  page,
+  openGame,
+}) => {
+  const opened = await openGame("MV");
+  const game = await opened.play();
+  await game.clock.install();
+  await game.reload();
+  await game.waitForFunction("window.SceneManager");
+  const reports: number[] = [];
+  const twoReports = new Promise<void>((resolve) =>
+    game.on("response", (response) => {
+      if (!response.url().endsWith(`/playtime/${opened.id}`)) return;
+      reports.push(response.status());
+      if (reports.length === 2) resolve();
+    }),
+  );
+  await game.keyboard.press("ArrowDown");
+  await game.clock.runFor(60_000);
+  await twoReports;
+  expect(reports).toEqual([204, 204]);
+
+  await page.reload();
+  await expect(page.getByText(/^Played 1 min, last on /)).toBeVisible();
+});

@@ -103,6 +103,20 @@ export const ListedGame = Schema.Struct({
 });
 export type ListedGame = typeof ListedGame.Type;
 
+/**
+ * `games/<id>/playtime.json`: how long the game was played, counting only time with its window
+ * focused and the player not idle.
+ */
+export const Playtime = Schema.Struct({
+  seconds: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  /** An ISO time. */
+  lastPlayed: Schema.String,
+});
+export type Playtime = typeof Playtime.Type;
+
+/** Seconds of play the game runtime reports at once; it reports about every 30 seconds. */
+export const PlayedSeconds = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 600 }));
+
 /** A folder on the server's computer, as the page's folder browser shows it. */
 export const FolderListing = Schema.Struct({
   /** The folder's absolute path. */
