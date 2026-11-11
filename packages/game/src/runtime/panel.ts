@@ -108,6 +108,13 @@ export function mountPanel(
     host.addEventListener(type, (event) => event.stopPropagation());
 
   const panel = shadow.querySelector("section")!;
+  // Chrome moves the focus off a hidden control only at its next frame. Until then the listeners
+  // above keep a key pressed right after closing from the game.
+  const hidePanel = () => {
+    panel.hidden = true;
+    const focused = shadow.activeElement;
+    if (focused && "blur" in focused && typeof focused.blur === "function") focused.blur();
+  };
   const $ = <T extends HTMLElement = HTMLInputElement>(id: string) =>
     shadow.getElementById(id) as T;
   const setStatus = (text: string) => ($("status").textContent = text);
@@ -215,8 +222,8 @@ export function mountPanel(
       if (event.code !== "F8") return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      panel.hidden = !panel.hidden;
-      if (panel.hidden) return;
+      if (!panel.hidden) return hidePanel();
+      panel.hidden = false;
       raise();
       $("through").checked = rm.$gamePlayer?.isThrough() ?? false;
       fillItems();
@@ -241,7 +248,7 @@ export function mountPanel(
   );
 
   $("mapView").onclick = () => {
-    panel.hidden = true;
+    hidePanel();
     document.dispatchEvent(new CustomEvent("rpgtl-map-view"));
   };
 
@@ -261,7 +268,7 @@ export function mountPanel(
       setStatus((error as Error).message);
       return;
     }
-    panel.hidden = true;
+    hidePanel();
     SceneManager.push(Scene_Save);
   };
 
