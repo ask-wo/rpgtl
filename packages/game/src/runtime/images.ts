@@ -2,6 +2,7 @@ import type { ImageTextHint } from "@rpgtl/contracts";
 import { letteringFace } from "../letteringFonts.ts";
 import { drawImageText } from "../lettering.ts";
 import { type LoadingBitmap, type TextBitmap, describeError, loadImage, rm } from "./engine.ts";
+import { reportMissing } from "./missingFiles.ts";
 import { renderScale, rescale } from "./sharpRendering.ts";
 
 // A missing image shows as this transparent pixel instead of stopping the game with a loading
@@ -51,7 +52,7 @@ export function hookMissingImages() {
   if (!requestImage || !Decrypter || !ResourceHandler) {
     proto._onError = function (this: LoadingBitmap) {
       if (this._image.src === blankImage) return onError.call(this);
-      reportMissing(this._url);
+      reportMissing(this._url, "image");
       this._image = new Image();
       this._image.onload = this._onLoad.bind(this);
       this._image.onerror = onError.bind(this);
@@ -75,7 +76,7 @@ export function hookMissingImages() {
   };
   proto._onError = function (this: LoadingBitmap) {
     if (this._url === blankImage) return onError.call(this);
-    reportMissing(this._url);
+    reportMissing(this._url, "image");
     this._requestImage!(blankImage);
   };
 }
@@ -161,14 +162,4 @@ export function hookImageText() {
       )
       .then(finish);
   };
-}
-
-// Shown in the NW.js log or the browser console, and briefly on screen.
-let missingListener: ((url: string) => void) | undefined;
-export function onMissingImage(listener: (url: string) => void) {
-  missingListener = listener;
-}
-function reportMissing(url: string) {
-  console.warn(`RPGTL: ${url} could not be loaded, shown blank.`);
-  missingListener?.(url);
 }

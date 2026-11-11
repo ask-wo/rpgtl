@@ -82,7 +82,7 @@ console.error = function (...args: unknown[]) {
   logGameError(args.map(describe).join(" "));
   return consoleError.apply(this, args);
 };
-// RPGTL's runtime warns about images it shows blank, which tells which file a game misses.
+// RPGTL's runtime warns about files it can't load, which tells which file a game misses.
 const consoleWarn = console.warn;
 console.warn = function (...args: unknown[]) {
   if (typeof args[0] === "string" && args[0].startsWith("RPGTL: "))

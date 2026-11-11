@@ -1,5 +1,5 @@
 import { type RpgMaker, rm } from "./engine.ts";
-import { onMissingImage } from "./images.ts";
+import { type MissingKind, onMissingFile } from "./missingFiles.ts";
 import { atDecision, isSkipping, onSkipChange, setSkipping } from "./skip.ts";
 import { statNames as stats } from "../statNames.ts";
 
@@ -84,7 +84,7 @@ const party = () => {
   return rm.$gameParty;
 };
 
-/** The F8 panel, the badges F9 and missing images show, and the switch that turns encounters off. */
+/** The F8 panel, the badges F9 and missing files show, and the switch that turns encounters off. */
 export function mountPanel(
   SceneManager: NonNullable<RpgMaker["SceneManager"]>,
   Game_Player: NonNullable<RpgMaker["Game_Player"]>,
@@ -120,22 +120,31 @@ export function mountPanel(
     skipBadge.hidden = false;
     raise();
   };
-  // Images that fail close together are listed in one badge, and each only the first time.
+  // Files that fail close together are listed in one badge.
   const missingBadge = $("missing");
-  const reported = new Set<string>();
   let missing: string[] = [];
+  const kinds = new Set<MissingKind>();
   let hideMissingBadge: ReturnType<typeof setTimeout> | undefined;
-  onMissingImage((url) => {
-    if (reported.has(url)) return;
-    reported.add(url);
-    if (missingBadge.hidden) missing = [];
+  onMissingFile((url, kind) => {
+    if (missingBadge.hidden) {
+      missing = [];
+      kinds.clear();
+    }
+    kinds.add(kind);
     let name = url;
     try {
       name = decodeURIComponent(url);
     } catch {}
     missing.push(name);
     const more = missing.length > 3 ? ` and ${missing.length - 3} more` : "";
-    missingBadge.textContent = `${missing.length > 1 ? "Images" : "Image"} missing, shown blank: ${missing.slice(0, 3).join(", ")}${more}.`;
+    const many = missing.length > 1;
+    const what =
+      kinds.size > 1
+        ? "Files missing, left out"
+        : kind === "image"
+          ? `${many ? "Images" : "Image"} missing, shown blank`
+          : `${many ? "Sounds" : "Sound"} missing, left silent`;
+    missingBadge.textContent = `${what}: ${missing.slice(0, 3).join(", ")}${more}.`;
     missingBadge.hidden = false;
     raise();
     clearTimeout(hideMissingBadge);

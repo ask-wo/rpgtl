@@ -9,6 +9,7 @@
     "encryptedAssets": true,
     "mediaWarnings": ["audio/bgm/Field.ogg"],
     "missingImages": [{ "path": "img/faces/$Ivo", "files": ["Map001.json"] }],
+    "missingAudio": [{ "path": "audio/me/Fanfare", "files": ["System.json"] }],
     "identity": { "encryptionKey": "0f1e2d3c4b5a69788796a5b4c3d2e1f0" },
     "build": { "versionId": 81234567, "sha256": "5e1c0f6a", "label": "v0.3" }
   },

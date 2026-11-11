@@ -1,4 +1,4 @@
-import type { Catalog, Engine, Entry, Game, MissingImage } from "@rpgtl/contracts";
+import type { Catalog, Engine, Entry, Game, MissingFile } from "@rpgtl/contracts";
 import * as Predicate from "effect/Predicate";
 import { guessRuns } from "./catalog.ts";
 import { entryTranslation } from "./guesses.ts";
@@ -38,8 +38,8 @@ export const mediaWarnings = (files: ReadonlyArray<string>) => {
     .toSorted();
 };
 
-/** An image a data file asks for, such as `img/faces/Actor1`. */
-export interface ImageReference {
+/** A file a data file asks for, without extension, such as `img/faces/Actor1` or `audio/se/Door`. */
+export interface MediaReference {
   readonly file: string;
   readonly path: string;
 }
@@ -56,10 +56,42 @@ const imageParameters: Record<number, Record<number, string>> = {
   231: { 1: "img/pictures/" }, // Show Picture
   41: { 0: "img/characters/" }, // Change Image in a move route
 };
+// Fields and event command parameters that hold a sound as `{ name, volume, pitch, pan }`, or a
+// list of them, and the folder it is in.
+const audioFields: Record<string, string> = {
+  bgm: "audio/bgm/",
+  bgs: "audio/bgs/",
+  se: "audio/se/",
+  sounds: "audio/se/",
+  titleBgm: "audio/bgm/",
+  battleBgm: "audio/bgm/",
+  victoryMe: "audio/me/",
+  defeatMe: "audio/me/",
+  gameoverMe: "audio/me/",
+};
+const audioParameters: Record<number, Record<number, string>> = {
+  132: { 0: "audio/bgm/" }, // Change Battle BGM
+  133: { 0: "audio/me/" }, // Change Victory ME
+  139: { 0: "audio/me/" }, // Change Defeat ME
+  140: { 1: "audio/bgm/" }, // Change Vehicle BGM
+  241: { 0: "audio/bgm/" }, // Play BGM
+  245: { 0: "audio/bgs/" }, // Play BGS
+  249: { 0: "audio/me/" }, // Play ME
+  250: { 0: "audio/se/" }, // Play SE
+  44: { 0: "audio/se/" }, // Play SE in a move route
+};
+// A map keeps the music it doesn't play too.
+const autoplay: Record<string, string> = { bgm: "autoplayBgm", bgs: "autoplayBgs" };
 
-/** The images the data of `file` asks for. */
-export function imageReferences(file: string, data: unknown): ReadonlyArray<ImageReference> {
-  const references: ImageReference[] = [];
+const soundName = (sound: unknown) =>
+  Predicate.hasProperty(sound, "name") && Predicate.isString(sound.name) ? sound.name : "";
+
+/** The images and sounds the data of `file` asks for. */
+export function mediaReferences(file: string, data: unknown): ReadonlyArray<MediaReference> {
+  const references: MediaReference[] = [];
+  const add = (folder: string, name: string) => {
+    if (name) references.push({ file, path: folder + name });
+  };
   const walk = (node: unknown) => {
     if (!Predicate.isObjectOrArray(node)) return;
     if (
@@ -71,14 +103,22 @@ export function imageReferences(file: string, data: unknown): ReadonlyArray<Imag
       const parameters: ReadonlyArray<unknown> = node.parameters;
       for (const [index, folder] of Object.entries(imageParameters[node.code] ?? {})) {
         const name = parameters[Number(index)];
-        if (Predicate.isString(name) && name) references.push({ file, path: folder + name });
+        if (Predicate.isString(name)) add(folder, name);
       }
+      for (const [index, folder] of Object.entries(audioParameters[node.code] ?? {}))
+        add(folder, soundName(parameters[Number(index)]));
     }
-    for (const [key, value] of Object.entries(node)) {
-      const folder = imageFields[key];
-      if (Predicate.isString(value) && value && folder)
-        references.push({ file, path: folder + value });
-      else walk(value);
+    const fields = new Map(Object.entries(node));
+    for (const [key, value] of fields) {
+      const imageFolder = imageFields[key];
+      const audioFolder = audioFields[key];
+      if (Predicate.isString(value) && imageFolder) add(imageFolder, value);
+      else if (audioFolder && Predicate.isObjectOrArray(value)) {
+        const flag = autoplay[key];
+        if (flag && fields.get(flag) === false) continue;
+        for (const sound of Array.isArray(value) ? value : [value])
+          add(audioFolder, soundName(sound));
+      } else walk(value);
     }
   };
   walk(data);
@@ -88,34 +128,39 @@ export function imageReferences(file: string, data: unknown): ReadonlyArray<Imag
 const folderOf = (path: string) => path.slice(0, path.lastIndexOf("/") + 1);
 
 /** The folders, such as `img/faces/`, that the references are in. */
-export const referencedFolders = (references: ReadonlyArray<ImageReference>) => [
+export const referencedFolders = (references: ReadonlyArray<MediaReference>) => [
   ...new Set(references.map(({ path }) => folderOf(path))),
 ];
 
 const imageExtension = /\.(?:png|rpgmvp|png_)$/i;
 
-/** The image names in a folder without extension, from the folder's file names. */
-export const imageNames = (files: ReadonlyArray<string>) =>
+/**
+ * The names without extension of the files in `folder`. Any file counts as a sound: plugins play
+ * other formats than the engine, and `mediaWarnings` names the ones NW.js can't play.
+ */
+export const mediaNames = (folder: string, files: ReadonlyArray<string>) =>
   [
     ...new Set(
-      files
-        .filter((file) => imageExtension.test(file))
-        .map((file) => file.replace(imageExtension, "")),
+      folder.startsWith("img/")
+        ? files
+            .filter((file) => imageExtension.test(file))
+            .map((file) => file.replace(imageExtension, ""))
+        : files.map((file) => file.replace(/\.[^.]*$/, "")),
     ),
   ].toSorted();
 
 /**
- * The images the references ask for that no file in `folders` (image names by folder) is. A file
- * whose name differs only in case is found by both play modes, so it isn't missing.
+ * The files the references ask for that no name in `folders` (names by folder) is. A file whose
+ * name differs only in case is found by both play modes, so it isn't missing.
  */
-export function missingImages(
-  references: ReadonlyArray<ImageReference>,
+export function missingFiles(
+  references: ReadonlyArray<MediaReference>,
   folders: ReadonlyMap<string, ReadonlyArray<string>>,
-): ReadonlyArray<MissingImage> {
+): ReadonlyArray<MissingFile> {
   const asked = new Map<string, Set<string>>();
   for (const { file, path } of references)
     asked.set(path, (asked.get(path) ?? new Set()).add(file));
-  const missing: MissingImage[] = [];
+  const missing: MissingFile[] = [];
   for (const [path, files] of asked) {
     const folder = folderOf(path);
     const name = path.slice(folder.length).toLowerCase();

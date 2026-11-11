@@ -11,10 +11,10 @@ import {
   GameFileInvalid,
   type GameImage,
   imageExtension,
-  imageNames,
-  imageReferences,
+  mediaNames,
+  mediaReferences,
   mediaWarnings,
-  missingImages,
+  missingFiles,
   referencedFolders,
   textImages,
 } from "@rpgtl/domain";
@@ -267,7 +267,7 @@ const make = Effect.gen(function* () {
       requiredText(dataDir, file).pipe(
         Effect.tap((text) => Effect.sync(() => hash.update(`${file}\0${text}\0`))),
         Effect.flatMap((text) => Effect.fromResult(decodeGameFile(file, text))),
-        Effect.map((data) => imageReferences(file, data.data)),
+        Effect.map((data) => mediaReferences(file, data.data)),
       ),
     );
     hash.update(Option.getOrElse(yield* textInside(webRoot, "js/plugins.js"), () => ""));
@@ -276,10 +276,11 @@ const make = Effect.gen(function* () {
       yield* Effect.forEach(referencedFolders(asked), (folder) =>
         Effect.map(
           namesIn(path.join(webRoot, folder)),
-          (names) => [folder, imageNames(names)] as const,
+          (names) => [folder, mediaNames(folder, names)] as const,
         ),
       ),
     );
+    const missing = missingFiles(asked, folders);
     return {
       root,
       webRoot,
@@ -288,7 +289,8 @@ const make = Effect.gen(function* () {
       files,
       encryptedAssets: Boolean(system.hasEncryptedImages || system.hasEncryptedAudio),
       mediaWarnings: mediaWarnings(yield* filesUnder(webRoot)),
-      missingImages: missingImages(asked, folders),
+      missingImages: missing.filter((file) => file.path.startsWith("img/")),
+      missingAudio: missing.filter((file) => file.path.startsWith("audio/")),
       identity: {
         ...(system.advanced?.gameId !== undefined && { gameId: system.advanced.gameId }),
         ...(system.encryptionKey && { encryptionKey: system.encryptionKey }),

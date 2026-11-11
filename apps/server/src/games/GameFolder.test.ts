@@ -27,6 +27,7 @@ it.effect("a game is found in its folder, its www folder, or beside a file in it
       encryptedAssets: false,
       mediaWarnings: ["movies/Op.mp4 has no .webm counterpart; NW.js cannot play H.264 video."],
       missingImages: [{ path: "img/faces/$Arlene", files: ["Map001.json"] }],
+      missingAudio: [{ path: "audio/bgm/Storm", files: ["Map001.json"] }],
     });
     assert.deepStrictEqual(identity, {});
     assert.match(build?.sha256 ?? "", /^[0-9a-f]{64}$/);
