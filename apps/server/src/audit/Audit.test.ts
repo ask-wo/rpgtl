@@ -77,7 +77,7 @@ it.effect("coverage and logic search the inspected game's own files", () =>
     const id = yield* gameWithRuns([]);
     // The plugin's sound setting is a file name, which no entry covers.
     assert.deepStrictEqual(yield* audit.coverage(id), [
-      { where: "plugins.js Pic", count: 1, examples: ["合成物品"] },
+      { where: "plugins.js Pic", shown: true, count: 1, examples: ["合成物品"] },
     ]);
     assert.deepStrictEqual(yield* audit.logic(id), []);
   }).pipe(Effect.provide(Services)),

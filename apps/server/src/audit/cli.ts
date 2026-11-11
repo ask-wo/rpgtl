@@ -127,14 +127,23 @@ const reportLines = (report: AuditReport, logFile: (file: string) => string) => 
   return lines;
 };
 
-const coverageLines = (groups: ReadonlyArray<MissingText>) => [
-  `Text no entry covers: ${groups.reduce((sum, group) => sum + group.count, 0)}`,
-  "  Comments (codes 108, 408), file names and names only the editor shows are expected here.",
-  ...groups.flatMap((group) => [
-    `  ${group.where}: ${group.count}`,
-    ...group.examples.map((example) => `    ${oneLine(example.slice(0, 120))}`),
-  ]),
-];
+const total = (groups: ReadonlyArray<MissingText>) =>
+  groups.reduce((sum, group) => sum + group.count, 0);
+
+const coverageLines = (groups: ReadonlyArray<MissingText>) => {
+  const shown = groups.filter((group) => group.shown);
+  const names = groups.filter((group) => !group.shown);
+  return [
+    `Text no entry covers that the game may show: ${total(shown)}`,
+    "  Comments (codes 108, 408) are expected here.",
+    ...shown.flatMap((group) => [
+      `  ${group.where}: ${group.count}`,
+      ...group.examples.map((example) => `    ${oneLine(example.slice(0, 120))}`),
+    ]),
+    `File names and names only the editor shows: ${total(names)}`,
+    ...names.map((group) => `  ${group.where}: ${group.count}`),
+  ];
+};
 
 const logicLines = (uses: ReadonlyArray<LogicUse>) => [
   `Translated text that game logic uses: ${uses.length}`,

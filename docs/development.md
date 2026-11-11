@@ -33,7 +33,7 @@ Import matches a file entry to the game's entry of the same id, which comes from
 
 - `--compare` puts the run before's counts next to this run's, to see whether a change helped.
 - `--previous` audits the run before, `--log <file>` another run's log, and `--json` prints all of it as JSON.
-- `--coverage` lists Chinese, Japanese or Korean text in the game's data and plugin settings that no entry covers.
+- `--coverage` lists Chinese, Japanese or Korean text in the game's data and plugin settings that no entry covers. Text the game may show comes first, with examples; after it come only the counts of fields that hold file names or names only the editor shows (pictures, sounds, faces, event and troop names, note text outside tags when the note has no block tag such as `<Help Description>`).
 - `--logic` lists translated text that scripts, conditions, notes or plugins also use as a value, where translating it can change what the game does.
 
 **Comparing translators.** `pnpm run compare --game <id> --model <setup>` runs each `--model` setup on a sample of an inspected game as a translation run would, one after another, and writes a side-by-side report to `RPGTL_DIR/games/<id>/reports/compare-<time>.html`, with each run's requests and answers in the `.json` next to it. The report shows for each setup what it gave up on, its retries, what the checks flag, its speed, the most VRAM it took and Claude's cost at API prices.

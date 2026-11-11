@@ -5,9 +5,11 @@ const map = {
   events: [
     null,
     {
+      name: "宝箱",
       pages: [
         {
           list: [
+            { code: 101, parameters: ["头像", 0, 0, 2] },
             { code: 108, parameters: ["注释"] },
             { code: 355, parameters: ['$gameVariables.setValue(1, "人类")'] },
             { code: 111, parameters: [12, '$gameActors.actor(1).name() == "致谢"'] },
@@ -18,7 +20,17 @@ const map = {
   ],
 };
 const contents: GameContents = {
-  dataFiles: [{ name: "Map009.json", data: map }],
+  dataFiles: [
+    {
+      name: "Items.json",
+      data: [
+        null,
+        { id: 1, note: "掉落率低\n<手动>\n<Category:宝物>" },
+        { id: 2, note: "<Help Description>\n一把旧钥匙\n</Help Description>" },
+      ],
+    },
+    { name: "Map009.json", data: map },
+  ],
   plugins: [
     { name: "Credits", status: true, parameters: { title: "制作", list: '["致谢"]' } },
     { name: "Off", status: false, parameters: { title: "关闭" } },
@@ -38,20 +50,46 @@ const catalog = {
   ],
 };
 
-it("Coverage lists text no entry covers, by where it is, and leaves out a script's own text", () => {
+it("Coverage lists text no entry covers, by where it is, file and editor names last, and leaves out a script's own text", () => {
   assert.deepStrictEqual(missingText(contents, ["System.json"], catalog), [
     {
+      where: "Items.json note (file not read by RPGTL)",
+      shown: true,
+      count: 2,
+      examples: ["<Category:宝物>", "<Help Description>\n一把旧钥匙\n</Help Description>"],
+    },
+    {
       where: "Map*.json code 108 parameter 0 (file not read by RPGTL)",
+      shown: true,
       count: 1,
       examples: ["注释"],
     },
     // The condition is game logic, which `textInLogic` checks; its text isn't extracted.
     {
       where: "Map*.json code 111 parameter 1 (file not read by RPGTL)",
+      shown: true,
       count: 1,
       examples: ['$gameActors.actor(1).name() == "致谢"'],
     },
-    { where: "plugins.js Credits", count: 1, examples: ["制作"] },
+    { where: "plugins.js Credits", shown: true, count: 1, examples: ["制作"] },
+    {
+      where: "Items.json note outside tags (file not read by RPGTL)",
+      shown: false,
+      count: 1,
+      examples: ["掉落率低\n<手动>\n"],
+    },
+    {
+      where: "Map*.json code 101 parameter 0 (file not read by RPGTL)",
+      shown: false,
+      count: 1,
+      examples: ["头像"],
+    },
+    {
+      where: "Map*.json name (file not read by RPGTL)",
+      shown: false,
+      count: 1,
+      examples: ["宝箱"],
+    },
   ]);
 });
 
