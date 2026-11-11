@@ -71,15 +71,25 @@ it("MZ plugin commands and variable text in scripts are extracted", () => {
   );
 });
 
-it("note tags are extracted only when they hold text codes", () => {
+it("note tags are extracted when they hold text codes, line breaks or sentences", () => {
   const note = [
     "<sideview battler: 蓝铃菇>",
     "<AddInfoWindowP:\\C[4]品级      \\C[0]普通>",
     "<AddInfoWindowA:15    \\I[95]>",
+    "<BookText:河边住着一只老乌龟。\n它从不说话>",
+    "<BookCategory:动物>",
+    "<Hint:据说它知道宝藏在哪里！>",
+    "<Portrait:乌龟\n>",
+    "<Elements:火、水>",
+    '<Script>if (a < b ? "低" : "高")\nif (x > 1)</Script>',
   ].join("\n");
   assert.deepStrictEqual(
     extractFrom("Armors.json", [null, { id: 1, name: "", note }]).map((e) => [e.path, e.source]),
-    [[["1", "note", "noteText", "1"], "\\C[4]品级      \\C[0]普通"]],
+    [
+      [["1", "note", "noteText", "1"], "\\C[4]品级      \\C[0]普通"],
+      [["1", "note", "noteText", "3"], "河边住着一只老乌龟。\n它从不说话"],
+      [["1", "note", "noteText", "5"], "据说它知道宝藏在哪里！"],
+    ],
   );
 });
 

@@ -224,15 +224,20 @@ it("MZ plugin commands and variable text in scripts are applied", () => {
   );
 });
 
-it("note tags with text codes are translated in place; other note tags are left alone", () => {
+it("note tags with text are translated in place; other note tags are left alone", () => {
   const note = [
     "<sideview battler: 蓝铃菇>",
     "<AddInfoWindowP:\\C[4]品级      \\C[0]普通>",
     "<AddInfoWindowA:15    \\I[95]>",
     "<AddInfoWindowP:\\C[4]部位      \\C[0]护肩>",
+    "<BookText:河边住着一只老乌龟。\n它从不说话>",
   ].join("\n");
   const armor = { id: 1, name: "", note };
-  const translations = ["Grade      Common", "\\C[4]Slot      \\C[0]Shoulder <L>\nguard"];
+  const translations = [
+    "Grade      Common",
+    "\\C[4]Slot      \\C[0]Shoulder <L>\nguard",
+    "An old turtle lives by the river.\nIt never speaks.",
+  ];
   const entries = extractFrom("Armors.json", [null, armor]).map((entry, i) => ({
     ...entry,
     translation: { user: translations[i] ?? "" },
@@ -246,6 +251,7 @@ it("note tags with text codes are translated in place; other note tags are left 
         "<AddInfoWindowP:Grade      Common>",
         "<AddInfoWindowA:15    \\I[95]>",
         "<AddInfoWindowP:\\C[4]Slot      \\C[0]Shoulder ‹L› guard>",
+        "<BookText:An old turtle lives by the river.\nIt never speaks.>",
       ].join("\n"),
     },
   ]);
