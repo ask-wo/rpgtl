@@ -156,6 +156,7 @@ export interface RpgMaker {
       intervals: number[],
     ): () => void;
   };
+  WebAudio?: { prototype: LoadingAudio };
   // MV keeps its renderer in Graphics._renderer, MZ in Graphics._app.renderer.
   Graphics?: {
     width: number;
@@ -244,6 +245,15 @@ export const loadImage = (url: string) =>
     image.onerror = () => reject(new Error(`${url} could not be loaded`));
     image.src = url;
   });
+
+/** A sound as MV and MZ load it. Only MV has `_load`, and only MV 1.5 and later `_loader`. */
+export interface LoadingAudio {
+  _url: string;
+  _loader?: () => void;
+  _hasError?: boolean;
+  _load?(url: string): void;
+  isError(): boolean;
+}
 
 export const rm = window as unknown as RpgMaker;
 export const gameId = document.currentScript?.dataset.game;
