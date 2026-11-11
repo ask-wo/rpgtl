@@ -483,7 +483,7 @@ const data = {
     {
       expParams: [30, 20, 30, 30],
       id: 1,
-      learnings: [],
+      learnings: [{ level: 2, note: "", skillId: 3 }],
       name: "Adventurer",
       note: "",
       params: [500, 50, 20, 20, 20, 20, 20, 20].map(params),
@@ -526,8 +526,43 @@ const data = {
       switchId: 1,
       trigger: 0,
     },
+    // A battle that can be lost, which sets variable 3 to 1 when won and 2 when lost.
+    {
+      id: 3,
+      list: [
+        { code: 301, indent: 0, parameters: [0, 1, false, true] },
+        { code: 601, indent: 0, parameters: [] },
+        { code: 122, indent: 1, parameters: [3, 3, 0, 0, 1] },
+        { code: 0, indent: 1, parameters: [] },
+        { code: 603, indent: 0, parameters: [] },
+        { code: 122, indent: 1, parameters: [3, 3, 0, 0, 2] },
+        { code: 0, indent: 1, parameters: [] },
+        { code: 604, indent: 0, parameters: [] },
+        { code: 0, indent: 0, parameters: [] },
+      ],
+      name: "Battle",
+      switchId: 1,
+      trigger: 0,
+    },
   ],
-  "Enemies.json": [null],
+  "Enemies.json": [
+    null,
+    {
+      actions: [
+        { conditionParam1: 0, conditionParam2: 0, conditionType: 0, rating: 5, skillId: 1 },
+      ],
+      battlerHue: 0,
+      battlerName: "Blob",
+      dropItems: [0, 0, 0].map(() => ({ dataId: 1, denominator: 1, kind: 0 })),
+      exp: 0,
+      gold: 0,
+      id: 1,
+      name: "Moss Blob",
+      note: "",
+      params: [200, 0, 10, 10, 10, 10, 10, 10],
+      traits: [{ code: 22, dataId: 0, value: 0.95 }],
+    },
+  ],
   "Items.json": [null, item],
   "MapInfos.json": [
     null,
@@ -536,7 +571,12 @@ const data = {
   ],
   "Map001.json": map("Fixture Forest", 40, 24, [1, 1, 9, 6], [4, 4], forestEvents),
   "Map002.json": map("Second Field", 8, 7, [1, 1, 6, 5], [3, 3], fieldEvents),
-  "Skills.json": [null, skill(1, "Attack", "a.atk * 4 - b.def * 2"), skill(2, "Guard", "0")],
+  "Skills.json": [
+    null,
+    skill(1, "Attack", "a.atk * 4 - b.def * 2"),
+    skill(2, "Guard", "0"),
+    skill(3, "Spark", "a.mat * 2"),
+  ],
   "States.json": [
     null,
     {
@@ -702,7 +742,7 @@ const data = {
     title1Name: "",
     title2Name: "",
     titleBgm: audio,
-    variables: ["", "任务进度", "好感度"],
+    variables: ["", "任务进度", "好感度", "Battle result"],
     versionId: 1,
     victoryMe: audio,
     weaponTypes: ["", "Sword"],
@@ -719,7 +759,34 @@ const data = {
       tilesetNames: ["", "", "", "", "", "Field_B", "", "", ""],
     },
   ],
-  "Troops.json": [null],
+  "Troops.json": [
+    null,
+    {
+      id: 1,
+      members: [{ enemyId: 1, hidden: false, x: 480, y: 300 }],
+      name: "Moss Blob",
+      pages: [
+        {
+          conditions: {
+            actorHp: 50,
+            actorId: 1,
+            actorValid: false,
+            enemyHp: 50,
+            enemyIndex: 0,
+            enemyValid: false,
+            switchId: 1,
+            switchValid: false,
+            turnA: 0,
+            turnB: 0,
+            turnEnding: false,
+            turnValid: false,
+          },
+          list: [{ code: 0, indent: 0, parameters: [] }],
+          span: 0,
+        },
+      ],
+    },
+  ],
   "Weapons.json": [null],
 };
 
@@ -806,6 +873,11 @@ const images: Record<string, Buffer> = {
   "system/Weapons3.png": png(576, 192),
   "system/ButtonSet.png": png(240, 48),
   "system/Loading.png": png(48, 48),
+  "system/GameOver.png": png(48, 48),
+  "enemies/Blob.png": png(96, 96),
+  // The battle background MV picks for a map without one.
+  "battlebacks1/Grassland.png": png(48, 48),
+  "battlebacks2/Grassland.png": png(48, 48),
 };
 
 /** Writes the game into `root`, which is also its web root, and returns `root`. */

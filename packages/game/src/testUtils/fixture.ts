@@ -242,7 +242,8 @@ const coreScript = `
     recoverAll() { this.healed = true; },
     addParam(id, bonus) { this.bonus = bonus; },
   };
-  window.$gameActors = { actor: () => hero };
+  window.$gameActors = { actor: () => hero, _data: [] };
+  window.ConfigManager = { alwaysDash: false, save() {} };
   window.$gameVariables = { value(id) { return this[id] ?? 0; }, setValue(id, value) { this[id] = value; } };
   window.$gameSwitches = { value(id) { return !!this[id]; }, setValue(id, value) { this[id] = value; } };
   window.$gameSelfSwitches = {
@@ -257,6 +258,7 @@ const coreScript = `
     gold() { return this.amount; },
     gainGold(value) { this.amount += value; },
     members: () => [hero],
+    inBattle: () => false,
     hasItem(item) { return this.item === item && this.quantity > 0; },
     gainItem(item, n) { this.item = item; this.quantity = n; },
   };

@@ -1,6 +1,7 @@
 // Injected into game pages. Separates browser saves per game, wraps message text, draws translated
 // title commands and the English in images, adds the F8 panel and F9's fast forward to the next choice.
 import { hookMissingAudio } from "./audio.ts";
+import { hookCheats } from "./cheats.ts";
 import { mountPanel } from "./panel.ts";
 import { gameId, rm } from "./engine.ts";
 import { hookClassNames, hookHiddenText, hookItemNames, hookShortNames } from "./fittedText.ts";
@@ -35,6 +36,7 @@ function install() {
     hookSkip();
     hookStretch();
     hookPlaytime();
+    hookCheats();
     return run.apply(this, args);
   };
 

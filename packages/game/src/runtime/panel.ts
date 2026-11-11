@@ -1,3 +1,4 @@
+import { type CheatRequest, cheatState, refusal, requestCheat } from "./cheats.ts";
 import { type RpgMaker, rm } from "./engine.ts";
 import { type MissingKind, onMissingFile } from "./missingFiles.ts";
 import { atDecision, isSkipping, onSkipChange, setSkipping } from "./skip.ts";
@@ -10,6 +11,7 @@ const style = `
     border: 1px solid #52627b; border-radius: 6px; padding: 7px;
   }
   button { cursor: pointer }
+  button:disabled { opacity: 0.5; cursor: default }
   label { display: block; margin: 10px 0 }
   input[type=number] { width: 105px }
   select { max-width: 230px }
@@ -44,8 +46,14 @@ const markup = `
     <button id="mapView">Map view</button>
     <button id="save">Save game</button>
     <button id="heal">Heal party</button>
+    <div class="row">
+      <button id="winBattle">Win battle</button>
+      <button id="loseBattle">Lose battle</button>
+    </div>
     <label><input id="encounters" type="checkbox"> Disable random encounters</label>
     <label><input id="through" type="checkbox"> Walk through obstacles</label>
+    <label><input id="alwaysDash" type="checkbox"> Always dash (Shift walks)</label>
+    <label><input id="dashOnEveryMap" type="checkbox"> Dash on every map</label>
     <label>Item type
       <select id="kind">
         <option value="Items">Items</option>
@@ -59,6 +67,10 @@ const markup = `
       <button id="give">Add items</button>
     </div>
     <label>Actor <select id="actor"></select></label>
+    <div class="row">
+      <button id="levelUp">Level up</button>
+      <small id="level"></small>
+    </div>
     <select id="param" aria-label="Stat">
       ${stats.map((name, i) => `<option value="${i}">${name}</option>`).join("")}
     </select>
@@ -77,6 +89,11 @@ const markup = `
     <p id="status" role="status">Load a save or start a new game first.</p>
   </section>
 `;
+
+const request = (cheat: CheatRequest) => {
+  const refused = requestCheat(cheat);
+  if (refused) throw new Error(refused);
+};
 
 const party = () => {
   if (!rm.$gameParty || !rm.$gamePlayer || !rm.$gameParty.members().length)
@@ -170,14 +187,33 @@ export function mountPanel(
     return value;
   };
 
-  const action = (id: string, fn: () => void) => {
+  const refreshCheats = () => {
+    const state = cheatState();
+    const show = (id: string, cheat: CheatRequest) => {
+      const refused = refusal(state, cheat);
+      $<HTMLButtonElement>(id).disabled = !!refused;
+      $(id).title = refused ?? "";
+    };
+    show("winBattle", { type: "winBattle" });
+    show("loseBattle", { type: "loseBattle" });
+    const actor = state?.actors.find(
+      ({ id }) => String(id) === $<HTMLSelectElement>("actor").value,
+    );
+    show("levelUp", { type: "levelUp", actorId: actor?.id ?? 0 });
+    $("level").textContent = actor ? `Level ${actor.level} of ${actor.maxLevel}` : "";
+    $("alwaysDash").checked = state?.alwaysDash ?? false;
+    $("dashOnEveryMap").checked = state?.dashOnEveryMap ?? false;
+  };
+  let refreshTimer: ReturnType<typeof setInterval> | undefined;
+
+  const action = (id: string, fn: () => string | void) => {
     $(id).onclick = () => {
       try {
-        fn();
-        setStatus(`Done. Gold: ${party().gold()}`);
+        setStatus(fn() ?? `Done. Gold: ${party().gold()}`);
       } catch (error) {
         setStatus((error as Error).message);
       }
+      refreshCheats();
     };
   };
 
@@ -203,6 +239,7 @@ export function mountPanel(
   const itemList = () => rm[`$data${$<HTMLSelectElement>("kind").value}` as "$dataItems"] ?? [];
   const fillItems = () => fillOptions("item", itemList(), (item) => item.name);
   $("kind").onchange = fillItems;
+  $("actor").onchange = refreshCheats;
 
   document.addEventListener(
     "keydown",
@@ -243,6 +280,13 @@ export function mountPanel(
       setStatus(
         rm.$gameParty ? `Gold: ${rm.$gameParty.gold()}` : "Start a new game or load a save first.",
       );
+      // Battles start and end, and messages close, while the panel is open.
+      refreshCheats();
+      clearInterval(refreshTimer);
+      refreshTimer = setInterval(
+        () => (panel.hidden ? clearInterval(refreshTimer) : refreshCheats()),
+        250,
+      );
     },
     true,
   );
@@ -282,6 +326,16 @@ export function mountPanel(
       .members()
       .forEach((actor) => actor.recoverAll()),
   );
+  action("winBattle", () => request({ type: "winBattle" }));
+  action("loseBattle", () => {
+    if (
+      cheatState()?.battle?.canLose === false &&
+      !confirm("This battle can't be lost: losing it ends in a game over. Lose anyway?")
+    )
+      return "Not lost.";
+    request({ type: "loseBattle" });
+  });
+  action("levelUp", () => request({ type: "levelUp", actorId: number("actor") }));
   action("give", () => {
     party();
     const item = itemList()[number("item")];
@@ -310,4 +364,13 @@ export function mountPanel(
     if (rm.$gamePlayer) rm.$gamePlayer.setThrough($("through").checked);
     else $("through").checked = false;
   };
+  const toggle = (id: string, cheat: (on: boolean) => CheatRequest) => {
+    $(id).onchange = () => {
+      const refused = requestCheat(cheat($(id).checked));
+      if (refused) setStatus(refused);
+      refreshCheats();
+    };
+  };
+  toggle("alwaysDash", (on) => ({ type: "setAlwaysDash", on }));
+  toggle("dashOnEveryMap", (on) => ({ type: "setDashOnEveryMap", on }));
 }

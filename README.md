@@ -11,7 +11,7 @@ Play Chinese/Korean/Japanese RPG Maker MV and MZ games in English. RPGTL transla
 - **Edit anything** the translator got wrong, line by line, and import, export, or share a translation as a file.
 - **Map view** (F7): Allows you to see every event on the current map and teleport between tiles or maps.
 - **Fast-forward** (F9) through dialogue and cutscenes until the next choice.
-- **Cheats (WIP)** (F8): gold, items, stats, switches, no random encounters, walking through walls, saving anywhere. Very basic and unfinished.
+- **Cheats (WIP)** (F8): gold, items, actors, switches, battles, movement and saving anywhere. Very basic and unfinished.
 - Plays in **NW.js** with your existing saves, or in the **browser**. Linux and Windows.
 
 ## Install

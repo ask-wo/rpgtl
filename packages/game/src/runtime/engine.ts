@@ -47,9 +47,23 @@ export interface TextBitmap {
   getPixel(x: number, y: number): unknown;
   getAlphaPixel(x: number, y: number): unknown;
 }
-interface Actor {
+export interface Battler {
+  isAlive(): boolean;
+  setHp(hp: number): void;
+  deathStateId(): number;
+  addNewState(stateId: number): void;
+  performCollapse(): void;
+}
+interface Actor extends Battler {
+  level: number;
+  maxLevel(): number;
+  changeLevel(level: number, show: boolean): void;
   recoverAll(): void;
   addParam(id: number, bonus: number): void;
+}
+interface DataActor extends Named {
+  initialLevel: number;
+  maxLevel: number;
 }
 export interface TextWindow {
   contents: { width: number; height: number; fontSize: number };
@@ -106,7 +120,15 @@ export interface RpgMaker {
   Scene_Map?: new () => object;
   Scene_Battle?: new () => object;
   Scene_Save?: new () => object;
-  BattleManager?: { isInputting(): boolean };
+  BattleManager?: {
+    isInputting(): boolean;
+    // The same names in MV and MZ, such as "input" and "battleEnd".
+    _phase?: string | null;
+    canLose(): boolean;
+    checkBattleEnd(): boolean;
+  };
+  ConfigManager: { alwaysDash: boolean; save(): void };
+  Game_Map?: { prototype: { isDashDisabled(): boolean } };
   $gameMessage?: {
     isChoice(): boolean;
     isNumberInput(): boolean;
@@ -180,12 +202,16 @@ export interface RpgMaker {
     gold(): number;
     gainGold(amount: number): void;
     members(): Actor[];
+    aliveMembers(): Actor[];
+    inBattle(): boolean;
     gainItem(item: Named, amount: number): void;
   };
-  $gameActors: { actor(id: number): Actor | null };
+  $gameTroop?: { aliveMembers(): Battler[] };
+  // `_data` holds only the actors the game has used so far; `actor` adds the others.
+  $gameActors: { actor(id: number): Actor | null; _data: (Actor | null | undefined)[] };
   $gameVariables: { setValue(id: number, value: number): void };
   $gameSwitches: { setValue(id: number, value: boolean): void };
-  $dataActors?: (Named | null)[];
+  $dataActors?: (DataActor | null)[];
   $dataItems?: (Named | null)[];
   $dataWeapons?: (Named | null)[];
   $dataArmors?: (Named | null)[];

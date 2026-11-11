@@ -19,7 +19,7 @@ const tools = [
   {
     key: "F8",
     name: "Game panel (WIP)",
-    does: "Changes gold, items, stats, variables and switches; turns off encounters, walks through walls, saves anywhere. Currently unfinished.",
+    does: "Changes gold, items, actors, variables and switches; ends battles, changes how you move, saves anywhere. Currently unfinished.",
   },
   {
     key: "F9",
