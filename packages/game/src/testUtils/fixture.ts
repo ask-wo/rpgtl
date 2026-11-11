@@ -614,6 +614,7 @@ export async function loadRuntime(engine: "MV" | "MZ", extra: Record<string, unk
   }
   const win: any = {
     SceneManager: { run() {} },
+    addEventListener() {},
     StorageManager: {},
     Game_Player: { prototype: {} },
     Window_Message: Message,

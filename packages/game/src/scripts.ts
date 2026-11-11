@@ -9,6 +9,7 @@ export interface HookConfig {
   readonly erased: string;
   readonly images: string;
   readonly log: string;
+  readonly playtime: string;
   readonly root: string;
 }
 

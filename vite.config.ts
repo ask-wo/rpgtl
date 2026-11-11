@@ -42,6 +42,7 @@ export default defineConfig({
         {
           allow: [
             "_tag",
+            "_latestButton",
             "_wordWrap",
             "_textState",
             "_rpgtlFontSize",

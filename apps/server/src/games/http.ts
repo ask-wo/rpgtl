@@ -16,6 +16,8 @@ import { decodeTranslationFile, type GameFileInvalid } from "@rpgtl/domain";
 import * as Effect from "effect/Effect";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Playtime from "../play/Playtime.ts";
 import { stateFileFailed } from "../state/http.ts";
 import * as Catalogs from "./Catalogs.ts";
 import * as FolderBrowser from "./FolderBrowser.ts";
@@ -53,6 +55,7 @@ const GamesHandlers = HttpApiBuilder.group(
     const games = yield* Games.Games;
     const catalogs = yield* Catalogs.Catalogs;
     const folders = yield* FolderBrowser.FolderBrowser;
+    const playtime = yield* Playtime.Playtime;
     return handlers.handleAll({
       list: Effect.fn("games.list")(function* () {
         return yield* catalogs.list;
@@ -81,6 +84,11 @@ const GamesHandlers = HttpApiBuilder.group(
               ),
           }),
         );
+      }),
+      playtime: Effect.fn("games.playtime")(function* ({ query }) {
+        return yield* playtime
+          .get(query.id)
+          .pipe(Effect.map(Option.getOrNull), Effect.catchTags(readFailed));
       }),
       forget: Effect.fn("games.forget")(function* ({ payload }) {
         return yield* games.forget(payload.id).pipe(Effect.catchTags(writeFailed));

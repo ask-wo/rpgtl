@@ -25,6 +25,8 @@ const onMap = (game: Page, mapId: number) =>
   );
 
 test("the map view on MV's real engine", async ({ openGame }) => {
+  // On CI this test takes over a minute, close to the default limit.
+  test.slow();
   const game = await (await openGame("real-MV")).play();
   const errors = gameErrors(game);
   const view = game.locator("#rpgtl-map-view");

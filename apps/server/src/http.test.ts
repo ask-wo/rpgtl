@@ -1,7 +1,14 @@
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import { assert, it } from "@effect/vitest";
-import { Catalog, FolderListing, GameActivity, NwjsStatus, gameFiles } from "@rpgtl/contracts";
+import {
+  Catalog,
+  FolderListing,
+  GameActivity,
+  NwjsStatus,
+  Playtime,
+  gameFiles,
+} from "@rpgtl/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
@@ -580,6 +587,30 @@ it.effect("requests without the token, from another origin or for another host a
       ).pipe(Effect.provide(NodeHttpClient.layerNodeHttp));
       assert.deepStrictEqual(yield* refused(rebound), [403, "Invalid host."]);
     }
+  }).pipe(Effect.provide(serving(saved))),
+);
+
+const report = (id: string, body: unknown, from?: string) =>
+  HttpClientRequest.post(`/playtime/${id}`).pipe(
+    from === undefined ? (request) => request : HttpClientRequest.setHeader("Origin", from),
+    HttpClientRequest.bodyJson(body),
+    Effect.flatMap(HttpClient.execute),
+    Effect.map((response) => response.status),
+  );
+
+it.effect("a game played in the browser adds to its playtime, from RPGTL's origin only", () =>
+  Effect.gen(function* () {
+    const origin = `http://127.0.0.1:${yield* listeningPort}`;
+    assert.deepStrictEqual(yield* (yield* get(`/api/playtime?id=${game.id}`)).json, null);
+    assert.strictEqual(yield* report(game.id, { seconds: 30 }), 403);
+    assert.strictEqual(yield* report(game.id, { seconds: 30 }, "http://example.com"), 403);
+    assert.strictEqual(yield* report(game.id, { seconds: 0 }, origin), 400);
+    assert.strictEqual(yield* report("missing", { seconds: 30 }, origin), 404);
+    assert.strictEqual(yield* report(game.id, { seconds: 30 }, origin), 204);
+    const playtime = yield* HttpClientResponse.schemaBodyJson(Playtime)(
+      yield* get(`/api/playtime?id=${game.id}`),
+    );
+    assert.strictEqual(playtime.seconds, 30);
   }).pipe(Effect.provide(serving(saved))),
 );
 

@@ -249,6 +249,7 @@ async function launchedHook() {
     erased: path.join(stateDir, gameFiles(id).erasedImages),
     images: path.join(stateDir, gameFiles(id).imageResults),
     log,
+    playtime: path.join(stateDir, gameFiles(id).playtime),
     root,
   };
   await writeFile(
@@ -499,4 +500,18 @@ test("Hook hands the translated image blocks to the game, with their erased imag
   await writeFile(imagesFile, JSON.stringify({ ...results, images: { [image]: { lines: 1 } } }));
   expect((await (await reload()).load("System.json")).rpgtlImageText).toBeUndefined();
   expect(await readFile(log, "utf8")).toContain(`RPGTL: image text could not be loaded`);
+});
+
+test("Hook adds the game's playtime to its file and leaves a file it can't read alone", async () => {
+  const { page, stateDir, id, log } = await launchedHook();
+  const file = path.join(stateDir, gameFiles(id).playtime);
+  page.window.rpgtlRecordPlaytime(30);
+  page.window.rpgtlRecordPlaytime(12);
+  const saved = JSON.parse(await readFile(file, "utf8"));
+  expect(saved.seconds).toBe(42);
+  expect(Date.parse(saved.lastPlayed)).toBeGreaterThan(Date.now() - 60_000);
+  await writeFile(file, "{");
+  page.window.rpgtlRecordPlaytime(30);
+  expect(await readFile(file, "utf8")).toBe("{");
+  expect(await readFile(log, "utf8")).toContain("RPGTL: playtime could not be saved");
 });

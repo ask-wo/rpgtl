@@ -82,7 +82,7 @@ A test that plays MV's real engine presses keys with `key` from `e2e/realMv.ts` 
 
 `apps/server/src/state/formats/<n>/` holds made-up files as RPGTL saves them in format `n`: a state folder in `state/` and the settings in `config/`, with each optional field used at least once. `formats.test.ts` upgrades each format to the latest one and decodes the result. A schema change that these files no longer decode with needs a step in `stateUpgrades.ts` (or in `Settings.ts` for the settings) and a folder for the new format. A change they still decode with, such as a new optional field, goes into the newest format's files.
 
-`pnpm run decode-state <dir> [--settings <settings.json>]` decodes `games.json` and each game folder's catalog, backups, image read results, reading, samples and run logs in a state folder with the schemas the server reads them with, and the settings file when given, and exits with 1 if any file doesn't decode. It only reads. Run it on a copy of a real state folder after changing a schema of a state file: older files can hold values the current types no longer list.
+`pnpm run decode-state <dir> [--settings <settings.json>]` decodes `games.json` and each game folder's catalog, backups, image read results, reading, samples, playtime and run logs in a state folder with the schemas the server reads them with, and the settings file when given, and exits with 1 if any file doesn't decode. It only reads. Run it on a copy of a real state folder after changing a schema of a state file: older files can hold values the current types no longer list.
 
 ## Game errors
 

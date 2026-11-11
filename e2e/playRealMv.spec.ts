@@ -25,6 +25,8 @@ test("translations edited on the Text page show in the game, which saves and loa
   page,
   openGame,
 }) => {
+  // On CI this test takes over a minute, close to the default limit.
+  test.slow();
   const opened = await openGame("real-MV");
   const english = (source: string) => page.getByRole("textbox", { name: `English for ${source}` });
   await page.locator('label[for="translate-game"]').click();

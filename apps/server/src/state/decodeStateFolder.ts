@@ -1,4 +1,12 @@
-import { Catalog, Games, ImageReadResults, RunLogLine, Samples, Settings } from "@rpgtl/contracts";
+import {
+  Catalog,
+  Games,
+  ImageReadResults,
+  Playtime,
+  RunLogLine,
+  Samples,
+  Settings,
+} from "@rpgtl/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -35,6 +43,7 @@ const gameKinds: ReadonlyArray<{ readonly name: RegExp; readonly read: Read }> =
   { name: /^backups\/[^/]+\.json$/, read: (folder, file) => folder.read(file, Catalog) },
   { name: /^images\.json$/, read: (folder, file) => folder.read(file, ImageReadResults) },
   { name: /^samples\.json$/, read: (folder, file) => folder.read(file, Samples) },
+  { name: /^playtime\.json$/, read: (folder, file) => folder.read(file, Playtime) },
   { name: /^logs\/translation-[^/]+\.log$/, read: readRunLog },
 ];
 

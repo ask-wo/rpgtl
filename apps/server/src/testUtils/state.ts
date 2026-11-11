@@ -24,6 +24,7 @@ import * as LlamaServer from "../localModels/LlamaServer.ts";
 import * as Launches from "../nwjs/Launches.ts";
 import * as Nwjs from "../nwjs/Nwjs.ts";
 import * as Play from "../play/Play.ts";
+import * as Playtime from "../play/Playtime.ts";
 import * as Settings from "../settings/Settings.ts";
 import * as Frontend from "../frontend/Frontend.ts";
 import * as RunLogs from "../translation/RunLogs.ts";
@@ -136,7 +137,7 @@ export const noNwjs = Nwjs.layer.pipe(
  * Playing games in the browser and in NW.js, with settings in the state folder's `config/`; needs
  * NW.js and the state services.
  */
-export const playServices = Layer.mergeAll(Play.layer, Launches.layer).pipe(
+export const playServices = Layer.mergeAll(Play.layer, Playtime.layer, Launches.layer).pipe(
   Layer.provideMerge(Layer.mergeAll(Settings.layer, Frontend.layer)),
   Layer.provide(NodeChildProcessSpawner.layer),
 );

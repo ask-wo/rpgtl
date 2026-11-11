@@ -1,15 +1,21 @@
+import { PlayedSeconds } from "@rpgtl/contracts";
 import * as Effect from "effect/Effect";
 import * as HttpRouter from "effect/http/HttpRouter";
+import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import { ownOrigin } from "../auth/LocalRequest.ts";
 import * as Play from "./Play.ts";
+import * as Playtime from "./Playtime.ts";
 
-// Game files aren't JSON, so these are plain routes, not part of the HttpApi; a failure answers
-// with its message as text, which the game shows as a load error.
+// Game files aren't JSON, and the game page has no session token, so these are plain routes, not
+// part of the HttpApi. A failure answers with its message as text, which the game shows as a load
+// error.
 const failure = (status: number) => (error: { readonly message: string }) =>
   Effect.succeed(HttpServerResponse.text(error.message, { status }));
 const logged = (status: number) => (error: { readonly message: string }) =>
-  Effect.logError("A played game's file failed", error).pipe(
+  Effect.logError("A game played in the browser failed", error).pipe(
     Effect.andThen(failure(status)(error)),
   );
 
@@ -50,6 +56,28 @@ const erasedImage = Effect.fn("play.erasedImage")(
   }),
 );
 
+// The game page has no session token, as the game's own scripts would get it too. Origin is
+// checked instead, since a browser sends it with every POST, and other sites can't set it.
+const recordPlaytime = Effect.fn("play.playtime")(
+  function* () {
+    const { headers } = yield* HttpServerRequest.HttpServerRequest;
+    if (headers.origin !== (yield* ownOrigin))
+      return HttpServerResponse.text("Invalid origin.", { status: 403 });
+    const { id = "" } = yield* HttpRouter.params;
+    const { seconds } = yield* HttpServerRequest.schemaBodyJson(
+      Schema.Struct({ seconds: PlayedSeconds }),
+    );
+    yield* Effect.flatMap(Playtime.Playtime, (playtime) => playtime.add(id, seconds));
+    return HttpServerResponse.empty({ status: 204 });
+  },
+  Effect.catchTags({
+    SchemaError: failure(400),
+    HttpServerError: failure(400),
+    GameNotInspectedError: failure(404),
+    StateFileError: logged(500),
+  }),
+);
+
 /** The games the page plays in the browser, under `/game/<id>/`. */
 export const routes = HttpRouter.use(
   Effect.fn(function* (router) {
@@ -62,5 +90,6 @@ export const routes = HttpRouter.use(
         : gameFile();
     });
     yield* router.add("GET", "/erased/:id/:name", erasedImage());
+    yield* router.add("POST", "/playtime/:id", recordPlaytime());
   }),
 );

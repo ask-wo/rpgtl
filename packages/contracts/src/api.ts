@@ -16,7 +16,7 @@ import {
 } from "./catalog.ts";
 import { Findings } from "./checks.ts";
 import { CatalogChange } from "./catalogChange.ts";
-import { FolderListing, Game, ListedGame, OtherVersion, VersionChoice } from "./game.ts";
+import { FolderListing, Game, ListedGame, OtherVersion, Playtime, VersionChoice } from "./game.ts";
 import {
   ImportPreview,
   TranslationFileProblem,
@@ -320,6 +320,12 @@ export class GamesApi extends HttpApiGroup.make("games")
         GameBusy,
         StateFileFailed,
       ],
+    }),
+    /** How long the game was played; null until it is first played. */
+    HttpApiEndpoint.get("playtime", "/playtime", {
+      query: GameId,
+      success: Schema.NullOr(Playtime),
+      error: [GameNotInspected, StateFileFailed],
     }),
     /** Removes a game from the list; opening its folder again brings it back with its state. */
     HttpApiEndpoint.post("forget", "/forget", {

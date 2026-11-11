@@ -11,3 +11,4 @@ export const forget = Rpgtl.mutation("games", "forget");
 /** The folders inside `path` on this computer, or in the home folder without one. */
 export const folders = (path: string) =>
   Rpgtl.query("games", "folders", { query: path ? { path } : {} });
+export const playtime = (id: string) => Rpgtl.query("games", "playtime", { query: { id } });
