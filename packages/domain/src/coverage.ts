@@ -1,6 +1,13 @@
 import type { Catalog, LogicUse, MissingText, Plugins } from "@rpgtl/contracts";
 import * as Predicate from "effect/Predicate";
-import { decodeJson, noteTags, pluginParameters, sourceText, variableStrings } from "./extract.ts";
+import {
+  decodeJson,
+  isDrawnTag,
+  noteTags,
+  pluginParameters,
+  sourceText,
+  variableStrings,
+} from "./extract.ts";
 import { entryTranslation } from "./guesses.ts";
 
 /** Every data file of a game and its plugins, for searches of all of it. */
@@ -22,25 +29,105 @@ const isCommand = (node: {
   readonly parameters: ReadonlyArray<unknown>;
 } => Number.isInteger(node.code) && Array.isArray(node.parameters);
 
+// Event and move route command code -> indexes of parameters that name a picture, sound, movie or
+// character image.
+const fileParameters: Partial<Record<number, ReadonlyArray<number>>> = {
+  41: [0], // Move route: Change Image
+  44: [0], // Move route: Play SE
+  101: [0], // Show Text: face
+  132: [0],
+  133: [0],
+  139: [0],
+  140: [1],
+  231: [1],
+  241: [0],
+  245: [0],
+  249: [0],
+  250: [0],
+  261: [0],
+  283: [0, 1],
+  284: [0],
+  322: [1, 3, 5],
+  323: [1],
+};
+const fileFields = new Set([
+  "characterName",
+  "faceName",
+  "battlerName",
+  "battleback1Name",
+  "battleback2Name",
+  "parallaxName",
+  "tilesetNames",
+  "title1Name",
+  "title2Name",
+  "animation1Name",
+  "animation2Name",
+  "effectName",
+]);
+// In these files a `name` is a sound's file name or a name only the editor shows.
+const editorNameFiles = new Set([
+  "Animations.json",
+  "CommonEvents.json",
+  "MapInfos.json",
+  "Map*.json",
+  "System.json",
+  "Tilesets.json",
+  "Troops.json",
+]);
+
+/** A note's tags with values, one per line, and the text around them. */
+function splitNote(note: string) {
+  const spans = noteTags(note).map(({ start, end }) => ({
+    start: note.lastIndexOf("<", start),
+    end: end + 1,
+  }));
+  return {
+    tags: spans.map(({ start, end }) => note.slice(start, end)).join("\n"),
+    rest: spans.reduceRight((text, { start, end }) => text.slice(0, start) + text.slice(end), note),
+  };
+}
+
 /**
- * Calls `visit` with every string in a data file and where it is: an event command's parameter,
- * or the field that holds it.
+ * Calls `visit` with every string in a data file, where it is (an event command's parameter, or
+ * the field that holds it) and whether the game may show it: file names and names only the
+ * editor shows are never shown.
  */
-function visitStrings(file: string, data: unknown, visit: (text: string, where: string) => void) {
-  const walk = (node: unknown, where: string): void => {
-    if (Predicate.isString(node)) visit(node, where);
-    else if (Array.isArray(node)) for (const item of node) walk(item, where);
+function visitStrings(
+  file: string,
+  data: unknown,
+  visit: (text: string, where: string, shown: boolean) => void,
+) {
+  const kind = fileKind(file);
+  const walk = (node: unknown, where: string, shown: boolean): void => {
+    if (Predicate.isString(node)) visit(node, where, shown);
+    else if (Array.isArray(node)) for (const item of node) walk(item, where, shown);
     else if (Predicate.isObject(node)) {
       if (isCommand(node)) {
         for (const [index, parameter] of node.parameters.entries())
-          walk(parameter, `${fileKind(file)} code ${node.code} parameter ${index}`);
+          walk(
+            parameter,
+            `${kind} code ${node.code} parameter ${index}`,
+            !fileParameters[node.code]?.includes(index),
+          );
         return;
       }
       for (const [key, value] of Object.entries(node))
-        walk(value, where.includes(" code ") ? where : `${fileKind(file)} ${key}`);
+        if (where.includes(" code ")) walk(value, where, shown);
+        else if (key === "note" && Predicate.isString(value)) {
+          const { tags, rest } = splitNote(value);
+          visit(tags, `${kind} note`, true);
+          // Plugins such as YEP_ItemCore draw the text between block tags like `<Help Description>`.
+          if (/<\/[^<>\n]+>/.test(rest)) visit(rest, `${kind} note`, true);
+          else visit(rest, `${kind} note outside tags`, false);
+        } else
+          walk(
+            value,
+            `${kind} ${key}`,
+            !fileFields.has(key) && !(key === "name" && editorNameFiles.has(kind)),
+          );
     }
   };
-  walk(data, fileKind(file));
+  walk(data, kind, true);
 }
 
 /** Strings in plugin settings, looking inside lists and structs stored as JSON text. */
@@ -55,9 +142,9 @@ function visitPluginStrings(value: unknown, visit: (text: string) => void): void
 
 /**
  * Chinese, Japanese or Korean text in the game's data files and enabled plugins' settings that no
- * catalog entry covers, grouped by where it is, most first. Comments, file names and names only
- * the editor shows belong here too; the rest is text extraction misses. `listed` are the data
- * files RPGTL reads.
+ * catalog entry covers, grouped by where it is: groups the game may show first, then those of
+ * file names and names only the editor shows, each most first. Comments belong here too; the
+ * rest is text extraction misses. `listed` are the data files RPGTL reads.
  */
 export function missingText(
   contents: GameContents,
@@ -65,24 +152,32 @@ export function missingText(
   catalog: Pick<Catalog, "entries">,
 ): ReadonlyArray<MissingText> {
   const covered = new Set(catalog.entries.flatMap((entry) => entry.source.split("\n")));
+  const sources = new Set(catalog.entries.map((entry) => entry.source));
   // Variable text in a script and drawn text in a note tag are their own entries, so the rest of
-  // the script or note is what may be missing.
+  // the script or note is what may be missing. A tag goes whole, since its key may be CJK too.
   const withoutOwnText = (text: string) =>
-    [...variableStrings(text), ...noteTags(text)]
+    [
+      ...variableStrings(text),
+      ...noteTags(text).map(({ start, end, value }) => ({
+        start: text.lastIndexOf("<", start),
+        end: end + 1,
+        value,
+      })),
+    ]
       .toSorted((a, b) => b.start - a.start)
       .reduce(
         (rest, { start, end, value }) =>
-          covered.has(value) ? rest.slice(0, start) + rest.slice(end) : rest,
+          sources.has(value) ? rest.slice(0, start) + rest.slice(end) : rest,
         text,
       );
   const isMissing = (text: string) =>
     withoutOwnText(text)
       .split("\n")
       .some((line) => sourceText.test(line) && !covered.has(line));
-  const groups = new Map<string, { count: number; examples: Set<string> }>();
-  const add = (where: string, text: string) => {
+  const groups = new Map<string, { shown: boolean; count: number; examples: Set<string> }>();
+  const add = (where: string, text: string, shown: boolean) => {
     if (!isMissing(text)) return;
-    const group = groups.get(where) ?? { count: 0, examples: new Set<string>() };
+    const group = groups.get(where) ?? { shown, count: 0, examples: new Set<string>() };
     groups.set(where, group);
     group.count++;
     if (group.examples.size < 5) group.examples.add(text);
@@ -90,13 +185,21 @@ export function missingText(
   const read = new Set(listed);
   for (const { name, data } of contents.dataFiles) {
     const note = read.has(name) ? "" : " (file not read by RPGTL)";
-    visitStrings(name, data, (text, where) => add(where + note, text));
+    visitStrings(name, data, (text, where, shown) => add(where + note, text, shown));
   }
   for (const [name, parameters] of pluginParameters(contents.plugins))
-    visitPluginStrings(parameters, (text) => add(`plugins.js ${name}`, text));
+    visitPluginStrings(parameters, (text) => add(`plugins.js ${name}`, text, true));
   return [...groups]
-    .map(([where, { count, examples }]) => ({ where, count, examples: [...examples] }))
-    .toSorted((a, b) => b.count - a.count || a.where.localeCompare(b.where));
+    .map(([where, { shown, count, examples }]) => ({
+      where,
+      shown,
+      count,
+      examples: [...examples],
+    }))
+    .toSorted(
+      (a, b) =>
+        Number(b.shown) - Number(a.shown) || b.count - a.count || a.where.localeCompare(b.where),
+    );
 }
 
 const stringLiteral = /"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`([^`\\]*)`/g;
@@ -108,6 +211,14 @@ function literals(code: string) {
     .filter((match) => !own.some(({ start }) => start === match.index))
     .map((match) => match[1] ?? match[2] ?? match[3] ?? "");
 }
+
+// A drawn tag's value is its own entry, which would otherwise match its own translation.
+const withoutDrawnTags = (note: string) =>
+  noteTags(note).reduceRight(
+    (text, { start, end, value }) =>
+      isDrawnTag(value) ? text.slice(0, start) + text.slice(end) : text,
+    note,
+  );
 
 const words = (text: string) => text.split(/[\s<>:,;=[\]"'()]+/);
 
@@ -155,7 +266,7 @@ export function textInLogic(
           check(where, actorName, [actorName]);
       }
       if (Predicate.isString(node.note))
-        check(`${fileKind(name)} note`, node.note, words(node.note));
+        check(`${fileKind(name)} note`, node.note, words(withoutDrawnTags(node.note)));
       for (const value of Object.values(node)) walk(value);
     };
     walk(data);

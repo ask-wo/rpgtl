@@ -65,7 +65,7 @@ function intoRecord<S>(
 const slice = (
   pieces: (text: string) => ReadonlyArray<{ start: number; end: number; value: string }>,
   index: number,
-  write: (value: string) => string,
+  write: (value: string, current: string) => string,
 ): Focus<unknown> => {
   const piece = (text: unknown) =>
     Predicate.isString(text) ? Arr.get(pieces(text), index) : Option.none();
@@ -79,17 +79,19 @@ const slice = (
       const found = piece(text);
       return Option.isSome(found) && Predicate.isString(text) && Predicate.isString(value)
         ? Result.succeed(
-            text.slice(0, found.value.start) + write(value) + text.slice(found.value.end),
+            text.slice(0, found.value.start) +
+              write(value, found.value.value) +
+              text.slice(found.value.end),
           )
         : missing(`no piece ${index}`);
     },
   );
 };
 
-// A line break, `<` or `>` would end the tag early.
-const tagValue = (value: string) =>
-  value
-    .replace(/\s*\n\s*/g, " ")
+// A `<` or `>` would end the tag early. Some plugins read a tag line by line, so a value gets line
+// breaks only where the game's own value has them.
+const tagValue = (value: string, current: string) =>
+  (current.includes("\n") ? value : value.replace(/\s*\n\s*/g, " "))
     .replace(/</g, "‹")
     .replace(/>/g, "›");
 

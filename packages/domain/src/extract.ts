@@ -78,9 +78,12 @@ export function variableStrings(script: string) {
   });
 }
 
-/** The values of a note's tags such as `<AddInfoWindowP:\\C[4]品级  \\C[0]普通>`, in order. */
+/**
+ * The values of a note's tags such as `<AddInfoWindowP:\\C[4]品级  \\C[0]普通>`, in order. A value
+ * may span lines, as in the engine's `DataManager.extractMetadata`.
+ */
 export function noteTags(note: string) {
-  return [...note.matchAll(/<[^<>:\n]+:([^<>\n]*)>/g)].map((match) => {
+  return [...note.matchAll(/<[^<>:\s][^<>:\n]*:([^<>]*)>/g)].map((match) => {
     const value = match[1] ?? "";
     const start = match.index + match[0].indexOf(":") + 1;
     return { start, end: start + value.length, value };
@@ -88,10 +91,10 @@ export function noteTags(note: string) {
 }
 
 /**
- * Whether a note tag's value is drawn as text: a text code such as `\\C[4]` only means something
- * there, while other values are often file names or keys that plugins look up.
+ * Whether a note tag's value is drawn as text: it holds a text code such as `\\C[4]`, a line break
+ * or sentence punctuation. Other values are often file names or keys that plugins look up.
  */
-export const isDrawnTag = (value: string) => /\\[A-Za-z]+\[\d+\]/.test(value);
+export const isDrawnTag = (value: string) => /\\[A-Za-z]+\[\d+\]|\n|[。！？…]/.test(value.trim());
 
 const recordFields = new Set([
   "name",

@@ -118,6 +118,8 @@ export type AuditReport = typeof AuditReport.Type;
 export const MissingText = Schema.Struct({
   /** A data file (maps as `Map*.json`) and the field or event command parameter. */
   where: Schema.String,
+  /** False when the field holds only file names or names the editor shows, never the player. */
+  shown: Schema.Boolean,
   count: Schema.Int,
   /** Up to 5 different texts. */
   examples: Schema.Array(Schema.String),
