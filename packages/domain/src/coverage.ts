@@ -152,14 +152,22 @@ export function missingText(
   catalog: Pick<Catalog, "entries">,
 ): ReadonlyArray<MissingText> {
   const covered = new Set(catalog.entries.flatMap((entry) => entry.source.split("\n")));
+  const sources = new Set(catalog.entries.map((entry) => entry.source));
   // Variable text in a script and drawn text in a note tag are their own entries, so the rest of
-  // the script or note is what may be missing.
+  // the script or note is what may be missing. A tag goes whole, since its key may be CJK too.
   const withoutOwnText = (text: string) =>
-    [...variableStrings(text), ...noteTags(text)]
+    [
+      ...variableStrings(text),
+      ...noteTags(text).map(({ start, end, value }) => ({
+        start: text.lastIndexOf("<", start),
+        end: end + 1,
+        value,
+      })),
+    ]
       .toSorted((a, b) => b.start - a.start)
       .reduce(
         (rest, { start, end, value }) =>
-          covered.has(value) ? rest.slice(0, start) + rest.slice(end) : rest,
+          sources.has(value) ? rest.slice(0, start) + rest.slice(end) : rest,
         text,
       );
   const isMissing = (text: string) =>

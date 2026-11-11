@@ -27,7 +27,7 @@ const contents: GameContents = {
         null,
         { id: 1, note: "掉落率低\n<手动>\n<Category:宝物>" },
         { id: 2, note: "<Help Description>\n一把旧钥匙\n</Help Description>" },
-        { id: 3, note: "<Hint:它在门后。>" },
+        { id: 3, note: "<提示:它在门后。>\n<BookText:河边住着一只老乌龟。\n它从不说话>" },
       ],
     },
     { name: "Map009.json", data: map },
@@ -51,6 +51,10 @@ const catalog = {
     {
       ...newEntry("Items.json", ["3", "note", "noteText", "0"], "它在门后。"),
       translation: { user: "It is behind the door." },
+    },
+    {
+      ...newEntry("Items.json", ["3", "note", "noteText", "1"], "河边住着一只老乌龟。\n它从不说话"),
+      translation: { user: "An old turtle lives by the river.\nIt never speaks." },
     },
   ],
 };
