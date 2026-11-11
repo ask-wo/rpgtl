@@ -27,6 +27,7 @@ const contents: GameContents = {
         null,
         { id: 1, note: "掉落率低\n<手动>\n<Category:宝物>" },
         { id: 2, note: "<Help Description>\n一把旧钥匙\n</Help Description>" },
+        { id: 3, note: "<Hint:它在门后。>" },
       ],
     },
     { name: "Map009.json", data: map },
@@ -46,6 +47,10 @@ const catalog = {
     {
       ...newEntry("Map009.json", ["events", "1", "pages", "0", "list", "1"], "人类"),
       translation: { user: "Human" },
+    },
+    {
+      ...newEntry("Items.json", ["3", "note", "noteText", "0"], "它在门后。"),
+      translation: { user: "It is behind the door." },
     },
   ],
 };

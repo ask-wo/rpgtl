@@ -1,6 +1,13 @@
 import type { Catalog, LogicUse, MissingText, Plugins } from "@rpgtl/contracts";
 import * as Predicate from "effect/Predicate";
-import { decodeJson, noteTags, pluginParameters, sourceText, variableStrings } from "./extract.ts";
+import {
+  decodeJson,
+  isDrawnTag,
+  noteTags,
+  pluginParameters,
+  sourceText,
+  variableStrings,
+} from "./extract.ts";
 import { entryTranslation } from "./guesses.ts";
 
 /** Every data file of a game and its plugins, for searches of all of it. */
@@ -197,6 +204,14 @@ function literals(code: string) {
     .map((match) => match[1] ?? match[2] ?? match[3] ?? "");
 }
 
+// A drawn tag's value is its own entry, which would otherwise match its own translation.
+const withoutDrawnTags = (note: string) =>
+  noteTags(note).reduceRight(
+    (text, { start, end, value }) =>
+      isDrawnTag(value) ? text.slice(0, start) + text.slice(end) : text,
+    note,
+  );
+
 const words = (text: string) => text.split(/[\s<>:,;=[\]"'()]+/);
 
 /**
@@ -243,7 +258,7 @@ export function textInLogic(
           check(where, actorName, [actorName]);
       }
       if (Predicate.isString(node.note))
-        check(`${fileKind(name)} note`, node.note, words(node.note));
+        check(`${fileKind(name)} note`, node.note, words(withoutDrawnTags(node.note)));
       for (const value of Object.values(node)) walk(value);
     };
     walk(data);
