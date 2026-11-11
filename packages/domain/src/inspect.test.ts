@@ -4,11 +4,11 @@ import {
   assetNames,
   bootEngines,
   entryTranslation,
-  imageNames,
-  imageReferences,
+  mediaNames,
+  mediaReferences,
   inspectedCatalog,
   mediaWarnings,
-  missingImages,
+  missingFiles,
   newEntry,
 } from "./index.ts";
 
@@ -46,16 +46,57 @@ it("an image is missing unless its folder has it, in any case, and faces name th
   };
   const actors = [null, { faceName: "$Arlene", faceIndex: 1, characterName: "hero" }];
   const references = [
-    ...imageReferences("Map001.json", map),
-    ...imageReferences("Actors.json", actors),
+    ...mediaReferences("Map001.json", map),
+    ...mediaReferences("Actors.json", actors),
   ];
   const folders = new Map([
-    ["img/characters/", imageNames(["HERO.png"])],
-    ["img/faces/", imageNames(["Actor1.png", "Actor1.rpgmvp", "notes.txt"])],
-    ["img/pictures/", imageNames(["Title.png_"])],
+    ["img/characters/", mediaNames("img/characters/", ["HERO.png"])],
+    ["img/faces/", mediaNames("img/faces/", ["Actor1.png", "Actor1.rpgmvp", "notes.txt"])],
+    ["img/pictures/", mediaNames("img/pictures/", ["Title.png_"])],
   ]);
-  assert.deepStrictEqual(missingImages(references, folders), [
+  assert.deepStrictEqual(missingFiles(references, folders), [
     { path: "img/faces/$Arlene", files: ["Actors.json", "Map001.json"] },
+  ]);
+});
+
+const sound = (name: string) => ({ name, volume: 90, pitch: 100, pan: 0 });
+
+it("a sound is missing unless its folder has it in any format, and a map's music only if it plays", () => {
+  const map = {
+    autoplayBgm: false,
+    bgm: sound("Unused"),
+    autoplayBgs: true,
+    bgs: sound("Rain"),
+    events: [
+      null,
+      {
+        pages: [
+          {
+            list: [
+              { code: 241, parameters: [sound("Duel")] },
+              { code: 250, parameters: [sound("")] },
+              {
+                code: 205,
+                parameters: [-1, { list: [{ code: 44, parameters: [sound("Step")] }] }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const system = { titleBgm: sound("theme"), sounds: [sound("Cursor"), sound("")] };
+  const references = [
+    ...mediaReferences("Map001.json", map),
+    ...mediaReferences("System.json", system),
+  ];
+  const folders = new Map([
+    ["audio/bgm/", mediaNames("audio/bgm/", ["Theme.ogg", "Duel.mid"])],
+    ["audio/bgs/", mediaNames("audio/bgs/", ["Rain.rpgmvo"])],
+    ["audio/se/", mediaNames("audio/se/", ["Cursor.m4a"])],
+  ]);
+  assert.deepStrictEqual(missingFiles(references, folders), [
+    { path: "audio/se/Step", files: ["Map001.json"] },
   ]);
 });
 

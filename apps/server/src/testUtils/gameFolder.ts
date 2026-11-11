@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
-/** An MV game below `www/`, with a dialogue line, a plugin setting and a face it doesn't have. */
+/** An MV game below `www/`, with a dialogue line, a plugin setting, and a face and a song it doesn't have. */
 export const mvGame: Record<string, string> = {
   "Game.exe": "",
   "www/index.html": '<script src="js/rpg_core.js"></script><script src="js/main.js"></script>',
@@ -24,6 +24,7 @@ export const mvGame: Record<string, string> = {
               { code: 101, parameters: ["$Arlene", 2, 0, 2] },
               { code: 401, parameters: ["你好"] },
               { code: 231, parameters: [1, "title"] },
+              { code: 241, parameters: [{ name: "Storm", volume: 90, pitch: 100, pan: 0 }] },
             ],
           },
         ],

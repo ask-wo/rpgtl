@@ -1,3 +1,4 @@
+import type { MissingFile } from "@rpgtl/contracts";
 import { TriangleAlertIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
@@ -27,25 +28,22 @@ export function Overview() {
   const game = useGame();
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
-      {game.missingImages.length > 0 && (
-        <Alert>
-          <TriangleAlertIcon />
-          <AlertTitle>
-            {game.missingImages.length === 1
-              ? "1 image the game asks for isn't in its folder. Replaced with a blank image."
-              : `${game.missingImages.length} images the game asks for aren't in its folder. Replaced with blank images.`}
-          </AlertTitle>
-          <AlertDescription>
-            <ul className="list-inside list-disc">
-              {game.missingImages.map((image) => (
-                <li key={image.path}>
-                  <code>{image.path}</code>, asked for in {image.files.join(", ")}
-                </li>
-              ))}
-            </ul>
-          </AlertDescription>
-        </Alert>
-      )}
+      <MissingFiles
+        files={game.missingImages}
+        title={(count) =>
+          count === 1
+            ? "1 image the game asks for isn't in its folder. Replaced with a blank image."
+            : `${count} images the game asks for aren't in its folder. Replaced with blank images.`
+        }
+      />
+      <MissingFiles
+        files={game.missingAudio ?? []}
+        title={(count) =>
+          count === 1
+            ? "1 sound the game asks for isn't in its folder. It stays silent."
+            : `${count} sounds the game asks for aren't in its folder. They stay silent.`
+        }
+      />
       {game.mediaWarnings.length > 0 && (
         <Alert>
           <TriangleAlertIcon />
@@ -84,5 +82,30 @@ export function Overview() {
       </Card>
       <TranslationCard />
     </div>
+  );
+}
+
+function MissingFiles({
+  files,
+  title,
+}: {
+  files: ReadonlyArray<MissingFile>;
+  title: (count: number) => string;
+}) {
+  if (files.length === 0) return null;
+  return (
+    <Alert>
+      <TriangleAlertIcon />
+      <AlertTitle>{title(files.length)}</AlertTitle>
+      <AlertDescription>
+        <ul className="list-inside list-disc">
+          {files.map((file) => (
+            <li key={file.path}>
+              <code>{file.path}</code>, asked for in {file.files.join(", ")}
+            </li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
   );
 }

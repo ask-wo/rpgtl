@@ -10,7 +10,7 @@ The user points RPGTL at an unpacked MV/MZ game folder; RPGTL scans its text, ad
 - `open-forget` removes a game from the list with its `×` and keeps its translations.
 - `open-pick` chooses a folder in the page's folder browser, which marks folders holding a game.
 - `open-version` opening a folder that holds another version of a saved game (same MZ game id, or encryption key and title, or only the title) asks first: **Replace** keeps the saved game's id and the translations of unchanged lines after a backup, **Keep both** opens it as a new game, **Don't open** opens nothing.
-- `open-overview` the overview: missing images and NW.js media warnings when there are any, and the in-game tools.
+- `open-overview` the overview: missing images, missing sounds and NW.js media warnings when there are any, and the in-game tools.
 
 ## How to get to it (user POV)
 

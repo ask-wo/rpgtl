@@ -1,13 +1,13 @@
 import * as Schema from "effect/Schema";
 import { Engine } from "./catalog.ts";
 
-/** An image the game's data asks for that isn't in the game, such as `img/faces/$Arlene`. */
-export const MissingImage = Schema.Struct({
+/** A file the game's data asks for that isn't in the game, such as `img/faces/$Arlene`. */
+export const MissingFile = Schema.Struct({
   path: Schema.String,
   /** The data files that ask for it. */
   files: Schema.Array(Schema.String),
 });
-export type MissingImage = typeof MissingImage.Type;
+export type MissingFile = typeof MissingFile.Type;
 
 /** What a game's `data/System.json` carries that is taken to stay the same across its versions. */
 export const GameIdentity = Schema.Struct({
@@ -42,7 +42,9 @@ export const Game = Schema.Struct({
   files: Schema.Array(Schema.String),
   encryptedAssets: Schema.Boolean,
   mediaWarnings: Schema.Array(Schema.String),
-  missingImages: Schema.Array(MissingImage),
+  missingImages: Schema.Array(MissingFile),
+  /** Read on every inspection; a game saved without it gets it when it is opened again. */
+  missingAudio: Schema.optionalKey(Schema.Array(MissingFile)),
   /** Read on every open; a game saved without it gets it on its next open. */
   identity: Schema.optionalKey(GameIdentity),
   /** Read on every open; a game saved without it gets it on its next open. */
