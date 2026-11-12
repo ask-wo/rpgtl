@@ -81,7 +81,7 @@ test("translations edited on the Text page show in the game, which saves and loa
   for (let i = 0; i < 3; i++) await closeMessage(game);
   await until(game, `${scene}._scrollTextWindow.visible`);
   // Holding OK scrolls three times as fast.
-  await key(game, "Enter", 4000);
+  await key(game, "Enter", 1000);
   await idle(game);
   expect(await game.evaluate("[$gameSwitches.value(1), $gameMap.event(1)._pageIndex]")).toEqual([
     true,
