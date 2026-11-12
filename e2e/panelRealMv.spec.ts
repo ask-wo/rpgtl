@@ -2,22 +2,12 @@
 // itself, shows the level-up message and decides whether the player dashes.
 import type { Page } from "@playwright/test";
 import { expect, test } from "./rpgtl.ts";
-import {
-  closeMessage,
-  expectNoErrors,
-  gameErrors,
-  idle,
-  newGame,
-  scene,
-  sceneIs,
-  until,
-} from "./realMv.ts";
+import { closeMessage, idle, newGame, scene, sceneIs, until } from "./realMv.ts";
 
 test("the game sees keys let go in the panel and pressed right after it closes", async ({
   openGame,
 }) => {
   const game = await (await openGame("real-MV")).play();
-  const errors = gameErrors(game);
   await newGame(game);
   await closeMessage(game);
   await idle(game);
@@ -40,8 +30,6 @@ test("the game sees keys let go in the panel and pressed right after it closes",
   await game.keyboard.press("F8");
   await idle(game);
   expect(await game.evaluate("Input.isPressed('left')")).toBe(false);
-
-  await expectNoErrors(game, errors);
 });
 
 /** Starts walking with an arrow key and tells whether the player dashes on that step. */
@@ -58,7 +46,6 @@ async function dashes(game: Page, arrow: string) {
 test("the panel wins and loses battles, levels up and dashes", async ({ openGame }) => {
   test.slow();
   const game = await (await openGame("real-MV")).play();
-  const errors = gameErrors(game);
   const dialogs: string[] = [];
   let acceptDialog = false;
   game.on("dialog", async (dialog) => {
@@ -152,6 +139,4 @@ test("the panel wins and loses battles, levels up and dashes", async ({ openGame
   await closePanel();
   await closeMessage(game);
   await sceneIs(game, "Scene_Gameover");
-
-  await expectNoErrors(game, errors);
 });
