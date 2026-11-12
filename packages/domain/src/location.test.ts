@@ -1,7 +1,6 @@
 import { assert, it } from "@effect/vitest";
-import * as Option from "effect/Option";
 import * as Result from "effect/Result";
-import { applyTranslations, decodeGameFile, locationOf, pathOf } from "./index.ts";
+import { applyTranslations, decodeGameFile, mapOf } from "./index.ts";
 import { extractFrom, readGameFile } from "./testUtils/gameFiles.ts";
 
 const commonEvents = [
@@ -17,33 +16,12 @@ const commonEvents = [
     ],
   },
 ];
-const map = {
-  displayName: "大厅",
-  note: "<Info:\\C[1]地图>",
-  events: [null, { id: 1, name: "客人", note: "<Info:\\C[1]客人>", pages: [] }],
-};
-
-it("every path extraction writes reads back as the same location", () => {
-  const entries = [
-    ...extractFrom("CommonEvents.json", commonEvents),
-    ...extractFrom("Map001.json", map),
-    ...extractFrom("Classes.json", [
-      null,
-      { id: 1, name: "剑士", learnings: [{ note: "<A:\\C[1]技>" }] },
-    ]),
-    ...extractFrom("System.json", { switches: ["", "门"], terms: { commands: ["战斗"] } }),
-  ];
-  assert.strictEqual(entries.length, 14);
-  for (const { file, path } of entries)
-    assert.deepStrictEqual(Option.map(locationOf(file, path), pathOf), Option.some(path));
-});
-
-it("paths RPGTL never writes have no location", () => {
-  assert.isTrue(
-    Option.isNone(locationOf("CommonEvents.json", ["1", "list", "x", "parameters", "0"])),
-  );
-  assert.isTrue(Option.isNone(locationOf("Map001.json", ["events", "1", "pages", "0", "list"])));
-  assert.isTrue(Option.isNone(locationOf("Actors.json", ["1"])));
+it("only a map file named as the engine loads it holds a map", () => {
+  assert.strictEqual(mapOf("Map007.json"), 7);
+  assert.strictEqual(mapOf("Map1000.json"), 1000);
+  assert.isUndefined(mapOf("Map7.json"));
+  assert.isUndefined(mapOf("MapInfos.json"));
+  assert.isTrue(readGameFile("Map7.json", { events: [] })._tag === "Other");
 });
 
 it("a data file that isn't what its name says fails naming the file", () => {

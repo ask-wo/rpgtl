@@ -5,6 +5,7 @@ import { isColorCode, keepsControlCodes } from "./controlCodes.ts";
 import { plainDashes } from "./dashes.ts";
 import { requestText, withCodes, withoutCodes, type RequestText } from "./requestText.ts";
 import { onceEach } from "./sounds.ts";
+import type { Placed } from "./location.ts";
 
 const placeholder = /\{(\d+)\}/g;
 
@@ -95,7 +96,7 @@ export interface AcceptedAnswer {
 
 /** Checks a model's answer for an entry, with the entry's control codes put back when it passes. */
 export function checkAnswer(
-  entry: Pick<Entry, "source" | "file" | "path">,
+  entry: Pick<Entry, "source"> & Placed,
   answer: string | undefined,
   { glossary = [], speaker, limit }: AnswerContext = {},
 ): Result.Result<AcceptedAnswer, RejectReason> {

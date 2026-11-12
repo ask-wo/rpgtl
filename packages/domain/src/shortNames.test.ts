@@ -10,8 +10,11 @@ import {
 let counter = 0;
 const message = (source: string, speaker?: string): Entry => ({
   id: `m${++counter}`,
-  file: "Map001.json",
-  path: ["events", "1", "pages", "0", "list", String(counter), "parameters", "0"],
+  location: {
+    _tag: "Message",
+    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+    index: counter,
+  },
   source: speaker ? `\\n<${speaker}>${source}` : source,
   translation: {},
 });
@@ -30,8 +33,13 @@ it("the short form of a dotted name takes the last word of its translation", () 
 
 const mapLine = (source: string): Entry => ({
   id: source,
-  file: "Map001.json",
-  path: [],
+  location: {
+    _tag: "CommandText",
+    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+    index: 0,
+    parameter: 0,
+    keys: ["0"],
+  },
   source,
   translation: {},
 });

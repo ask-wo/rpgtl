@@ -4,8 +4,13 @@ import { appliedSystem, loadRuntime } from "../testUtils/fixture.ts";
 
 const variableTextEntry = (source: string, translation: string): Entry => ({
   id: source,
-  file: "CommonEvents.json",
-  path: ["1", "list", "0", "parameters", "0", "variableText", "0"],
+  location: {
+    _tag: "ScriptText",
+    list: { _tag: "CommonEvent", event: 1 },
+    index: 0,
+    parameter: 0,
+    literal: 0,
+  },
   source,
   translation: translation ? { user: translation } : {},
 });
@@ -16,15 +21,19 @@ test("runtime translates text that a save stored before it was translated", asyn
     variableTextEntry("猫娘", ""),
     {
       id: "a",
-      file: "Actors.json",
-      path: ["1", "name"],
+      location: { _tag: "RecordField", table: "actors", record: 1, field: "name" },
       source: "优斗",
       translation: { user: "Yuto" },
     },
     {
       id: "b",
-      file: "Map001.json",
-      path: ["events", "1", "pages", "0", "list", "3", "parameters", "1"],
+      location: {
+        _tag: "CommandText",
+        list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+        index: 3,
+        parameter: 1,
+        keys: [],
+      },
       source: "小优",
       translation: { user: "Little Yuto" },
     },

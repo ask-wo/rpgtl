@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import { Location } from "./location.ts";
 import { RunModels } from "./runLog.ts";
 
 export const Engine = Schema.Literals(["MV", "MZ"]);
@@ -45,13 +46,7 @@ export type EntryTranslation = typeof EntryTranslation.Type;
 
 export const Entry = Schema.Struct({
   id: Schema.String,
-  file: Schema.String,
-  /**
-   * Where the text is; see "entry path" in docs/glossary.md for its forms. A new form must be
-   * handled where paths are read: setText and applyTranslations in apply.ts, showTextSpeakers in
-   * reuse.ts, the name and speaker checks in nameEntries.ts, and keepsLineBreaks in extract.ts.
-   */
-  path: Schema.Array(Schema.String),
+  location: Location,
   source: Schema.String,
   /**
    * What the image reader read, when the user corrected it to `source`. The entry's id comes from

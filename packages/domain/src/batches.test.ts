@@ -2,19 +2,22 @@ import { assert, it } from "@effect/vitest";
 import type { Entry } from "@rpgtl/contracts";
 import { batchRequest, CatalogDraft, packGroups, sceneBatches, textGroups } from "./index.ts";
 
-const line = (id: string, index: number, list: string): Entry => ({
+const line = (id: string, index: number, list: number): Entry => ({
   id,
-  file: "Map001.json",
-  path: ["events", list, "pages", "0", "list", String(index), "parameters", "0"],
+  location: {
+    _tag: "Message",
+    list: { _tag: "MapEventPage", map: 1, event: list, page: 0 },
+    index: index,
+  },
   source: "你好",
   translation: {},
 });
 
-const scene = (list: string, count: number) =>
+const scene = (list: number, count: number) =>
   Array.from({ length: count }, (_, index) => line(`${list}-${index}`, index, list));
 
 it("short scenes are packed together up to a batch, and a long one goes alone", () => {
-  const packed = packGroups([scene("1", 2), scene("2", 2), scene("3", 5), scene("4", 1)], 4);
+  const packed = packGroups([scene(1, 2), scene(2, 2), scene(3, 5), scene(4, 1)], 4);
   assert.deepStrictEqual(
     packed.map((group) => group.map((entry) => entry.id)),
     [["3-0", "3-1", "3-2", "3-3", "3-4"], ["1-0", "1-1", "2-0", "2-1"], ["4-0"]],
@@ -23,8 +26,7 @@ it("short scenes are packed together up to a batch, and a long one goes alone", 
 
 const button = (file: string, source: string): Entry => ({
   id: file,
-  file,
-  path: ["lines", "0"],
+  location: { _tag: "ImageLines", image: file, lines: [0] },
   source,
   translation: {},
 });

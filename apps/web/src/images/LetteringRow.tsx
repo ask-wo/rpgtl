@@ -16,7 +16,7 @@ import { ChoiceField } from "../translation/ChoiceField.tsx";
 import type { Choice } from "../translation/choices.ts";
 import { gameFont } from "./assets.ts";
 import type { ShownImages } from "./InGameImage.tsx";
-import { entryTranslation } from "@rpgtl/domain";
+import { entryTranslation, isImageText } from "@rpgtl/domain";
 
 /** How this game draws the English in its images. */
 export interface Lettering {
@@ -139,7 +139,7 @@ function FontPreview({ game, shown }: { readonly game: Game; readonly shown: Sho
   const words = [
     ...new Set(
       shown.entries
-        .filter((entry) => entry.file.startsWith("img/") && !entry.keepOriginal)
+        .filter((entry) => isImageText(entry) && !entry.keepOriginal)
         .map((entry) => entryTranslation(entry).trim())
         .filter((text) => text && text.length <= 14 && !text.includes("\n")),
     ),

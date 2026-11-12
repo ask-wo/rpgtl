@@ -1,81 +1,80 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
+import { type Entry, EventListRef, Location, NoteOwner, Table } from "@rpgtl/contracts";
 import * as Data from "effect/Data";
-import * as Option from "effect/Option";
 
-/** An event list: a common event's, or a page's of a troop or a map event. */
-export type EventListRef = Data.TaggedEnum<{
-  CommonEvent: { readonly event: number };
-  TroopPage: { readonly troop: number; readonly page: number };
-  MapEventPage: { readonly event: number; readonly page: number };
-}>;
-export const EventListRef = Data.taggedEnum<EventListRef>();
+const tableFiles: Record<Table, string> = {
+  actors: "Actors.json",
+  classes: "Classes.json",
+  skills: "Skills.json",
+  items: "Items.json",
+  weapons: "Weapons.json",
+  armors: "Armors.json",
+  enemies: "Enemies.json",
+  states: "States.json",
+  mapInfos: "MapInfos.json",
+  tilesets: "Tilesets.json",
+};
+const fileTables = new Map(Table.literals.map((table) => [tableFiles[table], table]));
 
-/** What holds a note: a record, a class's learning, a map or a map event. */
-export type NoteOwner = Data.TaggedEnum<{
-  Record: { readonly record: number };
-  ClassLearning: { readonly record: number; readonly learning: number };
-  Map: {};
-  MapEvent: { readonly event: number };
-}>;
-export const NoteOwner = Data.taggedEnum<NoteOwner>();
+/** The database table a data file such as `Items.json` holds. */
+export const tableOf = (file: string) => fileTables.get(file);
 
-export type NameGroup = "events" | "switches" | "variables";
+// The engine loads map n from this name only.
+const mapFile = (map: number) => `Map${String(map).padStart(3, "0")}.json`;
+
+/** The map a data file such as `Map007.json` holds; none for a name the engine never loads. */
+export const mapOf = (file: string) => {
+  const map = /^Map(\d+)\.json$/.exec(file)?.[1];
+  return map !== undefined && mapFile(Number(map)) === file ? Number(map) : undefined;
+};
+
+const listFile = EventListRef.match({
+  CommonEvent: () => "CommonEvents.json",
+  TroopPage: () => "Troops.json",
+  MapEventPage: ({ map }) => mapFile(map),
+});
+
+const noteFile = NoteOwner.match({
+  Record: ({ table }) => tableFiles[table],
+  ClassLearning: () => tableFiles.classes,
+  Map: ({ map }) => mapFile(map),
+  MapEvent: ({ map }) => mapFile(map),
+});
 
 /**
- * Where an entry's text is. Saved catalogs keep it as an entry path (see "entry path" in
- * docs/glossary.md); `locationOf` reads one and `pathOf` writes it.
+ * The file below the game's `data/` folder that a location is in; `plugins.js` for a plugin
+ * setting, and the image's path for its text.
  */
-export type Location = Data.TaggedEnum<{
-  /** A Show Text or Scrolling Text message: the command at `index` and the lines after it. */
-  Message: { readonly list: EventListRef; readonly index: number };
-  /** Text in a command's parameter, at `keys` inside it, which may go through JSON text. */
-  CommandText: {
-    readonly list: EventListRef;
-    readonly index: number;
-    readonly parameter: number;
-    readonly keys: ReadonlyArray<string>;
-  };
-  /** The `literal`th string a script stores in or compares with a variable. */
-  ScriptText: {
-    readonly list: EventListRef;
-    readonly index: number;
-    readonly parameter: number;
-    readonly literal: number;
-  };
-  /** A text field of a database record, such as an actor's name or an item's description. */
-  RecordField: { readonly record: number; readonly field: string };
-  /** The value of the `tag`th tag of a note. */
-  NoteTag: { readonly owner: NoteOwner; readonly tag: number };
-  /** A text in System.json, such as the game title or a menu term, at `keys`. */
-  SystemText: { readonly keys: ReadonlyArray<string> };
-  /** A map's display name. */
-  MapName: {};
-  /** The name of an event, switch or variable, which only the map view and the F8 panel show. */
-  Name: { readonly group: NameGroup; readonly id: number };
-  /** A setting of a plugin in js/plugins.js, at `keys` inside it, which may go through JSON text. */
-  PluginSetting: { readonly plugin: string; readonly keys: ReadonlyArray<string> };
-  /** Lines of an image's saved read result. */
-  ImageLines: { readonly lines: ReadonlyArray<number> };
-}>;
-export const Location = Data.taggedEnum<Location>();
+export const fileOf: (location: Location) => string = Location.match({
+  Message: ({ list }) => listFile(list),
+  CommandText: ({ list }) => listFile(list),
+  ScriptText: ({ list }) => listFile(list),
+  RecordField: ({ table }) => tableFiles[table],
+  NoteTag: ({ owner }) => noteFile(owner),
+  SystemText: () => "System.json",
+  MapName: ({ map }) => mapFile(map),
+  EventName: ({ map }) => mapFile(map),
+  Name: () => "System.json",
+  PluginSetting: () => "plugins.js",
+  ImageLines: ({ image }) => image,
+});
 
-const number = (key: string | undefined) =>
-  key !== undefined && /^\d+$/.test(key) ? Option.some(Number(key)) : Option.none();
-
-const listKeys = EventListRef.$match({
+const listKeys = EventListRef.match({
   CommonEvent: ({ event }) => [String(event), "list"],
   TroopPage: ({ troop, page }) => [String(troop), "pages", String(page), "list"],
   MapEventPage: ({ event, page }) => ["events", String(event), "pages", String(page), "list"],
 });
 
-const noteKeys = NoteOwner.$match({
+const noteKeys = NoteOwner.match({
   Record: ({ record }) => [String(record)],
   ClassLearning: ({ record, learning }) => [String(record), "learnings", String(learning)],
   Map: () => [],
   MapEvent: ({ event }) => ["events", String(event)],
 });
 
-/** The entry path of a location. */
-export const pathOf: (location: Location) => ReadonlyArray<string> = Location.$match({
+/** The keys to a location's text in its file. */
+export const pathOf: (location: Location) => ReadonlyArray<string> = Location.match({
   Message: ({ list, index }) => [...listKeys(list), String(index), "parameters", "0"],
   CommandText: ({ list, index, parameter, keys }) => [
     ...listKeys(list),
@@ -96,120 +95,104 @@ export const pathOf: (location: Location) => ReadonlyArray<string> = Location.$m
   NoteTag: ({ owner, tag }) => [...noteKeys(owner), "note", "noteText", String(tag)],
   SystemText: ({ keys }) => keys,
   MapName: () => ["displayName"],
-  Name: ({ group, id }) =>
-    group === "events" ? ["events", String(id), "name"] : [group, String(id)],
+  EventName: ({ event }) => ["events", String(event), "name"],
+  Name: ({ group, id }) => [group, String(id)],
   PluginSetting: ({ plugin, keys }) => [plugin, ...keys],
   ImageLines: ({ lines }) => ["lines", ...lines.map(String)],
 });
 
-const isMap = (file: string) => /^Map\d+\.json$/.test(file);
+/**
+ * A new entry for the text at `location`. Its id hashes the file, keys and text, so it stays while
+ * the text stays where it is, also in another copy of the game.
+ */
+export const newEntry = <L extends Location>(
+  location: L,
+  source: string,
+): Entry & { readonly location: L } => ({
+  id: bytesToHex(
+    sha256(utf8ToBytes(JSON.stringify([fileOf(location), pathOf(location), source]))),
+  ).slice(0, 24),
+  location,
+  source,
+  translation: {},
+});
 
-/** The event list that keys up to and including "list" name in `file`. */
-function listOf(file: string, keys: ReadonlyArray<string>): Option.Option<EventListRef> {
-  if (file === "CommonEvents.json" && keys.length === 2)
-    return Option.map(number(keys[0]), (event) => EventListRef.CommonEvent({ event }));
-  if (file === "Troops.json" && keys.length === 4 && keys[1] === "pages")
-    return Option.zipWith(number(keys[0]), number(keys[2]), (troop, page) =>
-      EventListRef.TroopPage({ troop, page }),
-    );
-  if (isMap(file) && keys.length === 5 && keys[0] === "events" && keys[2] === "pages")
-    return Option.zipWith(number(keys[1]), number(keys[3]), (event, page) =>
-      EventListRef.MapEventPage({ event, page }),
-    );
-  return Option.none();
+/** An entry or what a run asks about; text that only a run made, such as a speaker's name, has no location. */
+export interface Placed {
+  readonly location?: Location | undefined;
 }
-
-function commandLocation(file: string, path: ReadonlyArray<string>, listEnd: number) {
-  const [position, parameters, parameter, ...rest] = path.slice(listEnd + 1);
-  if (parameters !== "parameters") return Option.none();
-  return Option.all({
-    list: listOf(file, path.slice(0, listEnd + 1)),
-    index: number(position),
-    parameter: number(parameter),
-  }).pipe(
-    Option.flatMap(({ list, index, parameter: at }): Option.Option<Location> => {
-      if (rest[0] === "variableText")
-        return rest.length === 2
-          ? Option.map(number(rest[1]), (literal) =>
-              Location.ScriptText({ list, index, parameter: at, literal }),
-            )
-          : Option.none();
-      return Option.some(
-        at === 0 && rest.length === 0
-          ? Location.Message({ list, index })
-          : Location.CommandText({ list, index, parameter: at, keys: rest }),
-      );
-    }),
-  );
-}
-
-function noteOwner(file: string, keys: ReadonlyArray<string>): Option.Option<NoteOwner> {
-  if (isMap(file)) {
-    if (keys.length === 0) return Option.some(NoteOwner.Map());
-    return keys.length === 2 && keys[0] === "events"
-      ? Option.map(number(keys[1]), (event) => NoteOwner.MapEvent({ event }))
-      : Option.none();
-  }
-  if (keys.length === 1)
-    return Option.map(number(keys[0]), (record) => NoteOwner.Record({ record }));
-  return keys.length === 3 && keys[1] === "learnings"
-    ? Option.zipWith(number(keys[0]), number(keys[2]), (record, learning) =>
-        NoteOwner.ClassLearning({ record, learning }),
-      )
-    : Option.none();
-}
-
-/** The location an entry path names in `file`, or none for a path RPGTL never writes. */
-export function locationOf(file: string, path: ReadonlyArray<string>): Option.Option<Location> {
-  if (file.startsWith("img/")) {
-    const [lines, ...numbers] = path;
-    return lines === "lines"
-      ? Option.map(Option.all(numbers.map(number)), (found) =>
-          Location.ImageLines({ lines: found }),
-        )
-      : Option.none();
-  }
-  if (file === "plugins.js") {
-    const [plugin, ...keys] = path;
-    return plugin === undefined
-      ? Option.none()
-      : Option.some(Location.PluginSetting({ plugin, keys }));
-  }
-  const note = path.length - 3;
-  if (path[note] === "note" && path[note + 1] === "noteText")
-    return Option.zipWith(
-      noteOwner(file, path.slice(0, note)),
-      number(path[note + 2]),
-      (owner, tag) => Location.NoteTag({ owner, tag }),
-    );
-  const list = path.indexOf("list");
-  if (list >= 0) return commandLocation(file, path, list);
-  const [first, second, third] = path;
-  if (file === "System.json") {
-    if (path.length === 2 && (first === "switches" || first === "variables"))
-      return Option.map(number(second), (id) => Location.Name({ group: first, id }));
-    return path.length ? Option.some(Location.SystemText({ keys: path })) : Option.none();
-  }
-  if (isMap(file)) {
-    if (path.length === 1 && first === "displayName") return Option.some(Location.MapName());
-    return path.length === 3 && first === "events" && third === "name"
-      ? Option.map(number(second), (id) => Location.Name({ group: "events", id }))
-      : Option.none();
-  }
-  return path.length === 2 && second !== undefined
-    ? Option.map(number(first), (record) => Location.RecordField({ record, field: second }))
-    : Option.none();
-}
-
-/** The location of an entry, when it has a path. */
-export const entryLocation = (entry: {
-  readonly file?: string | undefined;
-  readonly path?: ReadonlyArray<string> | undefined;
-}) =>
-  entry.file === undefined || entry.path === undefined
-    ? Option.none()
-    : locationOf(entry.file, entry.path);
 
 /** Whether the entry is the text of a Show Text command. */
-export const isMessage = (entry: Parameters<typeof entryLocation>[0]) =>
-  Option.exists(entryLocation(entry), (at) => at._tag === "Message");
+export const isMessage = (entry: Placed) => entry.location?._tag === "Message";
+
+type ImageLines = Extract<Location, { readonly _tag: "ImageLines" }>;
+
+/** Whether the entry is text read in an image. */
+export const isImageText = <E extends Placed>(
+  entry: E,
+): entry is E & { readonly location: ImageLines } => entry.location?._tag === "ImageLines";
+
+/** Text of the game's system settings: its title, terms, and switch and variable names. */
+export const isSystemText = ({ location }: Placed) =>
+  location?._tag === "SystemText" || location?._tag === "Name";
+
+/** Text of the system's or a plugin's settings, which says nothing about the story's people. */
+export const isSettingText = (entry: Placed) =>
+  isSystemText(entry) || entry.location?._tag === "PluginSetting";
+
+/** A text that names an event list, the same for equal lists. */
+export const listKey = EventListRef.match({
+  CommonEvent: ({ event }) => `common ${event}`,
+  TroopPage: ({ troop, page }) => `troop ${troop} ${page}`,
+  MapEventPage: ({ map, event, page }) => `map ${map} ${event} ${page}`,
+});
+
+/** The part of the game a location is in, which groups its text into scenes and the Text page's tree. */
+export type Place = Data.TaggedEnum<{
+  Map: { readonly map: number };
+  Table: { readonly table: Table };
+  CommonEvents: {};
+  Troops: {};
+  System: {};
+  Plugins: {};
+  Image: { readonly image: string };
+}>;
+export const Place = Data.taggedEnum<Place>();
+
+const listPlace = EventListRef.match({
+  CommonEvent: () => Place.CommonEvents(),
+  TroopPage: () => Place.Troops(),
+  MapEventPage: ({ map }) => Place.Map({ map }),
+});
+
+const notePlace = NoteOwner.match({
+  Record: ({ table }) => Place.Table({ table }),
+  ClassLearning: () => Place.Table({ table: "classes" }),
+  Map: ({ map }) => Place.Map({ map }),
+  MapEvent: ({ map }) => Place.Map({ map }),
+});
+
+export const placeOf: (location: Location) => Place = Location.match({
+  Message: ({ list }) => listPlace(list),
+  CommandText: ({ list }) => listPlace(list),
+  ScriptText: ({ list }) => listPlace(list),
+  RecordField: ({ table }) => Place.Table({ table }),
+  NoteTag: ({ owner }) => notePlace(owner),
+  SystemText: () => Place.System(),
+  MapName: ({ map }) => Place.Map({ map }),
+  EventName: ({ map }) => Place.Map({ map }),
+  Name: () => Place.System(),
+  PluginSetting: () => Place.Plugins(),
+  ImageLines: ({ image }) => Place.Image({ image }),
+});
+
+/** A place as a short text, such as `map3` or `actors`; an image's is its path. */
+export const placeKey: (place: Place) => string = Place.$match({
+  Map: ({ map }) => `map${map}`,
+  Table: ({ table }) => table,
+  CommonEvents: () => "commonEvents",
+  Troops: () => "troops",
+  System: () => "system",
+  Plugins: () => "plugins",
+  Image: ({ image }) => image,
+});

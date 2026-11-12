@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 import { withTranslation } from "./catalog.ts";
 import { entryTranslation } from "./guesses.ts";
+import { isImageText } from "./location.ts";
 import { keepsControlCodes } from "./controlCodes.ts";
 import { withImageText } from "./imageText.ts";
 
@@ -46,7 +47,7 @@ export function withEntryEdits(
     edited.set(id, { ...edited.get(id), ...edit });
   }
   const problem = (entry: Entry, { translation, text }: EntryEdit): EntryProblem | undefined => {
-    if (text !== undefined && !entry.file.startsWith("img/")) return "notImageText";
+    if (text !== undefined && !isImageText(entry)) return "notImageText";
     if (text?.trim() === "") return "emptyText";
     if (translation && !keepsControlCodes(text?.trim() ?? entry.source, translation))
       return "controlCodes";

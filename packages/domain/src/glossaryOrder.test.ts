@@ -12,8 +12,13 @@ const entries = [
   "卡斯特拉",
 ].map((source, index): Entry => ({
   id: `${index}`,
-  file: "Map001.json",
-  path: [],
+  location: {
+    _tag: "CommandText",
+    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+    index: 0,
+    parameter: 0,
+    keys: ["0"],
+  },
   source,
   translation: {},
 }));
@@ -39,8 +44,13 @@ it("a family name two characters share counts for neither, so each counts only i
   const lines = ["藤原·美咲来了", "藤原·雄一郎来了", "雄一郎：走吧。"].map(
     (source, index): Entry => ({
       id: `${index}`,
-      file: "Map001.json",
-      path: [],
+      location: {
+        _tag: "CommandText",
+        list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+        index: 0,
+        parameter: 0,
+        keys: ["0"],
+      },
       source,
       translation: {},
     }),

@@ -5,7 +5,7 @@ import {
   speakerTagName,
   speakerTagPattern,
 } from "./controlCodes.ts";
-import { isMessage } from "./location.ts";
+import { isMessage, isSettingText } from "./location.ts";
 import { firstLineSpeaker } from "./requestText.ts";
 import { showTextSpeakers } from "./reuse.ts";
 import { nameAliases } from "./shortNames.ts";
@@ -137,7 +137,7 @@ export function collectClues(
   const speakerOf = showTextSpeakers(entries);
   const known = new Set(names);
   for (const entry of entries) {
-    if (entry.file === "System.json" || entry.file === "plugins.js") continue;
+    if (isSettingText(entry)) continue;
     const speaker = speakerIn(entry, speakerOf, known);
     const spoken = speaker === undefined ? undefined : clues.get(speaker.trim());
     if (spoken) {
@@ -227,12 +227,7 @@ export function linesAbout(
     .map(([alias]) => alias);
   const speakerOf = showTextSpeakers(entries);
   const said = (entry: Entry) => speakerIn(entry, speakerOf, known)?.trim() === name;
-  const text = entries.filter(
-    (entry) =>
-      entry.file !== "System.json" &&
-      entry.file !== "plugins.js" &&
-      !terms.has(entry.source.trim()),
-  );
+  const text = entries.filter((entry) => !isSettingText(entry) && !terms.has(entry.source.trim()));
   // Speaker names are left out, so a line that only names its speaker counts as said.
   const mentioning = text.filter((entry) => {
     const line = sentences(withoutSpeakerLine(entry, known), words).join(" ");

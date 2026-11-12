@@ -1,6 +1,6 @@
 import type { Entry, ImageReadResults, ImageResult } from "@rpgtl/contracts";
 import type { ShownImages } from "./InGameImage.tsx";
-import { entryTranslation } from "@rpgtl/domain";
+import { entryTranslation, isImageText } from "@rpgtl/domain";
 
 /** Which images the Images page lists. */
 export type ImageFilter = "all" | "untranslated" | "kept";
@@ -15,10 +15,10 @@ export interface ListedImage {
 export const imagesWithText = (results: ImageReadResults, shown: ShownImages) => {
   const byImage = new Map<string, Array<Entry>>();
   for (const entry of shown.entries) {
-    if (!entry.file.startsWith("img/")) continue;
-    const entries = byImage.get(entry.file) ?? [];
+    if (!isImageText(entry)) continue;
+    const entries = byImage.get(entry.location.image) ?? [];
     entries.push(entry);
-    byImage.set(entry.file, entries);
+    byImage.set(entry.location.image, entries);
   }
   return Object.entries(results.images).flatMap(([image, result]): Array<ListedImage> => {
     const entries = byImage.get(image);

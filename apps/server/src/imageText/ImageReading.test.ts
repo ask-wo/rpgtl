@@ -2,7 +2,7 @@ import { gameFiles, runEnded } from "@rpgtl/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import type { ImageRunStatus, Settings as SavedSettings } from "@rpgtl/contracts";
-import { linesPrompt, entryTranslation } from "@rpgtl/domain";
+import { entryTranslation, isImageText, linesPrompt } from "@rpgtl/domain";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -173,8 +173,8 @@ const statusWhen = Effect.fnUntraced(function* (
 const imageEntries = Effect.fnUntraced(function* (id: string) {
   const catalogs = yield* Catalogs.Catalogs;
   return (yield* catalogs.get(id)).entries
-    .filter((entry) => entry.file.startsWith("img/"))
-    .map((entry) => `${entry.file} ${entry.source}`);
+    .filter(isImageText)
+    .map((entry) => `${entry.location.image} ${entry.source}`);
 });
 
 const size = { width: 1120, height: 630 };
@@ -276,7 +276,7 @@ it.effect(
 
       // Clearing forgets every read, so the next run reads them all again.
       const cleared = yield* reading.clear(id);
-      assert.isFalse(cleared.entries.some((entry) => entry.file.startsWith("img/")));
+      assert.isFalse(cleared.entries.some(isImageText));
       assert.deepStrictEqual(yield* reading.results(id), { version: 1, images: {} });
       assert.isFalse(yield* fs.exists(erasedDir));
       assert.isTrue(Option.isNone(yield* reading.status(id)));
@@ -312,7 +312,7 @@ it.effect(
       });
       const translations = Effect.map(catalogs.get(id), (catalog) =>
         catalog.entries.flatMap((entry) =>
-          entry.file.startsWith("img/") ? [[entry.source, entryTranslation(entry)]] : [],
+          isImageText(entry) ? [[entry.source, entryTranslation(entry)]] : [],
         ),
       );
 
@@ -556,7 +556,7 @@ it.effect(
       yield* catalogs.save({
         ...catalog,
         entries: catalog.entries.map((entry) =>
-          entry.file === "System.json" && entry.path[0] === "gameTitle"
+          entry.location._tag === "SystemText" && entry.location.keys[0] === "gameTitle"
             ? { ...entry, translation: { user: "Rain" } }
             : entry,
         ),

@@ -2,12 +2,15 @@ import type {
   Entry,
   EventCommand,
   EventList,
+  EventListRef,
   ImageReplacement,
   ImageTextHint,
+  Location,
   MessageLayout,
   Plugins,
   ServedMap,
   ServedSystem,
+  Table,
 } from "@rpgtl/contracts";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
@@ -17,7 +20,7 @@ import { measuredText } from "./controlCodes.ts";
 import { messageRun } from "./extract.ts";
 import { listFocus, pluginFocus, textFocus } from "./focus.ts";
 import { GameFile } from "./gameFile.ts";
-import { entryLocation, type EventListRef, type Location, type NameGroup } from "./location.ts";
+import { fileOf, isMessage, listKey } from "./location.ts";
 import { givenNameTranslation } from "./shortNames.ts";
 import { entryTranslation } from "./guesses.ts";
 
@@ -53,7 +56,7 @@ export function messageLayouts(entries: ReadonlyArray<Entry>) {
   const messages: { key: string | undefined; first: number; edge: number; lines: string[] }[] = [];
   const counts = new Map<number, number>();
   for (const entry of entries) {
-    if (!Option.exists(entryLocation(entry), (location) => location._tag === "Message")) continue;
+    if (!isMessage(entry)) continue;
     const lines = entry.source.split("\n");
     const first = lines.findIndex((line) => line.trim());
     const content = lines.slice(first).filter((line) => line.trim());
@@ -138,6 +141,8 @@ export function translatedImageNames(files: ReadonlyArray<string>, entries: Read
   return images;
 }
 
+type NameGroup = "events" | "switches" | "variables";
+
 /** The name an event, switch or variable has in the file. */
 function currentName(file: GameFile, group: NameGroup, id: number): unknown {
   if (group === "events") return file._tag === "Map" ? file.data.events[id]?.name : undefined;
@@ -172,18 +177,16 @@ function translateMessages(list: EventList, messages: ReadonlyMap<number, Entry>
 
 // Script text in a variable, an actor's name, nickname or profile, or the text of Change Name,
 // Change Nickname or Change Profile (which shares its parameter index with When [choice]).
-const isSaveText = (entry: Entry, location: Location) =>
+const isSaveText = (location: Location) =>
   location._tag === "ScriptText" ||
-  (entry.file === "Actors.json" && location._tag === "RecordField") ||
+  (location._tag === "RecordField" && location.table === "actors") ||
   (location._tag === "CommandText" && location.parameter === 1 && location.keys.length === 0);
 
-const isRecordName = (file: string) => (entry: Entry) =>
-  entry.file === file &&
-  !!entryTranslation(entry) &&
-  Option.exists(
-    entryLocation(entry),
-    (location) => location._tag === "RecordField" && location.field === "name",
-  );
+const isRecordName = (table: Table) => (entry: Entry) =>
+  entry.location._tag === "RecordField" &&
+  entry.location.table === table &&
+  entry.location.field === "name" &&
+  !!entryTranslation(entry);
 
 /** The images System.json tells the runtime to replace or draw English into. */
 export interface SystemImages {
@@ -212,29 +215,24 @@ function systemExtras(entries: ReadonlyArray<Entry>) {
   if (Object.keys(layouts).length) extras.rpgtlMessageLayouts = layouts;
   const saveText = Object.fromEntries(
     entries.flatMap((entry) =>
-      entryTranslation(entry) &&
-      Option.exists(entryLocation(entry), (location) => isSaveText(entry, location))
+      entryTranslation(entry) && isSaveText(entry.location)
         ? [[entry.source, entryTranslation(entry)]]
         : [],
     ),
   );
   if (Object.keys(saveText).length) extras.rpgtlSaveText = saveText;
   const shortNames: Record<string, { source: string; short: string }> = {};
-  for (const entry of entries.filter(isRecordName("Actors.json"))) {
+  for (const entry of entries.filter(isRecordName("actors"))) {
     const short = givenNameTranslation(entry.source, entryTranslation(entry), entries);
     if (short) shortNames[entryTranslation(entry)] = { source: entry.source, short };
   }
   if (Object.keys(shortNames).length) extras.rpgtlShortNames = shortNames;
   const classNames = Object.fromEntries(
-    entries
-      .filter(isRecordName("Classes.json"))
-      .map((entry) => [entryTranslation(entry), entry.source]),
+    entries.filter(isRecordName("classes")).map((entry) => [entryTranslation(entry), entry.source]),
   );
   if (Object.keys(classNames).length) extras.rpgtlClassNames = classNames;
   return extras;
 }
-
-const listKey = (ref: EventListRef) => JSON.stringify(ref);
 
 /**
  * The data file `file` with the entries' translations in it, and what the runtime, the map
@@ -252,10 +250,13 @@ export function applyTranslations(
   let commandsTranslated = false;
   let translated = data;
   for (const entry of entries) {
-    if (entry.file !== file || !entryTranslation(entry)) continue;
-    const found = entryLocation(entry);
-    if (Option.isNone(found)) return changed;
-    const location = found.value;
+    const { location } = entry;
+    if (!entryTranslation(entry) || fileOf(location) !== file) continue;
+    if (location._tag === "EventName") {
+      if (currentName(data, "events", location.event) === entry.source)
+        (names.events ??= {})[location.event] = entryTranslation(entry);
+      continue;
+    }
     if (location._tag === "Name") {
       if (currentName(data, location.group, location.id) === entry.source)
         (names[location.group] ??= {})[location.id] = entryTranslation(entry);
@@ -274,7 +275,7 @@ export function applyTranslations(
       location.keys[1] === "commands"
     )
       commandsTranslated = true;
-    const next = Option.flatMap(textFocus(translated, location, entry.source), (focus) =>
+    const next = Option.flatMap(textFocus(location, entry.source), (focus) =>
       Result.getSuccess(focus.replaceResult(entryTranslation(entry), translated)),
     );
     if (Option.isNone(next)) return changed;
@@ -298,7 +299,9 @@ export function applyTranslations(
   if (translated._tag === "System")
     return Result.succeed(GameFile.System({ data: { ...translated.data, ...added } }));
   if (translated._tag === "Map")
-    return Result.succeed(GameFile.Map({ data: { ...translated.data, ...added } }));
+    return Result.succeed(
+      GameFile.Map({ map: translated.map, data: { ...translated.data, ...added } }),
+    );
   return Result.succeed(translated);
 }
 
@@ -309,11 +312,8 @@ export function applyPluginTranslations(
 ): Result.Result<Plugins, GameDataChanged> {
   let translated = plugins;
   for (const entry of entries) {
-    if (entry.file !== "plugins.js" || !entryTranslation(entry)) continue;
-    const found = entryLocation(entry);
-    if (Option.isNone(found) || found.value._tag !== "PluginSetting")
-      return Result.fail(new GameDataChanged({ file: "js/plugins.js" }));
-    const { plugin, keys } = found.value;
+    if (entry.location._tag !== "PluginSetting" || !entryTranslation(entry)) continue;
+    const { plugin, keys } = entry.location;
     const next = Option.flatMap(pluginFocus(translated, plugin, keys, entry.source), (focus) =>
       Result.getSuccess(focus.replaceResult(entryTranslation(entry), translated)),
     );

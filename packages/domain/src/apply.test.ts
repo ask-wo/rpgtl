@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import type { Entry } from "@rpgtl/contracts";
+import type { Entry, Location } from "@rpgtl/contracts";
 import * as Predicate from "effect/Predicate";
 import * as Result from "effect/Result";
 import {
@@ -19,10 +19,9 @@ const applied = (file: string, data: unknown, entries: ReadonlyArray<Entry>) =>
   Result.getOrThrow(applyTranslations(file, readGameFile(file, data), entries)).data;
 
 it("applying a translation checks that the data still holds the source", () => {
-  const entry = {
+  const entry: Entry = {
     id: "a",
-    file: "Actors.json",
-    path: ["1", "name"],
+    location: { _tag: "RecordField", table: "actors", record: 1, field: "name" },
     source: "勇者",
     translation: { user: "Hero" },
   };
@@ -93,8 +92,7 @@ it("plugin settings are translated inside JSON text, and a changed setting means
   ];
   const entry: Entry = {
     id: "a",
-    file: "plugins.js",
-    path: ["Menu", "Items", "1"],
+    location: { _tag: "PluginSetting", plugin: "Menu", keys: ["Items", "1"] },
     source: "技能",
     translation: { user: "Skills" },
   };
@@ -122,10 +120,9 @@ it("of two enabled plugins with the same name, the last one's settings are trans
   );
 });
 
-const systemEntry = (path: string[], source: string, translation: string): Entry => ({
-  id: path.join("."),
-  file: "System.json",
-  path,
+const systemEntry = (keys: string[], source: string, translation: string): Entry => ({
+  id: keys.join("."),
+  location: { _tag: "SystemText", keys },
   source,
   translation: translation ? { user: translation } : {},
 });
@@ -144,8 +141,7 @@ it("translated menu commands mark System.json for the title screen", () => {
 
 const skillType = (source: string, translation: string): Entry => ({
   id: translation,
-  file: "System.json",
-  path: ["skillTypes", "1"],
+  location: { _tag: "SystemText", keys: ["skillTypes", "1"] },
   source,
   translation: translation ? { user: translation } : {},
 });
@@ -260,13 +256,16 @@ it("note tags with text are translated in place; other note tags are left alone"
 const layoutEntry = (
   source: string,
   translation: string,
-  listPath = ["events", "1", "pages", "0", "list", "0", "parameters", "0"],
+  location: Location = {
+    _tag: "Message",
+    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+    index: 0,
+  },
 ): Entry => ({
   id: source,
   source,
   translation: translation ? { user: translation } : {},
-  file: "Map001.json",
-  path: listPath,
+  location,
 });
 
 it("message layouts include only leading-blank, space-padded event messages", () => {
@@ -277,8 +276,14 @@ it("message layouts include only leading-blank, space-padded event messages", ()
       layoutEntry("        no blank row before this", "No leading row"),
       layoutEntry("\n\t tab indented", "Tab indentation"),
       layoutEntry("\n        first line\n    uneven second line", "Uneven indentation"),
-      layoutEntry(padded, "", ["events", "1", "pages", "0", "list", "0", "parameters", "0"]),
-      layoutEntry(padded, "Not a list message", ["events", "1", "pages", "0", "parameters", "0"]),
+      layoutEntry(padded, ""),
+      layoutEntry(padded, "Not a list message", {
+        _tag: "CommandText",
+        list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+        index: 0,
+        parameter: 0,
+        keys: ["0"],
+      }),
     ]),
     {
       "Picture text": {

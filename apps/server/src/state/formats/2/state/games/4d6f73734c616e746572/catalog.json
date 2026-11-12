@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "game": { "id": "4d6f73734c616e746572", "title": "苔灯小镇", "engine": "MV" },
+  "entries": [
+    {
+      "id": "e1",
+      "location": {
+        "_tag": "Message",
+        "list": { "_tag": "MapEventPage", "map": 1, "event": 1, "page": 0 },
+        "index": 3
+      },
+      "source": "\\N[1]，灯油快用完了。",
+      "translation": {
+        "guess": {
+          "value": "\\N[1], the lamp oil is nearly gone.",
+          "run": "2026-11-01T10:00:00.000Z",
+          "flag": "The speaker may be wrong."
+        },
+        "user": "\\N[1], the lamp is almost out of oil."
+      },
+      "speaker": "艾芙",
+      "previous": "\\N[1], the oil runs low."
+    },
+    {
+      "id": "e2",
+      "location": { "_tag": "ImageLines", "image": "img/pictures/Sign", "lines": [0] },
+      "source": "苔灯",
+      "readerText": "苔丁",
+      "translation": {
+        "guess": {
+          "value": "Moss Lamp",
+          "run": "2026-11-01T10:00:00.000Z",
+          "long": "The Moss Lantern"
+        }
+      },
+      "keepOriginal": false
+    },
+    {
+      "id": "e3",
+      "location": { "_tag": "SystemText", "keys": ["terms", "commands", "0"] },
+      "source": "战斗",
+      "translation": {},
+      "suggestion": { "text": "战斗 Fight", "reason": "source text left" }
+    }
+  ],
+  "glossary": [
+    {
+      "source": "艾芙",
+      "translation": {
+        "guess": { "value": "Ive", "run": "2026-11-01T09:00:00.000Z" },
+        "user": "Eve"
+      },
+      "kind": { "guess": { "value": "character", "run": "2026-11-01T09:00:00.000Z" } },
+      "pronoun": { "guess": { "value": "she", "she": 4, "he": 1 }, "user": "she" }
+    },
+    {
+      "source": "苔灯",
+      "translation": {},
+      "kind": { "guess": { "value": "name" }, "user": "word" }
+    }
+  ],
+  "translate": true,
+  "language": "chinese",
+  "imageBold": "never",
+  "imageFont": "serif",
+  "unchangedImages": ["img/pictures/Notice"],
+  "lastRun": "2026-11-01T10:00:00.000Z",
+  "runs": {
+    "2026-11-01T09:00:00.000Z": {
+      "translator": "ollama",
+      "model": "made-up-model:30b",
+      "glossaryModel": "made-up-model:30b",
+      "numCtx": 16384,
+      "sampling": "qwen",
+      "retrySampling": "model",
+      "effort": "off"
+    },
+    "2026-11-01T10:00:00.000Z": {
+      "translator": "claude",
+      "model": "made-up-claude",
+      "glossaryModel": "made-up-claude",
+      "effort": "low",
+      "glossaryEffort": "medium"
+    },
+    "2026-11-02T10:00:00.000Z": {
+      "translator": "codex",
+      "model": "made-up-codex",
+      "glossaryModel": "made-up-codex"
+    }
+  }
+}

@@ -2,6 +2,7 @@ import type { Catalog, Engine, Entry, Game, MissingFile } from "@rpgtl/contracts
 import * as Predicate from "effect/Predicate";
 import { guessRuns } from "./catalog.ts";
 import { entryTranslation } from "./guesses.ts";
+import { isImageText } from "./location.ts";
 
 /** The script each engine's boot code loads first. */
 export const coreScripts: Record<Engine, string> = { MV: "rpg_core.js", MZ: "rmmz_core.js" };
@@ -222,11 +223,10 @@ export function inspectedCatalog(
   const ids = new Set(entries.map((entry) => entry.id));
   // Image lines come from their read results, which keep their English themselves.
   const moved = englishByText(
-    previous?.entries.filter((entry) => !ids.has(entry.id) && !entry.file.startsWith("img/")) ?? [],
+    previous?.entries.filter((entry) => !ids.has(entry.id) && !isImageText(entry)) ?? [],
   );
   const kept = entries.map((entry) => {
-    const old =
-      saved.get(entry.id) ?? (entry.file.startsWith("img/") ? undefined : moved.get(entry.source));
+    const old = saved.get(entry.id) ?? (isImageText(entry) ? undefined : moved.get(entry.source));
     return {
       ...entry,
       ...(old?.readerText !== undefined && { source: old.source, readerText: old.readerText }),

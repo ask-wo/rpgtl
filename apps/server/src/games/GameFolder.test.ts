@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
+import { fileOf } from "@rpgtl/domain";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -147,7 +148,7 @@ it.effect("entries come from the data files and plugin settings that aren't file
     });
     const entries = yield* gameFolder.entries(yield* gameFolder.inspect(root));
     assert.deepStrictEqual(
-      entries.map((entry) => [entry.file, entry.source]),
+      entries.map((entry) => [fileOf(entry.location), entry.source]),
       [
         ["Map001.json", "你好"],
         ["System.json", "门开了"],

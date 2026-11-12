@@ -2,10 +2,13 @@ import { assert, it } from "@effect/vitest";
 import type { Catalog, Entry, GlossaryTerm } from "@rpgtl/contracts";
 import { CatalogDraft, entryTranslation } from "./index.ts";
 
-const line = (id: string, index: number, source: string, list = "1"): Entry => ({
+const line = (id: string, index: number, source: string, list = 1): Entry => ({
   id,
-  file: "Map001.json",
-  path: ["events", list, "pages", "0", "list", String(index), "parameters", "0"],
+  location: {
+    _tag: "Message",
+    list: { _tag: "MapEventPage", map: 1, event: list, page: 0 },
+    index: index,
+  },
   source,
   translation: {},
 });
@@ -48,8 +51,8 @@ it("a copy filled by repeated text drops its rejected answer, and its previous E
   const rejected = { text: "Hi 你", reason: "source text left" };
   const draft = draftOf(
     { ...line("a", 0, "你好"), suggestion: rejected },
-    { ...line("b", 0, "你好", "2"), suggestion: rejected, previous: "Hello" },
-    { ...line("c", 0, "你好", "3"), previous: "Hey" },
+    { ...line("b", 0, "你好", 2), suggestion: rejected, previous: "Hello" },
+    { ...line("c", 0, "你好", 3), previous: "Hey" },
   );
   const [first] = draft.entries;
   assert.isDefined(first);
@@ -57,13 +60,13 @@ it("a copy filled by repeated text drops its rejected answer, and its previous E
   const filled = { translation: { guess: { value: "Hello", run } } };
   assert.deepStrictEqual(draft.catalog.entries, [
     { ...line("a", 0, "你好"), ...filled },
-    { ...line("b", 0, "你好", "2"), ...filled },
-    { ...line("c", 0, "你好", "3"), ...filled, previous: "Hey" },
+    { ...line("b", 0, "你好", 2), ...filled },
+    { ...line("c", 0, "你好", 3), ...filled, previous: "Hey" },
   ]);
 });
 
 it("repeated text takes the first accepted translation, and a failed copy no longer counts", () => {
-  const draft = draftOf(line("a", 0, "你好"), line("b", 0, "你好", "2"));
+  const draft = draftOf(line("a", 0, "你好"), line("b", 0, "你好", 2));
   const [first, second] = draft.entries;
   assert.isDefined(first);
   assert.isDefined(second);
@@ -81,8 +84,7 @@ it("repeated text takes the first accepted translation, and a failed copy no lon
 
 const button = (id: string): Entry => ({
   id,
-  file: `img/titles2/${id}`,
-  path: ["lines", "0"],
+  location: { _tag: "ImageLines", image: `img/titles2/${id}`, lines: [0] },
   source: "致谢",
   translation: {},
 });
@@ -90,8 +92,7 @@ const button = (id: string): Entry => ({
 it("image text takes repeated translations only from image text", () => {
   const command: Entry = {
     id: "plugin",
-    file: "plugins.js",
-    path: ["Credits", "Command Name"],
+    location: { _tag: "PluginSetting", plugin: "Credits", keys: ["Command Name"] },
     source: "致谢",
     translation: { user: "Acknowledgments" },
   };
@@ -111,12 +112,15 @@ it("image text takes repeated translations only from image text", () => {
 it("a glossary pass answer becomes a glossary term, and the term wins over a later answer", () => {
   const actor: Entry = {
     id: "actor",
-    file: "Actors.json",
-    path: ["1", "name"],
+    location: { _tag: "RecordField", table: "actors", record: 1, field: "name" },
     source: "艾琳",
     translation: {},
   };
-  const draft = draftOf(actor, { ...actor, id: "again", path: ["2", "name"] });
+  const draft = draftOf(actor, {
+    ...actor,
+    id: "again",
+    location: { _tag: "RecordField", table: "actors", record: 2, field: "name" },
+  });
   const [first, second] = draft.entries;
   assert.isDefined(first);
   assert.isDefined(second);

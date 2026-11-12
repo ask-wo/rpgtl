@@ -1,11 +1,18 @@
-import type { Entry } from "@rpgtl/contracts";
-import * as Option from "effect/Option";
+import type { Entry, Table } from "@rpgtl/contracts";
+import type { Placed } from "./location.ts";
 import { controlCodePattern } from "./controlCodes.ts";
-import { entryLocation } from "./location.ts";
 
-type Located = Pick<Entry, "file" | "path" | "source">;
+type Located = Pick<Entry, "source"> & Placed;
 
-const databaseNames = /^(Classes|Skills|Items|Weapons|Armors|Enemies|States)\.json$/;
+const databaseNames = new Set<Table>([
+  "classes",
+  "skills",
+  "items",
+  "weapons",
+  "armors",
+  "enemies",
+  "states",
+]);
 const systemLists = ["elements", "skillTypes", "weaponTypes", "armorTypes", "equipTypes"];
 
 const systemNames = new Set(["basic", "commands", "params"]);
@@ -17,34 +24,26 @@ const systemNames = new Set(["basic", "commands", "params"]);
 export function isNameEntry(entry: Located) {
   if (entry.source.includes("\n") || entry.source.match(controlCodePattern)) return false;
   if (isActorName(entry)) return true;
-  return Option.exists(entryLocation(entry), (location) => {
-    if (location._tag === "RecordField")
-      return databaseNames.test(entry.file) && location.field === "name";
-    if (location._tag === "MapName") return true;
-    if (location._tag !== "SystemText") return false;
-    const [first, second = ""] = location.keys;
-    return (
-      first === "gameTitle" ||
-      systemLists.some((key) => first === key) ||
-      (first === "terms" && systemNames.has(second))
-    );
-  });
+  const { location } = entry;
+  if (location === undefined) return false;
+  if (location._tag === "RecordField")
+    return databaseNames.has(location.table) && location.field === "name";
+  if (location._tag === "MapName") return true;
+  if (location._tag !== "SystemText") return false;
+  const [first, second = ""] = location.keys;
+  return (
+    first === "gameTitle" ||
+    systemLists.some((key) => first === key) ||
+    (first === "terms" && systemNames.has(second))
+  );
 }
 
 /** An actor's name or nickname in Actors.json. */
-export const isActorName = (entry: Pick<Entry, "file" | "path">) =>
-  entry.file === "Actors.json" &&
-  Option.exists(
-    entryLocation(entry),
-    (location) =>
-      location._tag === "RecordField" &&
-      (location.field === "name" || location.field === "nickname"),
-  );
+export const isActorName = ({ location }: Placed) =>
+  location?._tag === "RecordField" &&
+  location.table === "actors" &&
+  (location.field === "name" || location.field === "nickname");
 
 /** The speaker name of an MZ Show Text (its parameter 4). */
-export const isSpeakerNameEntry = (entry: Pick<Entry, "file" | "path">) =>
-  Option.exists(
-    entryLocation(entry),
-    (location) =>
-      location._tag === "CommandText" && location.parameter === 4 && location.keys.length === 0,
-  );
+export const isSpeakerNameEntry = ({ location }: Placed) =>
+  location?._tag === "CommandText" && location.parameter === 4 && location.keys.length === 0;

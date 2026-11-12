@@ -19,6 +19,7 @@ import { keepsControlCodes } from "./controlCodes.ts";
 import { englishByText } from "./inspect.ts";
 import { renamedTranslation, repeatedSource, withoutStrayPronoun } from "./glossaryEdits.ts";
 import { entryTranslation, importedValue, termTranslation, withoutGuess } from "./guesses.ts";
+import { isImageText } from "./location.ts";
 
 /** A translation file that can't be imported into the catalog, and why. */
 export class TranslationFileInvalid extends Schema.TaggedError<TranslationFileInvalid>()(
@@ -104,18 +105,16 @@ function textMatches(
   const bySource = englishByText(leftover);
   return entries.flatMap((entry) => {
     const match = bySource.get(entry.source);
-    return match && !named.has(entry.id) && !entry.file.startsWith("img/")
-      ? [[entry, match] as const]
-      : [];
+    return match && !named.has(entry.id) && !isImageText(entry) ? [[entry, match] as const] : [];
   });
 }
 
 /** The entry with an image's text as the file has it, corrected or as read. */
-function importedText<T extends Pick<Entry, "file" | "source" | "readerText">>(
+function importedText<T extends Pick<Entry, "location" | "source" | "readerText">>(
   entry: T,
   update: FileEntry,
 ) {
-  if (!entry.file.startsWith("img/")) return entry;
+  if (!isImageText(entry)) return entry;
   const { readerText: _, ...rest } = entry;
   return {
     ...rest,
@@ -163,12 +162,11 @@ export function importTranslations(
   for (const entry of file.entries) {
     const original = known.get(entry.id);
     if (!original || idText(original) !== idText(entry)) continue;
-    if (entry.readerText !== undefined && !original.file.startsWith("img/")) continue;
+    if (entry.readerText !== undefined && !isImageText(original)) continue;
     const translation = entryTranslation(entry);
     if (translation && !keepsControlCodes(entry.source, translation))
       return invalid("controlCodes", entry.source.slice(0, 80));
-    if (entry.keepOriginal !== undefined && !original.file.startsWith("img/"))
-      return invalid("keepOriginal");
+    if (entry.keepOriginal !== undefined && !isImageText(original)) return invalid("keepOriginal");
     if (updates.has(entry.id)) return invalid("duplicateEntry");
     updates.set(entry.id, entry);
   }

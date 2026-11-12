@@ -1,16 +1,25 @@
-import { CommonEvents, GameMap, GameRecords, GameSystem, Plugins, Troops } from "@rpgtl/contracts";
+import {
+  CommonEvents,
+  GameMap,
+  GameRecords,
+  GameSystem,
+  Plugins,
+  type Table,
+  Troops,
+} from "@rpgtl/contracts";
 import * as Data from "effect/Data";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import { mapOf, tableOf } from "./location.ts";
 
 /** A data file of a game, by what RPGTL reads in it. */
 export type GameFile = Data.TaggedEnum<{
-  Map: { readonly data: GameMap };
+  Map: { readonly map: number; readonly data: GameMap };
   CommonEvents: { readonly data: CommonEvents };
   Troops: { readonly data: Troops };
   System: { readonly data: GameSystem };
   /** Actors.json, Items.json and the other files whose records have names and descriptions. */
-  Database: { readonly data: GameRecords };
+  Database: { readonly table: Exclude<Table, "tilesets">; readonly data: GameRecords };
   /** Tilesets.json, whose records have notes but no text the player sees. */
   Tilesets: { readonly data: GameRecords };
   /** A file with no text RPGTL translates, such as Animations.json or a plugin's own data. */
@@ -28,8 +37,6 @@ export class GameFileInvalid extends Schema.TaggedError<GameFileInvalid>()("Game
   }
 }
 
-const databaseFile = /^(Actors|Classes|Skills|Items|Weapons|Armors|Enemies|States|MapInfos)\.json$/;
-
 const decode = <S extends Schema.Decoder<unknown>>(
   schema: S,
   file: string,
@@ -44,18 +51,22 @@ export function decodeGameFile(
   file: string,
   text: string,
 ): Result.Result<GameFile, GameFileInvalid> {
-  if (/^Map\d+\.json$/.test(file))
-    return Result.map(decode(GameMap, file, text), (data) => GameFile.Map({ data }));
+  const map = mapOf(file);
+  if (map !== undefined)
+    return Result.map(decode(GameMap, file, text), (data) => GameFile.Map({ map, data }));
   if (file === "CommonEvents.json")
     return Result.map(decode(CommonEvents, file, text), (data) => GameFile.CommonEvents({ data }));
   if (file === "Troops.json")
     return Result.map(decode(Troops, file, text), (data) => GameFile.Troops({ data }));
   if (file === "System.json")
     return Result.map(decode(GameSystem, file, text), (data) => GameFile.System({ data }));
-  if (databaseFile.test(file))
-    return Result.map(decode(GameRecords, file, text), (data) => GameFile.Database({ data }));
-  if (file === "Tilesets.json")
+  const table = tableOf(file);
+  if (table === "tilesets")
     return Result.map(decode(GameRecords, file, text), (data) => GameFile.Tilesets({ data }));
+  if (table !== undefined)
+    return Result.map(decode(GameRecords, file, text), (data) =>
+      GameFile.Database({ table, data }),
+    );
   return Result.map(decode(Schema.Unknown, file, text), (data) => GameFile.Other({ data }));
 }
 

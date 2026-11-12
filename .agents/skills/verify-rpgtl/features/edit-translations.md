@@ -11,7 +11,7 @@ The Text page lists the game's text (everything but the text in images) with eac
 - `text-filter` **All**, **Untranslated**, **Failed**, **Last run** and **Flagged**, each with its count; Previous and Next page through 50 entries at a time.
 - `text-suggestion` an entry whose last answer was rejected shows it with **Use**; one the last run changed shows its English before the run with **Use the old one**.
 - `text-flagged` **Flagged** lists translations a check (`pnpm run audit`'s) or a run flagged, each with `Check: …`; editing the English clears it.
-- `text-address` the file or area, search and filter are in the address (`?file=Items.json&q=potion&show=untranslated`), so a reload keeps them.
+- `text-address` the place or area, search and filter are in the address (`?place=items&q=potion&show=untranslated`), so a reload keeps them.
 - `text-failed-link` after a run with failed text entries, the run bar's **Show the N failed text entries** opens the page on Failed.
 - `text-locked` the English can't be edited while a run goes.
 

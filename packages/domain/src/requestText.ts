@@ -2,6 +2,7 @@ import type { Entry } from "@rpgtl/contracts";
 import { codeOrBackslash, controlCodePattern, isPauseCode, shownText } from "./controlCodes.ts";
 import { creditLine, keepsLineBreaks } from "./extract.ts";
 import { pauseMarker, pausesIn, withPauses, type Pause, type Pauses } from "./pauses.ts";
+import type { Placed } from "./location.ts";
 
 // Korean puts spaces between words, so a line break between Hangul joins with a space.
 const unspacedCharacter = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}　-〿！-｠⏸]/u;
@@ -90,7 +91,7 @@ function withSpeakerLine(
 }
 
 export function requestText(
-  entry: Pick<Entry, "source" | "file" | "path">,
+  entry: Pick<Entry, "source"> & Placed,
   isSpeaker?: (name: string) => boolean,
 ): RequestText {
   const credit = creditLine(entry);

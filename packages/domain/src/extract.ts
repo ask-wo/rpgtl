@@ -1,35 +1,23 @@
-import { sha256 } from "@noble/hashes/sha2.js";
-import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
-import type { Entry, EventCommand, EventList, GameRecord, Plugins } from "@rpgtl/contracts";
+import type {
+  Entry,
+  EventCommand,
+  EventList,
+  EventListRef,
+  GameRecord,
+  Location,
+  NoteOwner,
+  Plugins,
+  Table,
+} from "@rpgtl/contracts";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
-import type * as Types from "effect/Types";
 import { GameFile } from "./gameFile.ts";
 import { assetNames } from "./inspect.ts";
-import {
-  EventListRef,
-  Location,
-  NoteOwner,
-  entryLocation,
-  pathOf,
-  type NameGroup,
-} from "./location.ts";
+import { newEntry, type Placed } from "./location.ts";
 
 // Chinese, Japanese or Korean text. Other values are settings, numbers or English labels.
 export const sourceText = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uff66-\uff9d\uac00-\ud7af]/;
-
-export const newEntry = (
-  file: string,
-  path: ReadonlyArray<string>,
-  source: string,
-): Types.DeepMutable<Entry> => ({
-  id: bytesToHex(sha256(utf8ToBytes(JSON.stringify([file, path, source])))).slice(0, 24),
-  file,
-  path: [...path],
-  source,
-  translation: {},
-});
 
 /** The parameters of enabled plugins by plugin name. */
 export const pluginParameters = (plugins: Plugins) =>
@@ -195,14 +183,14 @@ const noteText = (note: unknown, owner: NoteOwner): ReadonlyArray<Found> =>
   Predicate.isString(note)
     ? noteTags(note).flatMap(({ value }, tag) =>
         isDrawnTag(value) && sourceText.test(value) && value.trim()
-          ? [{ location: Location.NoteTag({ owner, tag }), text: value }]
+          ? [{ location: { _tag: "NoteTag", owner, tag } as const, text: value }]
           : [],
       )
     : [];
 
-const nameText = (group: NameGroup, id: number, name: unknown): ReadonlyArray<Found> =>
+const nameText = (location: Location, name: unknown): ReadonlyArray<Found> =>
   Predicate.isString(name) && sourceText.test(name) && name.trim()
-    ? [{ location: Location.Name({ group, id }), text: name }]
+    ? [{ location, text: name }]
     : [];
 
 const dialoguePicture = /^[(（]对话框(?:特殊)?[)）](.+?)(?:\d+)?$/;
@@ -217,7 +205,7 @@ function commandText(
   const parameter = textParameter[code];
   if (parameter !== undefined)
     for (const { keys, text } of strings(parameters[parameter]))
-      found.push({ location: Location.CommandText({ list, index, parameter, keys }), text });
+      found.push({ location: { _tag: "CommandText", list, index, parameter, keys }, text });
   // MZ Plugin Command: [plugin, command, command label, arguments].
   if (code === 357)
     for (const { keys, text } of pluginText(
@@ -226,14 +214,14 @@ function commandText(
       nonText(String(parameters[0])),
       fileNames,
     ))
-      found.push({ location: Location.CommandText({ list, index, parameter: 3, keys }), text });
+      found.push({ location: { _tag: "CommandText", list, index, parameter: 3, keys }, text });
   const script = scriptParameter({ code, parameters });
   const source = script === undefined ? undefined : parameters[script];
   if (script !== undefined && Predicate.isString(source))
     variableStrings(source).forEach(({ value }, literal) => {
       if (sourceText.test(value) && value.trim())
         found.push({
-          location: Location.ScriptText({ list, index, parameter: script, literal }),
+          location: { _tag: "ScriptText", list, index, parameter: script, literal },
           text: value,
         });
     });
@@ -261,7 +249,7 @@ function listText(list: EventList, ref: EventListRef, plugins: PluginText): Read
       const [speaker] = dialoguePictures.values();
       if (run.source.trim())
         found.push({
-          location: Location.Message({ list: ref, index }),
+          location: { _tag: "Message", list: ref, index },
           text: run.source,
           ...(speaker && dialoguePictures.size === 1 && { speaker }),
         });
@@ -271,39 +259,48 @@ function listText(list: EventList, ref: EventListRef, plugins: PluginText): Read
   return found;
 }
 
-const recordText = (record: GameRecord, index: number, fields: boolean): ReadonlyArray<Found> =>
+const recordText = (
+  record: GameRecord,
+  table: Table,
+  index: number,
+  fields: boolean,
+): ReadonlyArray<Found> =>
   Object.entries(record).flatMap(([field, value]): ReadonlyArray<Found> => {
-    if (field === "note") return noteText(value, NoteOwner.Record({ record: index }));
+    if (field === "note") return noteText(value, { _tag: "Record", table, record: index });
     if (field === "learnings" && Array.isArray(value))
       return value.flatMap((learning: unknown, at) =>
         Predicate.isObject(learning)
-          ? noteText(learning.note, NoteOwner.ClassLearning({ record: index, learning: at }))
+          ? noteText(learning.note, { _tag: "ClassLearning", record: index, learning: at })
           : [],
       );
     return fields && recordFields.has(field) && Predicate.isString(value) && value.trim()
-      ? [{ location: Location.RecordField({ record: index, field }), text: value }]
+      ? [{ location: { _tag: "RecordField", table, record: index, field }, text: value }]
       : [];
   });
 
-const namesIn = (group: NameGroup, names: unknown) =>
-  Array.isArray(names) ? names.flatMap((name: unknown, id) => nameText(group, id, name)) : [];
+const namesIn = (group: "switches" | "variables", names: unknown) =>
+  Array.isArray(names)
+    ? names.flatMap((name: unknown, id) => nameText({ _tag: "Name", group, id }, name))
+    : [];
 
 /** The text of a game file, in the order of the file. */
 function fileText(file: GameFile, plugins: PluginText): ReadonlyArray<Found> {
   return GameFile.$match(file, {
     // In RPG Maker's order of a map's fields, which decoding doesn't keep.
-    Map: ({ data }) => [
-      ...data.events.flatMap((event, id) => (event ? nameText("events", id, event.name) : [])),
+    Map: ({ map, data }) => [
+      ...data.events.flatMap((event, id) =>
+        event ? nameText({ _tag: "EventName", map, event: id }, event.name) : [],
+      ),
       ...(Predicate.isString(data.displayName) && data.displayName.trim()
-        ? [{ location: Location.MapName(), text: data.displayName }]
+        ? [{ location: { _tag: "MapName", map } as const, text: data.displayName }]
         : []),
-      ...noteText(data.note, NoteOwner.Map()),
+      ...noteText(data.note, { _tag: "Map", map }),
       ...data.events.flatMap((event, id) =>
         event
           ? [
-              ...noteText(event.note, NoteOwner.MapEvent({ event: id })),
+              ...noteText(event.note, { _tag: "MapEvent", map, event: id }),
               ...event.pages.flatMap((page, at) =>
-                listText(page.list, EventListRef.MapEventPage({ event: id, page: at }), plugins),
+                listText(page.list, { _tag: "MapEventPage", map, event: id, page: at }, plugins),
               ),
             ]
           : [],
@@ -311,13 +308,13 @@ function fileText(file: GameFile, plugins: PluginText): ReadonlyArray<Found> {
     ],
     CommonEvents: ({ data }) =>
       data.flatMap((event, id) =>
-        event ? listText(event.list, EventListRef.CommonEvent({ event: id }), plugins) : [],
+        event ? listText(event.list, { _tag: "CommonEvent", event: id }, plugins) : [],
       ),
     Troops: ({ data }) =>
       data.flatMap((troop, id) =>
         troop
           ? troop.pages.flatMap((page, at) =>
-              listText(page.list, EventListRef.TroopPage({ troop: id, page: at }), plugins),
+              listText(page.list, { _tag: "TroopPage", troop: id, page: at }, plugins),
             )
           : [],
       ),
@@ -329,21 +326,21 @@ function fileText(file: GameFile, plugins: PluginText): ReadonlyArray<Found> {
       const rest = Object.entries(data).flatMap(([key, value]): ReadonlyArray<Found> => {
         if (systemLists.has(key))
           return strings(value, [key]).map(({ keys, text }) => ({
-            location: Location.SystemText({ keys }),
+            location: { _tag: "SystemText", keys } as const,
             text,
           }));
         return (key === "gameTitle" || key === "currencyUnit") &&
           Predicate.isString(value) &&
           value.trim()
-          ? [{ location: Location.SystemText({ keys: [key] }), text: value }]
+          ? [{ location: { _tag: "SystemText", keys: [key] } as const, text: value }]
           : [];
       });
       return [...names, ...rest];
     },
-    Database: ({ data }) =>
-      data.flatMap((record, index) => (record ? recordText(record, index, true) : [])),
+    Database: ({ table, data }) =>
+      data.flatMap((record, index) => (record ? recordText(record, table, index, true) : [])),
     Tilesets: ({ data }) =>
-      data.flatMap((record, index) => (record ? recordText(record, index, false) : [])),
+      data.flatMap((record, index) => (record ? recordText(record, "tilesets", index, false) : [])),
     Other: () => [],
   });
 }
@@ -352,24 +349,17 @@ function fileText(file: GameFile, plugins: PluginText): ReadonlyArray<Found> {
  * Extracts the player-visible text of a data file such as `Map001.json`. `plugins` tells which
  * MZ plugin command arguments are text.
  */
-export const extract = (
-  file: string,
-  data: GameFile,
-  plugins: PluginText = noPluginText,
-): Types.DeepMutable<Entry>[] =>
+export const extract = (data: GameFile, plugins: PluginText = noPluginText): Entry[] =>
   fileText(data, plugins).map(({ location, text, speaker }) => ({
-    ...newEntry(file, pathOf(location), text),
+    ...newEntry(location, text),
     ...(speaker !== undefined && { speaker }),
   }));
 
 /** Text in the settings of enabled plugins, including lists and structs. */
-export const extractPlugins = (
-  plugins: Plugins,
-  { nonText, fileNames }: PluginText,
-): Types.DeepMutable<Entry>[] =>
+export const extractPlugins = (plugins: Plugins, { nonText, fileNames }: PluginText): Entry[] =>
   [...pluginParameters(plugins)].flatMap(([plugin, parameters]) =>
     pluginText(parameters, [], nonText(plugin), fileNames).map(({ keys, text }) =>
-      newEntry("plugins.js", pathOf(Location.PluginSetting({ plugin, keys })), text),
+      newEntry({ _tag: "PluginSetting", plugin, keys }, text),
     ),
   );
 
@@ -384,12 +374,7 @@ export interface GameText {
 }
 
 /** A game's catalog entries: its data files' text in the order given, then its plugins'. */
-export function gameEntries({
-  plugins,
-  pluginCode,
-  assets,
-  dataFiles,
-}: GameText): Types.DeepMutable<Entry>[] {
+export function gameEntries({ plugins, pluginCode, assets, dataFiles }: GameText): Entry[] {
   const nonText = new Map(
     plugins.flatMap((plugin) =>
       plugin ? [[plugin.name, nonTextParameters(pluginCode.get(plugin.name) ?? "")] as const] : [],
@@ -400,7 +385,7 @@ export function gameEntries({
     fileNames: assetNames(assets),
   };
   return [
-    ...dataFiles.flatMap(({ name, data }) => extract(name, data, settings)),
+    ...dataFiles.flatMap(({ data }) => extract(data, settings)),
     ...extractPlugins(plugins, settings),
   ];
 }
@@ -425,19 +410,12 @@ export function nonTextParameters(code: string) {
   return names;
 }
 
-type Located = Partial<Pick<Entry, "file" | "path">>;
-
 /**
  * A credits plugin's line such as "画师:青木流水" or "制作人 星澜Uno": the role is translated and the
  * names after it are kept as written, joined with ": ".
  */
-export function creditLine(entry: Pick<Entry, "source"> & Located) {
-  const location = entryLocation(entry);
-  if (
-    Option.isNone(location) ||
-    location.value._tag !== "PluginSetting" ||
-    !/credit/i.test(location.value.plugin)
-  )
+export function creditLine(entry: Pick<Entry, "source"> & Placed) {
+  if (entry.location?._tag !== "PluginSetting" || !/credit/i.test(entry.location.plugin))
     return undefined;
   const [, role, names] = /^([^\s:：]{1,12})(?:\s*[:：]\s*|\s+)(\S[^]*)$/.exec(entry.source) ?? [];
   if (!role || names === undefined || !sourceText.test(role)) return undefined;
@@ -448,10 +426,6 @@ export function creditLine(entry: Pick<Entry, "source"> & Located) {
  * Plugin settings and MZ plugin command arguments: plugins draw them as written, so their line
  * breaks are the author's layout, unlike messages, which the engine and RPGTL wrap.
  */
-export const keepsLineBreaks = (entry: Located) =>
-  Option.exists(
-    entryLocation(entry),
-    (location) =>
-      location._tag === "PluginSetting" ||
-      (location._tag === "CommandText" && location.parameter === 3),
-  );
+export const keepsLineBreaks = ({ location }: Placed) =>
+  location?._tag === "PluginSetting" ||
+  (location?._tag === "CommandText" && location.parameter === 3);

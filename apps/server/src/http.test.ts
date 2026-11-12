@@ -50,15 +50,21 @@ const catalog: Catalog = {
   entries: [
     {
       id: "a",
-      file: "Map001.json",
-      path: ["events", "1", "pages", "0", "list", "0", "parameters", "0"],
+      location: {
+        _tag: "Message",
+        list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+        index: 0,
+      },
       source: "你好",
       translation: { guess: { value: "Hello 你", run: "r", flag: "Check this." } },
     },
     {
       id: "b",
-      file: "Map001.json",
-      path: ["events", "1", "pages", "0", "list", "2", "parameters", "0"],
+      location: {
+        _tag: "Message",
+        list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+        index: 2,
+      },
       source: "再见",
       translation: {},
       suggestion: { text: "Bye bye bye", reason: "too long" },
@@ -162,16 +168,14 @@ it.effect("restoring clears every translation and what runs left, and backs the 
       entries: [
         {
           id: "a",
-          file: "Map001.json",
-          path: catalog.entries[0]?.path ?? [],
+          location: catalog.entries[0]?.location ?? { _tag: "SystemText", keys: [] },
           source: "你好",
           translation: {},
           previous: "Hello 你",
         },
         {
           id: "b",
-          file: "Map001.json",
-          path: catalog.entries[1]?.path ?? [],
+          location: catalog.entries[1]?.location ?? { _tag: "SystemText", keys: [] },
           source: "再见",
           translation: {},
         },

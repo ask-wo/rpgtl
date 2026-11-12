@@ -12,8 +12,18 @@ const saved: Catalog = {
   version: 1,
   game: { id: game.id, title: game.title, engine: "MV" },
   entries: [
-    { id: "1", file: "Map001.json", path: ["1"], source: "你好", translation: { user: "Hello" } },
-    { id: "2", file: "Items.json", path: ["2"], source: "药水", translation: {} },
+    {
+      id: "1",
+      location: { _tag: "MapName", map: 1 },
+      source: "你好",
+      translation: { user: "Hello" },
+    },
+    {
+      id: "2",
+      location: { _tag: "RecordField", table: "items", record: 2, field: "name" },
+      source: "药水",
+      translation: {},
+    },
   ],
   glossary: [],
   translate: true,

@@ -4,28 +4,29 @@ import { cn } from "cn";
 import { number } from "../translation/counts.ts";
 import type { Area } from "./search.ts";
 
-interface TreeFile {
-  readonly file: string;
+interface TreePlace {
+  /** The place's key, as the address keeps it. */
+  readonly key: string;
   readonly label: string;
-  /** How many of the file's entries the filter and search show. */
+  /** How many of the place's entries the filter and search show. */
   readonly count: number;
 }
 
 export interface TreeArea {
   readonly area: Area;
   readonly count: number;
-  readonly files: ReadonlyArray<TreeFile>;
+  readonly places: ReadonlyArray<TreePlace>;
 }
 
-/** What the page shows: every file, one area, or one file. */
+/** What the page shows: every place, one area, or one place. */
 export type Selection =
   | { readonly kind: "all" }
   | { readonly kind: "area"; readonly area: Area }
-  | { readonly kind: "file"; readonly file: string };
+  | { readonly kind: "place"; readonly place: string };
 
 /**
- * The game's text files by area, each with how many entries the filter and search show. While
- * either narrows the text, files with none of it are left out.
+ * The places of the game's text by area, each with how many entries the filter and search show.
+ * While either narrows the text, places with none of it are left out.
  */
 export function FileTree({
   total,
@@ -49,9 +50,9 @@ export function FileTree({
         current={selected.kind === "all"}
         onClick={() => onSelect({ kind: "all" })}
       />
-      {tree.map(({ area, count, files }) => {
+      {tree.map(({ area, count, places }) => {
         const open = !closed.has(area);
-        const listed = narrowed ? files.filter((file) => file.count > 0) : files;
+        const listed = narrowed ? places.filter((place) => place.count > 0) : places;
         return (
           <div key={area}>
             <div className="flex items-center">
@@ -80,13 +81,13 @@ export function FileTree({
               />
             </div>
             {open &&
-              listed.map(({ file, label, count: shown }) => (
+              listed.map(({ key, label, count: shown }) => (
                 <Row
-                  key={file}
+                  key={key}
                   label={label}
                   count={shown}
-                  current={selected.kind === "file" && selected.file === file}
-                  onClick={() => onSelect({ kind: "file", file })}
+                  current={selected.kind === "place" && selected.place === key}
+                  onClick={() => onSelect({ kind: "place", place: key })}
                   className="pl-9"
                 />
               ))}

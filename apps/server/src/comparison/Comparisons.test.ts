@@ -28,8 +28,7 @@ import * as Comparisons from "./Comparisons.ts";
 
 const line = (id: string, index: number, source: string): Entry => ({
   id,
-  file: "Map001.json",
-  path: ["events", "1", "pages", "0", "list", String(index), "parameters", "0"],
+  location: { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index },
   source,
   translation: {},
 });

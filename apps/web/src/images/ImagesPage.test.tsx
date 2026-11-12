@@ -1,3 +1,4 @@
+import { isImageText } from "@rpgtl/domain";
 import type {
   Catalog,
   Entry,
@@ -15,11 +16,10 @@ import { ImagesPage } from "./ImagesPage.tsx";
 
 beforeAll(() => page.viewport(1280, 800));
 
-const text = (id: string, file: string, line: number, source: string, translation: string) =>
+const text = (id: string, image: string, line: number, source: string, translation: string) =>
   ({
     id,
-    file,
-    path: ["lines", String(line)],
+    location: { _tag: "ImageLines", image, lines: [line] },
     source,
     translation: translation ? { guess: { value: translation, run: "r" } } : {},
   }) satisfies Entry;
@@ -34,7 +34,7 @@ const saved: Catalog = {
       ...text("c", "img/system/Menu", 0, "物品", "Items"),
       translation: { guess: { value: "Items", run: "r", long: "Inventory" } },
     },
-    { ...text("m", "Map001.json", 0, "你好", "Hello"), path: ["events", "1"] },
+    { ...text("m", "", 0, "你好", "Hello"), location: { _tag: "MapName", map: 1 } },
   ],
   glossary: [],
   translate: true,
@@ -99,7 +99,7 @@ const fakeServer = () => {
         server.posts.push({ path, body: await request.json() });
         server.catalog = {
           ...server.catalog,
-          entries: server.catalog.entries.filter((entry) => !entry.file.startsWith("img/")),
+          entries: server.catalog.entries.filter((entry) => !isImageText(entry)),
         };
         server.feed.changed();
         return Response.json(server.catalog);
@@ -275,7 +275,9 @@ test("an open image that loses its text closes the editor, which stays closed wh
   const withTitle = server.catalog;
   server.catalog = {
     ...withTitle,
-    entries: withTitle.entries.filter((entry) => entry.file !== "img/pictures/Title"),
+    entries: withTitle.entries.filter(
+      (entry) => !isImageText(entry) || entry.location.image !== "img/pictures/Title",
+    ),
   };
   server.feed.changed();
   await vi.waitFor(() => expect(page.getByRole("dialog").query()).toBeNull());
