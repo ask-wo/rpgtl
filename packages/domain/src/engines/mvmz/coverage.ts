@@ -8,7 +8,7 @@ import {
   sourceText,
   variableStrings,
 } from "./extract.ts";
-import { entryTranslation } from "./guesses.ts";
+import { entryTranslation } from "../../guesses.ts";
 
 /** Every data file of a game and its plugins, for searches of all of it. */
 export interface GameContents {

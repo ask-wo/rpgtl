@@ -1,6 +1,6 @@
 import type { Entry } from "@rpgtl/contracts";
 import { codeOrBackslash, controlCodePattern, isPauseCode, shownText } from "./controlCodes.ts";
-import { creditLine, keepsLineBreaks } from "./extract.ts";
+import { creditLine, keepsLineBreaks } from "./engines/mvmz/extract.ts";
 import { pauseMarker, pausesIn, withPauses, type Pause, type Pauses } from "./pauses.ts";
 import type { Placed } from "./location.ts";
 

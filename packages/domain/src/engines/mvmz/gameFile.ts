@@ -10,7 +10,7 @@ import {
 import * as Data from "effect/Data";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import { mapOf, tableOf } from "./location.ts";
+import { mapOf, tableOf } from "../../location.ts";
 
 /** A data file of a game, by what RPGTL reads in it. */
 export type GameFile = Data.TaggedEnum<{

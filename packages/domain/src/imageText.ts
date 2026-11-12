@@ -11,7 +11,7 @@ import type {
   PreparedBlock,
 } from "@rpgtl/contracts";
 import { sourceScript } from "./checks.ts";
-import { sourceText } from "./extract.ts";
+import { sourceText } from "./engines/mvmz/extract.ts";
 import { isImageText, newEntry } from "./location.ts";
 import { entryTranslation, isUserValue, withoutGuess } from "./guesses.ts";
 

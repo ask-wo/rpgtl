@@ -8,8 +8,8 @@ import {
   nonTextParameters,
   pathOf,
   reuseKeys,
-} from "./index.ts";
-import { extractFrom } from "./testUtils/gameFiles.ts";
+} from "../../index.ts";
+import { extractFrom } from "../../testUtils/gameFiles.ts";
 
 it("an entry's id is the start of the SHA-256 of its file, path and source", () => {
   const entry = newEntry({ _tag: "EventName", map: 1, event: 1 }, "客人1号");

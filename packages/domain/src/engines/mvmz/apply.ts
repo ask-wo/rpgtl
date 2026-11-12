@@ -16,13 +16,13 @@ import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import type * as Types from "effect/Types";
-import { measuredText } from "./controlCodes.ts";
+import { measuredText } from "../../controlCodes.ts";
 import { messageRun } from "./extract.ts";
 import { listFocus, pluginFocus, textFocus } from "./focus.ts";
 import { GameFile } from "./gameFile.ts";
-import { fileOf, isMessage, listKey } from "./location.ts";
-import { givenNameTranslation } from "./shortNames.ts";
-import { entryTranslation } from "./guesses.ts";
+import { fileOf, isMessage, listKey } from "../../location.ts";
+import { givenNameTranslation } from "../../shortNames.ts";
+import { entryTranslation } from "../../guesses.ts";
 
 export class GameDataChanged extends Schema.TaggedError<GameDataChanged>()("GameDataChanged", {
   file: Schema.String,

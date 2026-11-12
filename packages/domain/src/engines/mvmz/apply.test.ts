@@ -9,8 +9,8 @@ import {
   GameDataChanged,
   messageLayouts,
   translatedImageNames,
-} from "./index.ts";
-import { extractFrom, readGameFile } from "./testUtils/gameFiles.ts";
+} from "../../index.ts";
+import { extractFrom, readGameFile } from "../../testUtils/gameFiles.ts";
 
 const changedFile = (result: Result.Result<unknown, GameDataChanged>) =>
   Result.isFailure(result) ? result.failure.file : undefined;

@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import { type GameContents, missingText, newEntry, textInLogic } from "./index.ts";
+import { type GameContents, missingText, newEntry, textInLogic } from "../../index.ts";
 
 const map = {
   events: [
