@@ -103,7 +103,7 @@ export default async ({ page, api, run, log }: any) => {
   );
   await page.clickText("Flagged1");
   await page.waitUntil(
-    `document.body.textContent.includes("Check: Chinese left. Editing the English clears this.")`,
+    `document.body.textContent.includes("Check: source text left. Editing the English clears this.")`,
   );
   log(`checks: ${JSON.stringify(await api(`checks?id=${id}`))}`);
   await page.shot("flagged");

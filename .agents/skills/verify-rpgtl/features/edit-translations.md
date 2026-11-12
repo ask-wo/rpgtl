@@ -30,7 +30,7 @@ Preconditions:
 - **Type.** `page.fill('textarea[aria-label="English for 这把剑很重，你要小心。"]', …)`, wait until `$RUN/state/games/<id>/catalog.json` holds it, then for "All changes saved". `$RUN/state/games/<id>/backups/` gains nothing, and `fetch(run.url + "/game/<id>/data/CommonEvents.json")` serves the English.
 - **Control codes.** Fill the `Recover \V[1] HP.` box without `\V[1]`: the page shows "Keep the original's RPG Maker control codes…" and the catalog's entry stays empty.
 - **Tree, search and filter.** The tree is `nav[aria-label="Text files"]`; its buttons read label then count ("Items2"), so click them with a RegExp: `page.clickText(/^Items/, 'nav[aria-label="Text files"]')`. The search box is `[aria-label="Search the text"]`, the filters are buttons reading label then count ("Flagged1"). The entries are in `[aria-label="Entries"]`.
-- **Flagged.** Type English with Chinese left in it ("This sword 很重, so be careful."), wait for the save, and the Flagged button reads `Flagged1`; choosing it shows `Check: Chinese left. Editing the English clears this.`, and `api("checks?id=" + id)` returns the finding.
+- **Flagged.** Type English with Chinese left in it ("This sword 很重, so be careful."), wait for the save, and the Flagged button reads `Flagged1`; choosing it shows `Check: source text left. Editing the English clears this.`, and `api("checks?id=" + id)` returns the finding.
 - **Failed link and suggestions.** Need a run with failed entries; a real run rarely fails on the fixture. The page's component tests (`apps/web/src/text/TextPage.test.tsx`, `apps/web/src/translation/RunBar.test.tsx`) cover them.
 - **Proof.** Screenshots after each step, and a copy of `$RUN/state/games/<id>/catalog.json` in evidence.
 
