@@ -68,10 +68,10 @@ const showNav = (
         if (otherVersion && !body.choice)
           return Response.json({
             otherVersion: {
-              game: { ...game, title: "雨", build: { sha256: "s", label: "v0.40" } },
+              game: { ...game, title: "雨", build: { sha256: "s", version: "v0.40" } },
               titleTranslation: "Rain",
               sure: true,
-              label: "v0.41",
+              version: "v0.41",
             },
           });
         list = [moved];
@@ -100,9 +100,11 @@ const showNav = (
   return { history, browsed, moves, inspected, queue };
 };
 
-test("a game shows the English of its title under its own, its engine, and its folder on hover", async () => {
-  showNav();
-  const row = page.getByRole("button", { name: "雨 MV Rain" });
+const versioned = { listed: { build: { sha256: "s", version: "v0.41" } } };
+
+test("a game shows the English of its title under its own, its version, its engine, and its folder on hover", async () => {
+  showNav("/", versioned);
+  const row = page.getByRole("button", { name: "雨 MV v0.41 · Rain" });
   await expect.element(row).toBeVisible();
   await row.hover();
   await expect.element(page.getByText(`MV · ${game.root}`)).toBeVisible();
@@ -133,11 +135,12 @@ test("a game whose run waits shows an hourglass saying what for, then a spinner 
   await expect.element(page.getByRole("status", { name: "Translating" })).not.toBeInTheDocument();
 });
 
-test("an open game's header shows the English of its title next to its own", async () => {
-  showNav(`/games/${game.id}`);
+test("an open game's header shows the English of its title next to its own, and its version before its folder", async () => {
+  showNav(`/games/${game.id}`, versioned);
   const title = page.getByRole("heading", { name: "雨", level: 1 });
   await expect.element(title).toBeVisible();
   expect(title.element().nextElementSibling?.textContent).toBe("Rain");
+  await expect.element(page.getByText(`v0.41 · ${game.root}`)).toBeVisible();
 });
 
 test("clicking a game opens its page without reading its folder again", async () => {

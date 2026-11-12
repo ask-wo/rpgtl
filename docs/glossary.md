@@ -10,7 +10,7 @@ The words the code and these docs are built from. Use them in code, tests, docs 
 | Game | An unpacked RPG Maker MV or MZ game folder that RPGTL has inspected (`Games`). Its **engine** is MV or MZ. |
 | Game id | The random id a game gets when first inspected. It names the game's state folder and its addresses, and stays when the folder moves or a new version replaces the game. The same game opened on another computer gets another id, so an import matches a translation file to the game by its entry ids instead. |
 | Game identity | What a game's `System.json` carries that is taken to stay the same across its versions: MZ's game id and the encryption key. With the title, it tells that a game in a new folder is another version of a saved game. |
-| Build | One version of a game, told apart by System.json's `versionId` and a hash of its data and plugin files; its label is the version in the folder's name or the date of its newest data file. |
+| Build | One version of a game, told apart by System.json's `versionId` and a hash of its data and plugin files; its version, written like `v0.41`, is the one in the folder's name, its parent's name or else the game's title, which the page shows without it. |
 | Inspecting | Reading a game folder's data and plugin files into the game list and its catalog. Opening a listed game shows what was saved and doesn't inspect it again. |
 | Hold | An operation such as a run or a save holds a game, so others don't write it meanwhile. |
 

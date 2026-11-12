@@ -1,19 +1,35 @@
 import { assert, it } from "@effect/vitest";
 import type { SavedGame } from "@rpgtl/contracts";
-import { folderVersion, otherVersions, sameGameAs } from "./index.ts";
+import { otherVersions, sameGameAs, splitVersion } from "./index.ts";
 
-it("a folder's version is the version-like part of its name", () => {
+it("a name's version is its version-like part written as v and its number, and the rest without it is its name", () => {
   assert.deepStrictEqual(
     [
-      "Moss Garden v0.41",
+      "Moss Garden V.0.41B",
       "Moss_Garden_1.2.3",
-      "Moss Garden Ver1.05",
+      "Moss Garden Ver 1.05 Demo",
       "MossGarden[v2]",
+      "苔の庭（v1.1）",
       "Moss Garden 2",
-      "Moss Garden",
       "Level5",
-    ].map(folderVersion),
-    ["v0.41", "1.2.3", "Ver1.05", "v2", undefined, undefined, undefined],
+      "v1.0",
+      "Moss Garden Patreon 0-1-1",
+      "Moss Garden 2022-08-06",
+      "Moss Garden 2022.08.06",
+    ].map(splitVersion),
+    [
+      { name: "Moss Garden", version: "v0.41b" },
+      { name: "Moss_Garden", version: "v1.2.3" },
+      { name: "Moss Garden Demo", version: "v1.05" },
+      { name: "MossGarden", version: "v2" },
+      { name: "苔の庭", version: "v1.1" },
+      { name: "Moss Garden 2" },
+      { name: "Level5" },
+      { name: "v1.0", version: "v1.0" },
+      { name: "Moss Garden Patreon", version: "v0.1.1" },
+      { name: "Moss Garden 2022-08-06" },
+      { name: "Moss Garden 2022.08.06" },
+    ],
   );
 });
 
