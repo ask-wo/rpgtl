@@ -5,8 +5,6 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "./rpgtl.ts";
 import {
   closeMessage,
-  expectNoErrors,
-  gameErrors,
   idle,
   loadFromTitle,
   newGame,
@@ -28,7 +26,6 @@ test("the map view on MV's real engine", async ({ openGame }) => {
   // On CI this test takes over a minute, close to the default limit.
   test.slow();
   const game = await (await openGame("real-MV")).play();
-  const errors = gameErrors(game);
   const view = game.locator("#rpgtl-map-view");
   const inView = (selector: string) => view.locator(selector);
   const frames = () =>
@@ -186,5 +183,4 @@ test("the map view on MV's real engine", async ({ openGame }) => {
   await expect(inView('#events button[aria-pressed="true"]')).toHaveCount(0);
   await expect(inView("#detail")).toHaveText("");
   await closeView();
-  await expectNoErrors(game, errors);
 });

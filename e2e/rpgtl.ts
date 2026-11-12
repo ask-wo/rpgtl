@@ -21,11 +21,19 @@ export interface OpenedGame {
   readonly id: string;
   /** The game's catalog as RPGTL saved it. */
   readonly saved: () => Promise<{ entries: Pick<Entry, "source" | "translation">[] }>;
-  /** Opens the game as the browser plays it, in a tab of its own. */
+  /**
+   * Opens the game as the browser plays it, in a tab of its own. The test fails if the game logs
+   * an error or throws one.
+   */
   readonly play: () => Promise<Page>;
 }
 
 type Kind = "MV" | "MZ" | "real-MV";
+
+const gameErrors = new WeakMap<Page, string[]>();
+
+/** The errors a game page has logged or thrown so far. */
+export const errorsIn = (game: Page) => gameErrors.get(game) ?? [];
 
 /** An X display of its own, so that games RPGTL starts in NW.js open no window on the desktop. */
 async function startXvfb(): Promise<{ display: string; stop: () => Promise<void> }> {
@@ -127,6 +135,7 @@ export const test = base.extend<
     { scope: "worker" },
   ],
   openGame: async ({ rpgtl, page, context }, use, testInfo) => {
+    const games: Page[] = [];
     await use(async (kind) => {
       const root = testInfo.outputPath("game");
       const webRoot = kind === "real-MV" ? await mvGame(root) : await fixture(root, kind);
@@ -147,11 +156,20 @@ export const test = base.extend<
           JSON.parse(await readFile(path.join(rpgtl.state, "games", id, "catalog.json"), "utf8")),
         play: async () => {
           const game = await context.newPage();
+          const errors: string[] = [];
+          game.on("console", (message) => {
+            if (message.type() === "error")
+              errors.push(`${message.text()} ${message.location().url}`.trim());
+          });
+          game.on("pageerror", (error) => errors.push(error.stack ?? error.message));
+          gameErrors.set(game, errors);
+          games.push(game);
           await game.goto(`${rpgtl.url}/game/${id}/`);
           return game;
         },
       };
     });
+    for (const game of games) expect(errorsIn(game), "errors in the game").toEqual([]);
   },
 });
 

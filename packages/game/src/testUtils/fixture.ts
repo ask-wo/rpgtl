@@ -484,6 +484,7 @@ export async function fixture(root: string, engine: Engine = "MV", wrapped = fal
   await mkdir(path.join(webRoot, "img", "characters"), { recursive: true });
   await writeFile(path.join(webRoot, "img", "characters", "People1.png"), spriteSheet(false));
   await writeFile(path.join(webRoot, "img", "characters", "$Big.png"), spriteSheet(true));
+  await writeFile(path.join(webRoot, "img", "characters", "Actor1.png"), spriteSheet(false));
   await mkdir(path.join(webRoot, "audio", "se"), { recursive: true });
   await writeFile(path.join(webRoot, "audio", "se", "合成物品.ogg"), "");
   const core = engine === "MV" ? "rpg_core.js" : "rmmz_core.js";

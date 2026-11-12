@@ -7,8 +7,6 @@ import {
   choose,
   closeMessage,
   confirm,
-  expectNoErrors,
-  gameErrors,
   idle,
   key,
   loadFromTitle,
@@ -41,7 +39,6 @@ test("translations edited on the Text page show in the game, which saves and loa
   expect((await opened.saved()).entries.filter(entryTranslation)).toHaveLength(2);
 
   const game = await opened.play();
-  const errors = gameErrors(game);
   await sceneIs(game, "Scene_Title");
   expect(await game.evaluate("[Graphics.width, Graphics.height].join('x')")).toBe("960x540");
   expect(await game.evaluate(`${scene}._commandWindow._list.map((c) => c.name)`)).toEqual([
@@ -101,5 +98,4 @@ test("translations edited on the Text page show in the game, which saves and loa
     3,
     true,
   ]);
-  await expectNoErrors(game, errors);
 });

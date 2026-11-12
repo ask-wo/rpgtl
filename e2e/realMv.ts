@@ -1,14 +1,24 @@
 // Plays MV's real engine the way a player does. The engine reads keys once per frame, so each key
 // is held for a few frames. verify-rpgtl's examples/real-mv.ts has the same helpers for its own
 // driver: a fix to one belongs in the other too.
-import { expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { errorsIn } from "./rpgtl.ts";
 
 export const scene = "SceneManager._scene";
 export const messageWindow = `${scene}._messageWindow`;
 
 /** Waits until a script expression in the game is true. */
-export const until = (game: Page, expression: string, timeout = 10_000) =>
-  game.waitForFunction(expression, undefined, { timeout, polling: 50 });
+export async function until(game: Page, expression: string, timeout = 10_000) {
+  try {
+    await game.waitForFunction(expression, undefined, { timeout, polling: 50 });
+  } catch (error) {
+    // A game that stopped on an error shows here only as a timeout.
+    const errors = errorsIn(game);
+    if (error instanceof Error && errors.length)
+      error.message += `\n\nErrors in the game:\n${errors.join("\n")}`;
+    throw error;
+  }
+}
 
 /** Waits until the scene is `name` (a class such as "Scene_Map") and has finished starting. */
 export const sceneIs = (game: Page, name: string) =>
@@ -142,20 +152,4 @@ export async function loadFromTitle(game: Page) {
   await sceneIs(game, "Scene_Load");
   await confirm(game, `${scene}._listWindow`);
   await sceneIs(game, "Scene_Map");
-}
-
-/** The game's console errors and uncaught exceptions, collected from now on. */
-export function gameErrors(game: Page) {
-  const errors: string[] = [];
-  game.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  game.on("pageerror", (error) => errors.push(error.message));
-  return errors;
-}
-
-/** Checks the engine shows no error screen and logged no error. */
-export async function expectNoErrors(game: Page, errors: string[]) {
-  await expect(game.locator("#ErrorPrinter")).toHaveText(/^$/);
-  expect(errors).toEqual([]);
 }
