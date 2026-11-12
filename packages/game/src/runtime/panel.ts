@@ -266,6 +266,8 @@ export function mountPanel(
       $("through").checked = rm.$gamePlayer?.isThrough() ?? false;
       fillItems();
       fillOptions("actor", rm.$dataActors ?? [], (actor) => actor.name);
+      const leader = rm.$gameParty?.leader()?.actorId();
+      if (leader) $<HTMLSelectElement>("actor").value = String(leader);
       fillOptions(
         "variable",
         rm.$dataSystem?.variables ?? [],

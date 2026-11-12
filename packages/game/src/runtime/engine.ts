@@ -56,6 +56,7 @@ export interface Battler {
 }
 interface Actor extends Battler {
   level: number;
+  actorId(): number;
   maxLevel(): number;
   changeLevel(level: number, show: boolean): void;
   recoverAll(): void;
@@ -202,6 +203,7 @@ export interface RpgMaker {
     gold(): number;
     gainGold(amount: number): void;
     members(): Actor[];
+    leader(): Actor | undefined;
     aliveMembers(): Actor[];
     inBattle(): boolean;
     gainItem(item: Named, amount: number): void;

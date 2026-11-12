@@ -239,6 +239,7 @@ const coreScript = `
   window.$dataWeapons = [null, { name: "Sword" }];
   window.$dataArmors = [null, { name: "Shield" }];
   const hero = {
+    actorId: () => 1,
     recoverAll() { this.healed = true; },
     addParam(id, bonus) { this.bonus = bonus; },
   };
@@ -258,6 +259,7 @@ const coreScript = `
     gold() { return this.amount; },
     gainGold(value) { this.amount += value; },
     members: () => [hero],
+    leader: () => hero,
     inBattle: () => false,
     hasItem(item) { return this.item === item && this.quantity > 0; },
     gainItem(item, n) { this.item = item; this.quantity = n; },
