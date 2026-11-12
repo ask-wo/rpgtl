@@ -6,6 +6,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import { command, rubyObject, xpArchive, xpFile, xpMap } from "@rpgtl/domain/testUtils/xpGame";
 import { folderWith, mvGame } from "../testUtils/gameFolder.ts";
 import * as GameFolder from "./GameFolder.ts";
 
@@ -158,6 +159,43 @@ it.effect("entries come from the data files and plugin settings that aren't file
       ],
     );
   }).pipe(Effect.provide(services)),
+);
+
+it.effect(
+  "an XP game is found by its archive, its files come from the archive before its Data folder, and its title from Game.ini",
+  () =>
+    Effect.gen(function* () {
+      const gameFolder = yield* GameFolder.GameFolder;
+      const root = yield* folderWith({
+        "Game.ini": "[Game]\r\nLibrary=RGSS102E.dll\r\nTitle=苔岛\r\n",
+        "Game.rgssad": xpArchive({
+          "Map001.rxdata": xpMap({ 1: [command(101, "早安")] }),
+          "System.rxdata": rubyObject("RPG::System", { elements: ["", "风"] }),
+        }),
+        "Data/Map001.rxdata": xpFile(xpMap({ 1: [command(101, "旧的问候")] })),
+        "Data/Items.rxdata": xpFile([null, rubyObject("RPG::Item", { name: "苔藓" })]),
+      });
+      const game = yield* gameFolder.inspect(root);
+      const { identity, build, ...folder } = game;
+      assert.deepStrictEqual(folder, {
+        root,
+        webRoot: root,
+        engine: "XP",
+        title: "苔岛",
+        files: ["Items.rxdata", "Map001.rxdata", "System.rxdata"],
+        encryptedAssets: true,
+        mediaWarnings: [],
+        missingImages: [],
+        missingAudio: [],
+      });
+      assert.deepStrictEqual(identity, {});
+      assert.match(build?.sha256 ?? "", /^[0-9a-f]{64}$/);
+      assert.deepStrictEqual(
+        (yield* gameFolder.entries(game)).map((entry) => entry.source),
+        ["苔藓", "早安", "风"],
+      );
+      assert.isTrue(yield* gameFolder.present(game));
+    }).pipe(Effect.provide(services)),
 );
 
 it.effect("the game's contents are every data file and the code of the plugins inside it", () =>

@@ -48,3 +48,4 @@ export * from "./engines/xp/archive.ts";
 export * from "./engines/xp/extract.ts";
 export * from "./engines/xp/gameFile.ts";
 export * from "./engines/xp/location.ts";
+export * from "./engines/features.ts";

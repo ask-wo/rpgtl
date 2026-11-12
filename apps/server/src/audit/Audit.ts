@@ -60,14 +60,14 @@ export class Audit extends Context.Service<
       id: string,
     ) => Effect.Effect<
       ReadonlyArray<MissingText>,
-      CatalogError | GameFolder.GameFileReadError | GameFileInvalid
+      CatalogError | Games.EngineUnsupportedError | GameFolder.GameFileReadError | GameFileInvalid
     >;
     /** Translated text that scripts, conditions, notes, plugin commands or plugin code use. */
     readonly logic: (
       id: string,
     ) => Effect.Effect<
       ReadonlyArray<LogicUse>,
-      CatalogError | GameFolder.GameFileReadError | GameFileInvalid
+      CatalogError | Games.EngineUnsupportedError | GameFolder.GameFileReadError | GameFileInvalid
     >;
   }
 >()("@rpgtl/server/audit/Audit") {}
@@ -116,12 +116,14 @@ const make = Effect.gen(function* () {
 
   const coverage = Effect.fn("Audit.coverage")(function* (id: string) {
     const game = yield* games.get(id);
+    yield* Games.requireFeature(game, "coverage");
     const catalog = yield* catalogs.get(id);
     return missingText(yield* folder.contents(game), game.files, catalog);
   });
 
   const logic = Effect.fn("Audit.logic")(function* (id: string) {
     const game = yield* games.get(id);
+    yield* Games.requireFeature(game, "coverage");
     const catalog = yield* catalogs.get(id);
     return textInLogic(yield* folder.contents(game), catalog);
   });

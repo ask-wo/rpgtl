@@ -85,6 +85,7 @@ export class Launches extends Context.Service<
       NwjsLaunch,
       | Games.GameNotInspectedError
       | Games.GameBusyError
+      | Games.EngineUnsupportedError
       | Nwjs.NwjsMissingError
       | NwjsRunningError
       | NwjsLaunchError
@@ -302,6 +303,7 @@ const make = Effect.gen(function* () {
 
   const launch = Effect.fn("Launches.launch")(function* (id: string) {
     const game = yield* games.get(id);
+    yield* Games.requireFeature(game, "play");
     const program = yield* nwjs.program;
     return yield* games.exclusive(
       id,

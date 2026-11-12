@@ -128,7 +128,7 @@ export const FolderListing = Schema.Struct({
   home: Schema.String,
   /** The tops of the file system: `/`, or each drive on Windows. */
   roots: Schema.Array(Schema.String),
-  /** The folders inside it, sorted by name; `game` when one holds an MV or MZ game's data. */
+  /** The folders inside it, sorted by name; `game` when one holds an MV, MZ or XP game's data. */
   folders: Schema.Array(
     Schema.Struct({ name: Schema.String, path: Schema.String, game: Schema.Boolean }),
   ),

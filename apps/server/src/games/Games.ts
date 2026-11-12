@@ -1,5 +1,5 @@
-import { type Game, Games as GameList, type SavedGame } from "@rpgtl/contracts";
-import { otherVersions } from "@rpgtl/domain";
+import { Engine, type Game, Games as GameList, type SavedGame } from "@rpgtl/contracts";
+import { type EngineFeatures, engineFeatures, otherVersions } from "@rpgtl/domain";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
@@ -21,6 +21,26 @@ export class GameNotInspectedError extends Schema.TaggedError<GameNotInspectedEr
     return `Game ${this.id} hasn't been inspected.`;
   }
 }
+
+/** Something RPGTL can't do yet for games of the game's engine, such as playing an XP game. */
+export class EngineUnsupportedError extends Schema.TaggedError<EngineUnsupportedError>()(
+  "EngineUnsupportedError",
+  {
+    id: Schema.String,
+    engine: Engine,
+    feature: Schema.Literals(["play", "imageText", "coverage"]),
+  },
+) {
+  override get message() {
+    return `RPGTL can't do this for ${this.engine} games yet (game ${this.id}).`;
+  }
+}
+
+/** Fails unless RPGTL can do `feature` for the game's engine. */
+export const requireFeature = (game: Game, feature: keyof EngineFeatures) =>
+  engineFeatures[game.engine][feature]
+    ? Effect.void
+    : Effect.fail(new EngineUnsupportedError({ id: game.id, engine: game.engine, feature }));
 
 /** Another operation on the game holds it, such as a run or a save. */
 export class GameBusyError extends Schema.TaggedError<GameBusyError>()("GameBusyError", {

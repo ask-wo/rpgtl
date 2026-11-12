@@ -7,7 +7,7 @@ The words the code and these docs are built from. Use them in code, tests, docs 
 | Term | Meaning |
 | --- | --- |
 | State folder | RPGTL's data folder (`RPGTL_DIR`, `StateFolder`): the game list `games.json` and a folder of files per game. |
-| Game | An unpacked RPG Maker MV or MZ game folder that RPGTL has inspected (`Games`). Its **engine** is MV or MZ. |
+| Game | An RPG Maker game folder that RPGTL has inspected (`Games`): an unpacked MV or MZ game, or an XP game, whose data may be in its `Game.rgssad` archive. Its **engine** is MV, MZ or XP, and `engineFeatures` says what RPGTL can do with it besides translating its text. |
 | Game id | The random id a game gets when first inspected. It names the game's state folder and its addresses, and stays when the folder moves or a new version replaces the game. The same game opened on another computer gets another id, so an import matches a translation file to the game by its entry ids instead. |
 | Game identity | What a game's `System.json` carries that is taken to stay the same across its versions: MZ's game id and the encryption key. With the title, it tells that a game in a new folder is another version of a saved game. |
 | Build | One version of a game, told apart by System.json's `versionId` and a hash of its data and plugin files; its version, written like `v0.41`, is the one in the folder's name, its parent's name or else the game's title, which the page shows without it. |

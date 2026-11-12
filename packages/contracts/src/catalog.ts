@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import { Location } from "./location.ts";
 import { RunModels } from "./runLog.ts";
 
-export const Engine = Schema.Literals(["MV", "MZ"]);
+export const Engine = Schema.Literals(["MV", "MZ", "XP"]);
 
 /** The language a game's text is written in. */
 export const SourceLanguage = Schema.Literals(["chinese", "japanese", "korean"]);

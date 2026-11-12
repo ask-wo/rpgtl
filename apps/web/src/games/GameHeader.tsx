@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { engineFeatures } from "@rpgtl/domain";
 import { CheckIcon } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { SidebarTrigger } from "~/components/ui/sidebar";
@@ -24,7 +25,7 @@ export function GameHeader() {
         </p>
       </div>
       <SaveStatus gameId={game.id} />
-      <PlayButtons key={game.id} gameId={game.id} />
+      {engineFeatures[game.engine].play && <PlayButtons key={game.id} gameId={game.id} />}
     </header>
   );
 }

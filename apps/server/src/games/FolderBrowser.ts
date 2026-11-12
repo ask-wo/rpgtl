@@ -80,7 +80,9 @@ const make = Effect.gen(function* () {
           if (!(yield* isFolder(inside))) return Option.none();
           const game =
             (yield* isFile(path.join(inside, "data", "System.json"))) ||
-            (yield* isFile(path.join(inside, "www", "data", "System.json")));
+            (yield* isFile(path.join(inside, "www", "data", "System.json"))) ||
+            (yield* isFile(path.join(inside, "Game.rgssad"))) ||
+            (yield* isFile(path.join(inside, "Data", "System.rxdata")));
           return Option.some({ name, path: inside, game });
         }),
       { concurrency: 16 },

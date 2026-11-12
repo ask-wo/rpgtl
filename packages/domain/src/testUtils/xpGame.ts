@@ -28,6 +28,11 @@ export const xpMap = (events: Record<number, ReadonlyArray<RubyObject>>) =>
     ),
   });
 
+/** A data file as RGSS writes it, such as `Map001.rxdata`. */
+export const xpFile = (data: unknown) => dump(data);
+
 /** An archive (`Game.rgssad`) of the data files given by name below `Data/`, dumped. */
 export const xpArchive = (files: Record<string, unknown>) =>
-  writeArchive(new Map(Object.entries(files).map(([name, data]) => [`Data/${name}`, dump(data)])));
+  writeArchive(
+    new Map(Object.entries(files).map(([name, data]) => [`Data/${name}`, xpFile(data)])),
+  );
