@@ -62,7 +62,7 @@ export default async ({ page, api, run, log }: any) => {
   );
 
   await page.clickText(/^Items/, 'nav[aria-label="Text files"]');
-  await page.waitUntil(`location.search === "?file=Items.json"`);
+  await page.waitUntil(`location.search === "?place=items"`);
   await page.fill('[aria-label="Search the text"]', "potion");
   await page.waitUntil(`new URLSearchParams(location.search).get("q") === "potion"`);
   await page.clickText(/^Untranslated/);
@@ -79,7 +79,7 @@ export default async ({ page, api, run, log }: any) => {
   if (narrowed.some(([, value]: [string, string]) => value !== ""))
     throw new Error("Untranslated lists a translated entry");
   await page.shot("narrowed");
-  await page.goto(`/games/${id}/text?file=Items.json&q=potion&show=untranslated`);
+  await page.goto(`/games/${id}/text?place=items&q=potion&show=untranslated`);
   await page.waitUntil(
     `document.querySelector('[aria-label="Search the text"]')?.value === "potion"`,
   );
@@ -103,7 +103,7 @@ export default async ({ page, api, run, log }: any) => {
   );
   await page.clickText("Flagged1");
   await page.waitUntil(
-    `document.body.textContent.includes("Check: Chinese left. Editing the English clears this.")`,
+    `document.body.textContent.includes("Check: source text left. Editing the English clears this.")`,
   );
   log(`checks: ${JSON.stringify(await api(`checks?id=${id}`))}`);
   await page.shot("flagged");

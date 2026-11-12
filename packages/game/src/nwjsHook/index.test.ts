@@ -47,10 +47,16 @@ interface SavedCatalog {
 async function importTranslations(saved: SavedCatalog, name = "Héros") {
   const catalog = await saved.read();
   for (const entry of catalog.entries) {
-    if (entry.file === "Actors.json" && entry.source === "Hero") entry.translation = { user: name };
-    if (entry.file === "Items.json" && entry.path.at(-1) === "description")
+    const { location } = entry;
+    if (location._tag === "RecordField" && location.table === "actors" && entry.source === "Hero")
+      entry.translation = { user: name };
+    if (
+      location._tag === "RecordField" &&
+      location.table === "items" &&
+      location.field === "description"
+    )
       entry.translation = { user: "Restore \\V[1] HP." };
-    if (entry.file === "plugins.js") entry.translation = { user: "Credits" };
+    if (location._tag === "PluginSetting") entry.translation = { user: "Credits" };
   }
   await saved.save(catalog);
 }
@@ -471,7 +477,7 @@ test("Hook hands the translated image blocks to the game, with their erased imag
   expect((await (await reload()).load("System.json")).rpgtlImageText).toBeUndefined();
 
   for (const entry of catalog.entries)
-    if (entry.file === image)
+    if (entry.location._tag === "ImageLines" && entry.location.image === image)
       entry.translation = { user: entry.source === "退出" ? "Quit" : "Begin" };
   await saved.save(catalog);
   const hints = (await (await reload()).load("System.json")).rpgtlImageText[image];

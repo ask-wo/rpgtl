@@ -2,11 +2,15 @@ import type { Catalog, Entry, GlossaryTerm, Pronoun, RunModels } from "@rpgtl/co
 import * as Struct from "effect/Struct";
 import { splitVersion } from "./gameIdentity.ts";
 import { entryTranslation, isUserValue, withUser } from "./guesses.ts";
+import { isImageText } from "./location.ts";
 
 /** The English of the game's title in System.json without its version, if it has any. */
 export const titleTranslation = ({ entries }: Pick<Catalog, "entries">) => {
   const entry = entries.find(
-    (each) => each.file === "System.json" && each.path.length === 1 && each.path[0] === "gameTitle",
+    ({ location }) =>
+      location._tag === "SystemText" &&
+      location.keys.length === 1 &&
+      location.keys[0] === "gameTitle",
   );
   return entry ? splitVersion(entryTranslation(entry)).name.trim() || undefined : undefined;
 };
@@ -22,7 +26,7 @@ export function sameGame(
   entries: ReadonlyArray<Pick<Entry, "id">>,
 ) {
   const found = new Set(entries.map((entry) => entry.id));
-  const text = catalog.entries.filter((entry) => !entry.file.startsWith("img/"));
+  const text = catalog.entries.filter((entry) => !isImageText(entry));
   return text.filter((entry) => found.has(entry.id)).length * 2 >= text.length;
 }
 

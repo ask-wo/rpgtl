@@ -4,8 +4,11 @@ import { pickSamples, sampleCatalog } from "./index.ts";
 
 const line = (event: number, index: number, source: string): Entry => ({
   id: `e${event}-${index}`,
-  file: "Map001.json",
-  path: ["events", String(event), "pages", "0", "list", String(index), "parameters", "0"],
+  location: {
+    _tag: "Message",
+    list: { _tag: "MapEventPage", map: 1, event: event, page: 0 },
+    index: index,
+  },
   source,
   translation: { user: "Done" },
 });
@@ -24,23 +27,25 @@ const catalog: Catalog = {
     ...scene(4, ["星澜说她累了。", "星澜说她饿了。"]),
     {
       id: "attack",
-      file: "System.json",
-      path: ["terms", "commands", "1"],
+      location: { _tag: "SystemText", keys: ["terms", "commands", "1"] },
       source: "攻击",
       translation: {},
     },
-    { id: "title", file: "System.json", path: ["gameTitle"], source: "雨", translation: {} },
+    {
+      id: "title",
+      location: { _tag: "SystemText", keys: ["gameTitle"] },
+      source: "雨",
+      translation: {},
+    },
     {
       id: "fall",
-      file: "Skills.json",
-      path: ["1", "message1"],
+      location: { _tag: "RecordField", table: "skills", record: 1, field: "message1" },
       source: "\\V[1]倒下了",
       translation: {},
     },
     {
       id: "potion",
-      file: "Items.json",
-      path: ["1", "description"],
+      location: { _tag: "RecordField", table: "items", record: 1, field: "description" },
       source: "回复体力。",
       translation: {},
     },
@@ -54,9 +59,9 @@ it("samples take the scenes with the most speakers, menu terms, descriptions and
   assert.deepStrictEqual(pickSamples(catalog), {
     gameId: "g",
     groups: [
-      { label: "Dialogue: Map001 event 2 page 1", ids: ["e2-0", "e2-1", "e2-2"] },
-      { label: "Dialogue: Map001 event 3 page 1", ids: ["e3-0", "e3-1"] },
-      { label: "Dialogue: Map001 event 4 page 1", ids: ["e4-0", "e4-1"] },
+      { label: "Dialogue: map 1 event 2 page 1", ids: ["e2-0", "e2-1", "e2-2"] },
+      { label: "Dialogue: map 1 event 3 page 1", ids: ["e3-0", "e3-1"] },
+      { label: "Dialogue: map 1 event 4 page 1", ids: ["e4-0", "e4-1"] },
       { label: "Menu terms", ids: ["attack"] },
       { label: "Descriptions", ids: ["potion"] },
       { label: "Control codes", ids: ["fall"] },
@@ -77,15 +82,13 @@ it("a sample's entries are untranslated but for fixed ones, with pronouns from t
   assert.deepStrictEqual(sample.entries, [
     {
       id: "attack",
-      file: "System.json",
-      path: ["terms", "commands", "1"],
+      location: { _tag: "SystemText", keys: ["terms", "commands", "1"] },
       source: "攻击",
       translation: { user: "Attack" },
     },
     {
       id: "potion",
-      file: "Items.json",
-      path: ["1", "description"],
+      location: { _tag: "RecordField", table: "items", record: 1, field: "description" },
       source: "回复体力。",
       translation: {},
     },

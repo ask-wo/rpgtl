@@ -1,24 +1,26 @@
-import type { Entry } from "@rpgtl/contracts";
-import type { CatalogDraft, DraftEntry, Prepared } from "./catalogDraft.ts";
+import type { CatalogDraft, Prepared, RunEntry } from "./catalogDraft.ts";
 import { seriesName } from "./imageText.ts";
 import { isNameEntry, isSpeakerNameEntry } from "./nameEntries.ts";
 import type { ContextLine, RequestEntry } from "./prompts.ts";
 import { withoutCodes } from "./requestText.ts";
 import { entryTranslation } from "./guesses.ts";
+import { isImageText, listKey, type Placed, placeKey, placeOf } from "./location.ts";
 
 /**
  * The event list an entry belongs to, or its file outside event lists: one scene of the game. The
  * images of a series, such as a menu's buttons drawn as `Command_0` to `Command_3`, are one scene,
  * so the translator sees the menu's other labels.
  */
-export const sceneKey = (entry: Pick<Entry, "file" | "path">) => {
-  if (entry.file.startsWith("img/")) return JSON.stringify([seriesName(entry.file) ?? entry.file]);
-  const list = entry.path.indexOf("list");
-  return JSON.stringify([entry.file, list < 0 ? [] : entry.path.slice(0, list + 1)]);
+export const sceneKey = ({ location }: Placed) => {
+  if (location === undefined) return "";
+  if (location._tag === "ImageLines")
+    return `image ${seriesName(location.image) ?? location.image}`;
+  if ("list" in location) return listKey(location.list);
+  return placeKey(placeOf(location));
 };
 
-const grouped = (entries: ReadonlyArray<DraftEntry>, key: (entry: DraftEntry) => string) => {
-  const groups = new Map<string, Array<DraftEntry>>();
+const grouped = (entries: ReadonlyArray<RunEntry>, key: (entry: RunEntry) => string) => {
+  const groups = new Map<string, Array<RunEntry>>();
   for (const entry of entries) {
     const group = groups.get(key(entry));
     if (group) group.push(entry);
@@ -27,12 +29,14 @@ const grouped = (entries: ReadonlyArray<DraftEntry>, key: (entry: DraftEntry) =>
   return [...groups.values()];
 };
 
-/** Name entries by file, which the glossary pass translates into the glossary first. */
-export const nameGroups = (entries: ReadonlyArray<DraftEntry>) =>
-  grouped(entries.filter(isNameEntry), (entry) => entry.file);
+/** Name entries by place, which the glossary pass translates into the glossary first. */
+export const nameGroups = (entries: ReadonlyArray<RunEntry>) =>
+  grouped(entries.filter(isNameEntry), ({ location }) =>
+    location ? placeKey(placeOf(location)) : "",
+  );
 
 /** The other entries by scene, which see the scene's earlier lines as context. */
-export const textGroups = (entries: ReadonlyArray<DraftEntry>) =>
+export const textGroups = (entries: ReadonlyArray<RunEntry>) =>
   grouped(
     entries.filter((entry) => !isNameEntry(entry)),
     sceneKey,
@@ -52,22 +56,20 @@ export function speakerEntries(draft: CatalogDraft, prepared: ReadonlyArray<Prep
       const trimmed = name?.trim();
       if (trimmed && !draft.term(trimmed)) names.add(trimmed);
     }
-  return [...names].map((name): DraftEntry => ({
+  return [...names].map((name): RunEntry => ({
     id: `speaker:${name}`,
-    file: "",
-    path: [],
     source: name,
     translation: {},
   }));
 }
 
-const left = (group: ReadonlyArray<DraftEntry>) =>
+const left = (group: ReadonlyArray<RunEntry>) =>
   group.filter((entry) => !entryTranslation(entry)).length;
 
 /** Packs groups with fewer entries left than a batch together, up to a batch each; a longer group goes alone. */
-export function packGroups(groups: ReadonlyArray<ReadonlyArray<DraftEntry>>, batchSize: number) {
-  const packed: Array<ReadonlyArray<DraftEntry>> = [];
-  let current: Array<DraftEntry> = [];
+export function packGroups(groups: ReadonlyArray<ReadonlyArray<RunEntry>>, batchSize: number) {
+  const packed: Array<ReadonlyArray<RunEntry>> = [];
+  let current: Array<RunEntry> = [];
   for (const group of groups) {
     if (left(group) >= batchSize) {
       packed.push(group);
@@ -140,7 +142,7 @@ export function batchRequest(
       ...sceneOf(item),
       ...speakerOf(item),
       text: item.text,
-      ...(item.entry.file.startsWith("img/") && { image: item.entry.file.slice("img/".length) }),
+      ...(isImageText(item.entry) && { image: item.entry.location.image.slice("img/".length) }),
       ...(limit !== undefined && { limit }),
     };
   });

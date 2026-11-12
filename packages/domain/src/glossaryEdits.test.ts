@@ -10,7 +10,10 @@ import {
 } from "./index.ts";
 
 const line = (index: number, source: string, translation: string) => ({
-  ...newEntry("Map001.json", ["events", "1", "pages", "0", "list", String(index)], source),
+  ...newEntry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index: index },
+    source,
+  ),
   translation: translation ? { user: translation } : {},
 });
 const run = "2026-11-04T10:00:00.000Z";

@@ -1,8 +1,10 @@
 import type {
   Catalog,
+  Entry,
   GameActivity,
   ImageReaderSetupStatus,
   ImageRunStatus,
+  Location,
   RunStatus,
 } from "@rpgtl/contracts";
 import { useState } from "react";
@@ -14,13 +16,16 @@ import { game, idle } from "../testUtils/game.ts";
 import { RunBar } from "./RunBar.tsx";
 import { TranslationCard } from "./TranslationCard.tsx";
 
-const entry = (id: string, file: string, translation: string) => ({
+const entry = (id: string, location: Location, translation: string): Entry => ({
   id,
-  file,
-  path: ["lines", "0"],
+  location,
   source: "你好",
   translation: translation ? { user: translation } : {},
 });
+const text = (id: string, translation: string) =>
+  entry(id, { _tag: "SystemText", keys: [id] }, translation);
+const imageText = (id: string, file: string, translation: string) =>
+  entry(id, { _tag: "ImageLines", image: file, lines: [0] }, translation);
 
 const notSetUp: ImageReaderSetupStatus = {
   device: "gpu",
@@ -140,11 +145,7 @@ const showGame = (fits: RunStatus["kind"] | "read-images" = "translate", onShowF
 
 test("Translate starts a run, and the counts grow while it saves", async () => {
   const server = fakeServer(
-    translating([
-      entry("a", "Map001.json", "Hello"),
-      entry("b", "Map001.json", ""),
-      entry("c", "img/pictures/Title", ""),
-    ]),
+    translating([text("a", "Hello"), text("b", ""), imageText("c", "img/pictures/Title", "")]),
   );
   const showFailed = vi.fn();
   showGame("translate", showFailed);
@@ -173,9 +174,9 @@ test("Translate starts a run, and the counts grow while it saves", async () => {
     .toBeVisible();
 
   server.catalog = translating([
-    entry("a", "Map001.json", "Hello"),
-    entry("b", "Map001.json", "Rain"),
-    entry("c", "img/pictures/Title", ""),
+    text("a", "Hello"),
+    text("b", "Rain"),
+    imageText("c", "img/pictures/Title", ""),
   ]);
   server.feed.changed();
   server.activity({ ...idle, translation: { ...running, done: 1, translated: 2, left: 1 } });
@@ -208,7 +209,7 @@ test("Translate starts a run, and the counts grow while it saves", async () => {
 
 test("on the Glossary page the bar offers Build glossary, and says how building it goes", async () => {
   const server = fakeServer({
-    ...translating([entry("a", "Map001.json", ""), entry("b", "Map001.json", "")]),
+    ...translating([text("a", ""), text("b", "")]),
     glossary: [{ source: "雨", translation: { user: "Rain" }, kind: { guess: { value: "name" } } }],
   });
   showGame("build-glossary");
@@ -237,7 +238,7 @@ test("on the Glossary page the bar offers Build glossary, and says how building 
 });
 
 test("a step such as loading the model shows with a spinner until translating starts", async () => {
-  const server = fakeServer(translating([entry("a", "Map001.json", "")]));
+  const server = fakeServer(translating([text("a", "")]));
   showGame();
   server.activity({
     ...idle,
@@ -252,7 +253,7 @@ test("a step such as loading the model shows with a spinner until translating st
 });
 
 test("a waiting run names what it waits for, can be stopped, and leaves the game editable", async () => {
-  const server = fakeServer(translating([entry("a", "Map001.json", "")]));
+  const server = fakeServer(translating([text("a", "")]));
   showGame();
   const harbor = { id: "harbor", title: "Harbor Tales" };
   server.activity({
@@ -282,7 +283,7 @@ test("a waiting run names what it waits for, can be stopped, and leaves the game
 });
 
 test("a run whose work is over says it is ending, without Stop, until it has ended", async () => {
-  const server = fakeServer(translating([entry("a", "Map001.json", "")]));
+  const server = fakeServer(translating([text("a", "")]));
   showGame();
   server.activity({ ...idle, translation: { ...running, phase: { _tag: "Ending" } } });
   const bar = page.getByRole("region", { name: "Runs" });
@@ -294,7 +295,7 @@ test("a run whose work is over says it is ending, without Stop, until it has end
 });
 
 test("a run says how long the rest takes once it has gone on for a while", async () => {
-  const server = fakeServer(translating([entry("a", "Map001.json", "")]));
+  const server = fakeServer(translating([text("a", "")]));
   showGame();
   onTestFinished(() => {
     vi.restoreAllMocks();
@@ -310,7 +311,7 @@ test("a run says how long the rest takes once it has gone on for a while", async
 });
 
 test("image reading says it checks the images, then which reader loads", async () => {
-  const server = fakeServer(translating([entry("a", "Map001.json", "")]));
+  const server = fakeServer(translating([text("a", "")]));
   showGame();
   const images: ImageRunStatus = {
     phase: { _tag: "Running" },
@@ -342,7 +343,7 @@ test("image reading says it checks the images, then which reader loads", async (
 });
 
 test("image reading shows on the bar, and Stop asks to stop it", async () => {
-  const server = fakeServer(translating([entry("a", "Map001.json", "")]));
+  const server = fakeServer(translating([text("a", "")]));
   showGame();
   server.activity({
     ...idle,
@@ -371,7 +372,7 @@ test("image reading shows on the bar, and Stop asks to stop it", async () => {
 });
 
 test("the bar is hidden while the game's translation is off", async () => {
-  const server = fakeServer({ ...translating([entry("a", "Map001.json", "")]), translate: false });
+  const server = fakeServer({ ...translating([text("a", "")]), translate: false });
   showGame();
   server.activity(idle);
   await expect.element(page.getByText("Switch on to translate or import.")).toBeVisible();
@@ -380,7 +381,7 @@ test("the bar is hidden while the game's translation is off", async () => {
 
 test("on the Images page the bar reads new images, or all again", async () => {
   const server = fakeServer(
-    translating([entry("a", "Map001.json", "Hello"), entry("c", "img/pictures/Title", "")]),
+    translating([text("a", "Hello"), imageText("c", "img/pictures/Title", "")]),
   );
   showGame("read-images");
   server.activity(idle);
@@ -398,7 +399,7 @@ test("on the Images page the bar reads new images, or all again", async () => {
 });
 
 test("Read new images asks to set the reader up first, and reads once it is set up", async () => {
-  const server = fakeServer(translating([entry("c", "img/pictures/Title", "")]));
+  const server = fakeServer(translating([imageText("c", "img/pictures/Title", "")]));
   showGame("read-images");
   server.activity(idle);
   server.reader(notSetUp);
@@ -447,7 +448,7 @@ test("Read new images asks to set the reader up first, and reads once it is set 
 });
 
 test("a failed setup shows why in the bar and reads nothing", async () => {
-  const server = fakeServer(translating([entry("c", "img/pictures/Title", "")]));
+  const server = fakeServer(translating([imageText("c", "img/pictures/Title", "")]));
   showGame("read-images");
   server.activity(idle);
   server.reader(notSetUp);
@@ -477,7 +478,7 @@ test("a failed setup shows why in the bar and reads nothing", async () => {
 });
 
 test("a setup that fails before the bar sees it says why, and a later setup doesn't start reading", async () => {
-  const server = fakeServer(translating([entry("c", "img/pictures/Title", "")]));
+  const server = fakeServer(translating([imageText("c", "img/pictures/Title", "")]));
   showGame("read-images");
   server.activity(idle);
   server.reader(notSetUp);
@@ -498,7 +499,7 @@ test("a setup that fails before the bar sees it says why, and a later setup does
 });
 
 test("the Images bar shows why the last setup failed, also when it was started elsewhere", async () => {
-  const server = fakeServer(translating([entry("c", "img/pictures/Title", "")]));
+  const server = fakeServer(translating([imageText("c", "img/pictures/Title", "")]));
   showGame("read-images");
   server.activity(idle);
   server.reader({
@@ -526,7 +527,7 @@ function Pages() {
 }
 
 test("every page's bar shows the reader's setup, and reading starts after it from any page", async () => {
-  const server = fakeServer(translating([entry("c", "img/pictures/Title", "")]));
+  const server = fakeServer(translating([imageText("c", "img/pictures/Title", "")]));
   render(<Pages />);
   server.activity(idle);
   server.reader(notSetUp);
@@ -557,7 +558,7 @@ test("every page's bar shows the reader's setup, and reading starts after it fro
 });
 
 test("a reader started outside RPGTL reads without setting up", async () => {
-  const server = fakeServer(translating([entry("c", "img/pictures/Title", "")]));
+  const server = fakeServer(translating([imageText("c", "img/pictures/Title", "")]));
   showGame("read-images");
   server.activity(idle);
   server.reader({ ...notSetUp, external: "http://127.0.0.1:5001" });
@@ -568,7 +569,7 @@ test("a reader started outside RPGTL reads without setting up", async () => {
   await vi.waitFor(() => expect(server.started).toHaveLength(1));
 });
 
-const koreanEntry = { ...entry("c", "img/pictures/Title", ""), source: "모험을 시작하자" };
+const koreanEntry = { ...imageText("c", "img/pictures/Title", ""), source: "모험을 시작하자" };
 
 test("a Korean game's Read new images asks to add the Korean model, and reads once it is added", async () => {
   const server = fakeServer(translating([koreanEntry]));
@@ -639,7 +640,7 @@ test("a setup asked for in one game doesn't start reading in the game opened nex
   await page.getByRole("button", { name: "Add and read" }).click();
   await vi.waitFor(() => expect(server.setups).toEqual([{ korean: true }]));
   server.catalog = {
-    ...translating([entry("c", "img/pictures/Title", "")]),
+    ...translating([imageText("c", "img/pictures/Title", "")]),
     game: { id: harbor.id, title: harbor.title, engine: "MV" },
   };
   await page.getByRole("button", { name: "Open Harbor" }).click();

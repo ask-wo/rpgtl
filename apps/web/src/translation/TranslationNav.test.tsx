@@ -1,4 +1,4 @@
-import type { Catalog } from "@rpgtl/contracts";
+import type { Catalog, Entry, Location } from "@rpgtl/contracts";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { page } from "vite-plus/test/browser";
 import { beforeAll, expect, test } from "vite-plus/test";
@@ -8,13 +8,16 @@ import { game, idle } from "../testUtils/game.ts";
 
 beforeAll(() => page.viewport(1280, 800));
 
-const entry = (id: string, file: string, translation: string) => ({
+const entry = (id: string, location: Location, translation: string): Entry => ({
   id,
-  file,
-  path: [id],
+  location,
   source: `原文${id}`,
   translation: translation ? { user: translation } : {},
 });
+const text = (id: string, translation: string) =>
+  entry(id, { _tag: "SystemText", keys: [id] }, translation);
+const imageText = (id: string, file: string, translation: string) =>
+  entry(id, { _tag: "ImageLines", image: file, lines: [0] }, translation);
 
 const showNav = (saved: Catalog) => {
   const stream = events();
@@ -51,11 +54,11 @@ const catalog = (entries: Catalog["entries"]): Catalog => ({
 test("the sidebar shows how many entries have English, or only the total once all do", async () => {
   const nav = showNav(
     catalog([
-      entry("1", "Map001.json", "Hello"),
-      entry("2", "Items.json", "Potion"),
-      entry("5", "Armors.json", "Shield"),
-      entry("3", "img/pictures/Sign", ""),
-      entry("4", "img/pictures/Logo", ""),
+      text("1", "Hello"),
+      text("2", "Potion"),
+      text("5", "Shield"),
+      imageText("3", "img/pictures/Sign", ""),
+      imageText("4", "img/pictures/Logo", ""),
     ]),
   );
   await expect.element(nav.getByRole("link", { name: "Glossary 1" })).toBeVisible();

@@ -1,39 +1,34 @@
-import type { Entry, GlossaryTerm } from "@rpgtl/contracts";
-import * as Option from "effect/Option";
+import type { Entry, GlossaryTerm, Table } from "@rpgtl/contracts";
 import { plainText, speakerTagPattern } from "./controlCodes.ts";
-import { entryLocation } from "./location.ts";
+import { isSettingText, isSystemText } from "./location.ts";
 import { isSpeakerNameEntry } from "./nameEntries.ts";
 import { showTextSpeakers } from "./reuse.ts";
 
 const maxLines = 3;
 const maxLineLength = 60;
 
-const databaseRoles: Partial<Record<string, string>> = {
-  "Classes.json": "class name",
-  "Skills.json": "skill name",
-  "Items.json": "item name",
-  "Weapons.json": "weapon name",
-  "Armors.json": "armor name",
-  "Enemies.json": "enemy name",
-  "States.json": "state name",
+const databaseRoles: Partial<Record<Table, string>> = {
+  classes: "class name",
+  skills: "skill name",
+  items: "item name",
+  weapons: "weapon name",
+  armors: "armor name",
+  enemies: "enemy name",
+  states: "state name",
 };
 
 /** What a game uses an entry's text as, when that says something about the kind of term it is. */
-function roleOf(entry: Pick<Entry, "file" | "path">) {
-  if (entry.file === "System.json") return "menu or system term";
+function roleOf(entry: Entry) {
+  const { location } = entry;
+  if (isSystemText(entry)) return "menu or system term";
   if (isSpeakerNameEntry(entry)) return "speaker";
-  return Option.match(entryLocation(entry), {
-    onNone: () => undefined,
-    onSome: (location) => {
-      if (location._tag === "MapName") return "map name";
-      if (location._tag !== "RecordField") return undefined;
-      if (entry.file === "Actors.json") {
-        if (location.field === "name") return "actor name";
-        if (location.field === "nickname") return "actor nickname";
-      }
-      return location.field === "name" ? databaseRoles[entry.file] : undefined;
-    },
-  });
+  if (location._tag === "MapName") return "map name";
+  if (location._tag !== "RecordField") return undefined;
+  if (location.table === "actors") {
+    if (location.field === "name") return "actor name";
+    if (location.field === "nickname") return "actor nickname";
+  }
+  return location.field === "name" ? databaseRoles[location.table] : undefined;
 }
 
 export interface TermInput {
@@ -64,7 +59,7 @@ export function termInputs(
       addRole(entry.source, role);
       continue;
     }
-    if (entry.file === "System.json" || entry.file === "plugins.js") continue;
+    if (isSettingText(entry)) continue;
     addRole(speakerOf(entry), "speaker");
     for (const [, name] of entry.source.matchAll(speakerTagPattern)) addRole(name, "speaker");
     lines.push(plainText(entry.source));

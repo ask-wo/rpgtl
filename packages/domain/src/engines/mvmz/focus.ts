@@ -1,4 +1,4 @@
-import type { EventList, Plugins } from "@rpgtl/contracts";
+import { EventListRef, type EventList, Location, NoteOwner, type Plugins } from "@rpgtl/contracts";
 import * as Arr from "effect/Array";
 import * as Optic from "effect/Optic";
 import * as Option from "effect/Option";
@@ -7,7 +7,6 @@ import * as Result from "effect/Result";
 import * as SchemaIssue from "effect/SchemaIssue";
 import { decodeJson, noteTags, variableStrings } from "./extract.ts";
 import type { GameFile } from "./gameFile.ts";
-import { EventListRef, Location, NoteOwner } from "./location.ts";
 
 type Focus<S> = Optic.Optional<S, unknown>;
 
@@ -113,7 +112,7 @@ const mapEvent = (event: number) => mapData.key("events").at(event).refine(Predi
 
 /** The command list an event list reference names. */
 export const listFocus: (ref: EventListRef) => Optic.Optional<GameFile, EventList> =
-  EventListRef.$match({
+  EventListRef.match({
     CommonEvent: ({ event }) =>
       file.tag("CommonEvents").key("data").at(event).refine(Predicate.isNotNull).key("list"),
     TroopPage: ({ troop, page }) =>
@@ -131,10 +130,10 @@ export const listFocus: (ref: EventListRef) => Optic.Optional<GameFile, EventLis
 const parameter = (list: EventListRef, index: number, at: number) =>
   listFocus(list).at(index).key("parameters").at(at);
 
-const noteFocus = (data: GameFile, owner: NoteOwner): Focus<GameFile> =>
-  NoteOwner.$match(owner, {
-    Record: ({ record }) =>
-      records[data._tag === "Tilesets" ? "Tilesets" : "Database"]
+const noteFocus = (owner: NoteOwner): Focus<GameFile> =>
+  NoteOwner.match(owner, {
+    Record: ({ table, record }) =>
+      records[table === "tilesets" ? "Tilesets" : "Database"]
         .at(record)
         .refine(Predicate.isNotNull)
         .at("note"),
@@ -152,12 +151,11 @@ const noteFocus = (data: GameFile, owner: NoteOwner): Focus<GameFile> =>
  * have none: applyTranslations handles them without replacing text in place.
  */
 export const textFocus = (
-  data: GameFile,
   location: Location,
   source: string,
 ): Option.Option<Optic.Optional<GameFile, string>> =>
   Option.map(
-    Location.$match(location, {
+    Location.match(location, {
       CommandText: ({ list, index, parameter: at, keys }) =>
         Option.some(within(parameter(list, index, at), keys)),
       ScriptText: ({ list, index, parameter: at, literal }) =>
@@ -167,13 +165,14 @@ export const textFocus = (
           ),
         ),
       NoteTag: ({ owner, tag }) =>
-        Option.some(noteFocus(data, owner).compose(slice(noteTags, tag, tagValue))),
+        Option.some(noteFocus(owner).compose(slice(noteTags, tag, tagValue))),
       RecordField: ({ record, field }) =>
         Option.some(records.Database.at(record).refine(Predicate.isNotNull).at(field)),
       SystemText: ({ keys }) => intoRecord(file.tag("System").key("data"), keys),
       MapName: () => Option.some(mapData.at("displayName")),
       Message: () => Option.none(),
       Name: () => Option.none(),
+      EventName: () => Option.none(),
       PluginSetting: () => Option.none(),
       ImageLines: () => Option.none(),
     }),

@@ -1,11 +1,14 @@
 import { assert, it } from "@effect/vitest";
-import type { Catalog, RejectReason, RunLogLine } from "@rpgtl/contracts";
+import type { Catalog, Entry, RejectReason, RunLogLine } from "@rpgtl/contracts";
 import { audit, inUse, runAnswers, runLog, runTotals } from "./index.ts";
 
-const line = (index: number, source: string, translation: string) => ({
+const line = (index: number, source: string, translation: string): Entry => ({
   id: `entry${index}`,
-  file: "Map001.json",
-  path: ["events", "1", "pages", "0", "list", String(index), "parameters", "0"],
+  location: {
+    _tag: "Message",
+    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+    index: index,
+  },
   source,
   translation: translation ? { user: translation } : {},
 });
@@ -18,10 +21,9 @@ const request = (
   type: "request",
   at: started,
   entryIds: entries.map((entry) => entry.id),
-  entries: entries.map(({ id, file, path, source, translation }) => ({
+  entries: entries.map(({ id, location, source, translation }) => ({
     id,
-    file,
-    path,
+    location,
     source,
     translation: answer ?? inUse(translation) ?? "",
   })),

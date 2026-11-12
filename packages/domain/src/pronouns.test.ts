@@ -5,8 +5,11 @@ import { collectClues, linesAbout } from "./index.ts";
 let counter = 0;
 const message = (source: string, speaker?: string): Entry => ({
   id: `m${++counter}`,
-  file: "Map001.json",
-  path: ["events", "1", "pages", "0", "list", String(counter), "parameters", "0"],
+  location: {
+    _tag: "Message",
+    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+    index: counter,
+  },
   source: speaker ? `\\n<${speaker}>${source}` : source,
   translation: {},
 });

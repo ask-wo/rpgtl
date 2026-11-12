@@ -7,6 +7,8 @@ import {
   runTotals,
   showTextSpeakers,
   translationChecks,
+  fileOf,
+  pathOf,
 } from "@rpgtl/domain";
 
 const escape = (value: string) =>
@@ -113,7 +115,7 @@ export function comparisonHtml(comparison: Comparison) {
         const entry = byId.get(id);
         return entry
           ? [
-              `<tr><td class="where">${escape(`${entry.file} · ${entry.path.join("/")}`)}</td><td>${escape(speakerOf(entry) ?? "")}</td><td>${escape(entry.source)}</td>${runs.map((run) => cell(run, entry)).join("")}</tr>`,
+              `<tr><td class="where">${escape(`${fileOf(entry.location)} · ${pathOf(entry.location).join("/")}`)}</td><td>${escape(speakerOf(entry) ?? "")}</td><td>${escape(entry.source)}</td>${runs.map((run) => cell(run, entry)).join("")}</tr>`,
             ]
           : [];
       });

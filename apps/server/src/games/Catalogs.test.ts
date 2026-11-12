@@ -21,8 +21,11 @@ import * as Games from "./Games.ts";
 
 const hello: Entry = {
   id: "a",
-  file: "Map001.json",
-  path: ["events", "1", "pages", "0", "list", "0", "parameters", "0"],
+  location: {
+    _tag: "Message",
+    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+    index: 0,
+  },
   source: "你好",
   translation: { user: "Hello 你" },
 };
@@ -150,8 +153,7 @@ it.effect("once no one follows a game, the next follower reads its catalog file 
 
 const title = (translation: string): Entry => ({
   id: "t",
-  file: "System.json",
-  path: ["gameTitle"],
+  location: { _tag: "SystemText", keys: ["gameTitle"] },
   source: "雨",
   translation: translation ? { user: translation } : {},
 });
@@ -305,7 +307,10 @@ const noticeImage: ImageResult = {
   ],
 };
 const notice: ImageReadResults = { version: 1, images: { "img/pictures/Notice": noticeImage } };
-const noticeEntry = newEntry("img/pictures/Notice", ["lines", "0"], "开始");
+const noticeEntry = newEntry(
+  { _tag: "ImageLines", image: "img/pictures/Notice", lines: [0] },
+  "开始",
+);
 
 const writeState = Effect.fnUntraced(function* (file: string, text: string) {
   const fs = yield* FileSystem.FileSystem;

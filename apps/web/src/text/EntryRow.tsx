@@ -41,7 +41,7 @@ export function EntryRow({
       aria-label={entry.source}
     >
       <div className="flex min-w-0 flex-col gap-1">
-        <p className="text-xs text-muted-foreground" title={entry.path.join(".")}>
+        <p className="text-xs text-muted-foreground">
           {where}
           {speaker && ` · ${speaker}`}
         </p>

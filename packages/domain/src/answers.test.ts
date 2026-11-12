@@ -1,20 +1,24 @@
 import { assert, it } from "@effect/vitest";
+import type { Entry } from "@rpgtl/contracts";
 import * as Result from "effect/Result";
 import { checkAnswer, outOfOrder, requestText } from "./index.ts";
 
-const messageEntry = (source: string) => ({
-  file: "Map001.json",
-  path: ["events", "1", "pages", "0", "list", "0"],
+type Asked = Pick<Entry, "location" | "source">;
+
+const messageEntry = (source: string): Asked => ({
+  location: {
+    _tag: "Message",
+    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+    index: 0,
+  },
   source,
 });
-const imageEntry = (source: string) => ({
-  file: "img/menus/main/commands/Recalled",
-  path: ["lines", "0"],
+const imageEntry = (source: string): Asked => ({
+  location: { _tag: "ImageLines", image: "img/menus/main/commands/Recalled", lines: [0] },
   source,
 });
-const pluginEntry = (source: string) => ({
-  file: "plugins.js",
-  path: ["Other", "Line 1 Text"],
+const pluginEntry = (source: string): Asked => ({
+  location: { _tag: "PluginSetting", plugin: "Other", keys: ["Line 1 Text"] },
   source,
 });
 const accepted = (translation: string, flag?: string) =>

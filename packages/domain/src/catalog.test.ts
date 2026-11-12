@@ -2,7 +2,7 @@ import { assert, it } from "@effect/vitest";
 import type { Catalog } from "@rpgtl/contracts";
 import { newEntry, restoredCatalog, runsWithCounts, withRunMarks } from "./index.ts";
 
-const entry = newEntry("Map001.json", ["events", "1", "name"], "客人");
+const entry = newEntry({ _tag: "EventName", map: 1, event: 1 }, "客人");
 const catalog = (fields: Partial<Catalog>): Catalog => ({
   version: 1,
   game: { id: "g", title: "G", engine: "MV" },
@@ -25,14 +25,18 @@ const codex = {
   model: "gpt-6.1-terra",
   glossaryModel: "gpt-6.1-sol",
 } as const;
-const line = (path: string, source: string) => newEntry("Map001.json", ["events", path], source);
+const line = (index: number, source: string) =>
+  newEntry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index },
+    source,
+  );
 const guessed = (value: string, run: string, user?: string) => ({
   guess: { value, run },
   ...(user !== undefined && { user }),
 });
 
 it("a run's marks add it to the runs, keep only the runs a guess still names, and make it the last once it translated an entry", () => {
-  const [a, b] = [line("1", "你好"), line("2", "再见")];
+  const [a, b] = [line(1, "你好"), line(2, "再见")];
   const marked = withRunMarks(
     catalog({
       entries: [
@@ -65,11 +69,11 @@ it("an export counts each run's guesses still in use, leaving out English that i
   const counts = runsWithCounts(
     catalog({
       entries: [
-        { ...line("1", "你好"), translation: guessed("Hello", "r") },
-        { ...line("2", "再见"), translation: guessed("Bye", "r") },
-        { ...line("3", "谢谢"), translation: guessed("Thanks", "r", "Thanks!") },
-        { ...line("5", "……"), translation: guessed("……", "r") },
-        { ...line("6", "停"), translation: {} },
+        { ...line(1, "你好"), translation: guessed("Hello", "r") },
+        { ...line(2, "再见"), translation: guessed("Bye", "r") },
+        { ...line(3, "谢谢"), translation: guessed("Thanks", "r", "Thanks!") },
+        { ...line(5, "……"), translation: guessed("……", "r") },
+        { ...line(6, "停"), translation: {} },
       ],
       glossary: [
         {

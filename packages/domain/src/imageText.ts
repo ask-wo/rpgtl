@@ -7,14 +7,16 @@ import type {
   ImageReadResults,
   ImageResult,
   ImageTextHint,
+  Location,
   PreparedBlock,
 } from "@rpgtl/contracts";
-import * as Option from "effect/Option";
-import type * as Types from "effect/Types";
 import { sourceScript } from "./checks.ts";
-import { newEntry, sourceText } from "./extract.ts";
-import { locationOf } from "./location.ts";
+import { sourceText } from "./engines/mvmz/extract.ts";
+import { newEntry } from "./engines/mvmz/location.ts";
+import { isImageText } from "./location.ts";
 import { entryTranslation, isUserValue, withoutGuess } from "./guesses.ts";
+
+type ImageEntry = Entry & { readonly location: Extract<Location, { readonly _tag: "ImageLines" }> };
 
 function keptPrefix(text: string) {
   const index = text.search(sourceText);
@@ -202,7 +204,7 @@ export function imageBlocks(result: KeptLineResult) {
 }
 
 /** An entry for each block of text the reader found in the images. */
-export function imageEntries(results: ImageReadResults): Types.DeepMutable<Entry>[] {
+export function imageEntries(results: ImageReadResults) {
   return Object.entries(results.images).flatMap(([file, result]) =>
     imageBlocks(result).map((block) => {
       const lines = block.flatMap((index) => result.lines[index] ?? []);
@@ -212,7 +214,7 @@ export function imageEntries(results: ImageReadResults): Types.DeepMutable<Entry
           return (previous && !sameWord(previous, line) ? "\n" : "") + content(line);
         })
         .join("");
-      return newEntry(file, ["lines", ...block.map(String)], text);
+      return newEntry({ _tag: "ImageLines", image: file, lines: block }, text);
     }),
   );
 }
@@ -247,13 +249,9 @@ export const normalise = (text: string) => text.replace(/[\s\p{P}]/gu, "");
 const sameText = (a: string, b: string) => normalise(a) === normalise(b);
 
 // The box around an entry's lines, from the results it was read from.
-function entryBox(
-  results: ImageReadResults | undefined,
-  entry: Pick<Entry, "file" | "path">,
-): Box | undefined {
-  const lines = entry.path
-    .slice(1)
-    .flatMap((index) => results?.images[entry.file]?.lines[Number(index)] ?? []);
+function entryBox(results: ImageReadResults | undefined, entry: ImageEntry): Box | undefined {
+  const { image, lines: indices } = entry.location;
+  const lines = indices.flatMap((index) => results?.images[image]?.lines[index] ?? []);
   if (lines.length === 0) return undefined;
   return [
     Math.min(...lines.map((line) => line.box[0])),
@@ -289,19 +287,20 @@ export function withImageEntries(
   const entries = imageEntries(results);
   const ids = new Set(entries.map((entry) => entry.id));
   const dropped = new Set(
-    current.entries.filter(
-      (entry) =>
-        entry.file.startsWith("img/") &&
-        !ids.has(entry.id) &&
-        (entryTranslation(entry) !== "" || entry.keepOriginal !== undefined),
-    ),
+    current.entries
+      .filter(isImageText)
+      .filter(
+        (entry) =>
+          !ids.has(entry.id) &&
+          (entryTranslation(entry) !== "" || entry.keepOriginal !== undefined),
+      ),
   );
-  const taken = new Map<Types.DeepMutable<Entry>, Entry>();
-  const take = (entry: Types.DeepMutable<Entry>, match: (other: Entry) => number) => {
-    let best: Entry | undefined;
+  const taken = new Map<ImageEntry, ImageEntry>();
+  const take = (entry: ImageEntry, match: (other: ImageEntry) => number) => {
+    let best: ImageEntry | undefined;
     let bestScore = 0;
     for (const other of dropped) {
-      const score = other.file === entry.file ? match(other) : 0;
+      const score = other.location.image === entry.location.image ? match(other) : 0;
       if (score > bestScore) [best, bestScore] = [other, score];
     }
     if (!best) return;
@@ -324,7 +323,7 @@ export function withImageEntries(
   return {
     ...current,
     entries: [
-      ...current.entries.filter((entry) => !entry.file.startsWith("img/")),
+      ...current.entries.filter((entry) => !isImageText(entry)),
       ...entries.map((entry) => {
         const own = saved.get(entry.id);
         if (own) return { ...entry, ...own };
@@ -336,7 +335,7 @@ export function withImageEntries(
         return {
           ...old,
           id: entry.id,
-          path: entry.path,
+          location: entry.location,
           ...(correction
             ? { source: old.source, readerText: entry.source }
             : { source: entry.source }),
@@ -387,21 +386,21 @@ function inGrid(block: PreparedBlock, blocks: ReadonlyArray<PreparedBlock>) {
  * 4 characters, of which at least two differ. Name plates repeat one name, and pages of text and
  * item names in a HUD are longer.
  */
-function menuImages(entries: ReadonlyArray<Pick<Entry, "file" | "source">>) {
-  const bySeries = new Map<string, Array<Pick<Entry, "file" | "source">>>();
+function menuImages(entries: ReadonlyArray<ImageEntry>) {
+  const bySeries = new Map<string, Array<ImageEntry>>();
   for (const entry of entries) {
-    const name = seriesName(entry.file);
+    const name = seriesName(entry.location.image);
     if (name !== undefined) bySeries.set(name, [...(bySeries.get(name) ?? []), entry]);
   }
   return new Set(
     [...bySeries.values()]
       .filter(
         (series) =>
-          new Set(series.map((entry) => entry.file)).size > 1 &&
+          new Set(series.map((entry) => entry.location.image)).size > 1 &&
           new Set(series.map((entry) => entry.source)).size > 1 &&
           series.every((entry) => Array.from(entry.source.trim()).length <= 4),
       )
-      .flatMap((series) => series.map((entry) => entry.file)),
+      .flatMap((series) => series.map((entry) => entry.location.image)),
   );
 }
 
@@ -420,8 +419,8 @@ export function imageLimits(results: ImageReadResults): ReadonlyMap<string, numb
   const entries = imageEntries(results);
   const menus = menuImages(entries);
   for (const entry of entries) {
-    const blocks = results.images[entry.file]?.blocks ?? [];
-    const lines = entry.path.slice(1).map(Number);
+    const { image, lines } = entry.location;
+    const blocks = results.images[image]?.blocks ?? [];
     const block = blocks.find((item) => sameLines(item.lines, lines));
     if (!block) continue;
     const [ax0, ay0, ax1, ay1] = block.area;
@@ -439,7 +438,7 @@ export function imageLimits(results: ImageReadResults): ReadonlyMap<string, numb
     const freeHeight = Math.max(0, ay1 - ay0 + 2 * Math.min(ay0 - sy0, sy1 - ay1));
     const rows = Math.max(1, Math.floor(freeHeight / (1.15 * block.lineHeight)));
     // A menu's button looks shrunk below about three quarters of the original size.
-    const glyph = (rows === 1 && menus.has(entry.file) ? 0.375 : 0.25) * block.lineHeight;
+    const glyph = (rows === 1 && menus.has(image) ? 0.375 : 0.25) * block.lineHeight;
     limits.set(entry.id, Math.max(1, Math.floor(width / glyph) * rows));
   }
   return limits;
@@ -477,12 +476,11 @@ export function imageTextHints(
   const { imageBold: bold, imageFont: font, unchangedImages = [] } = catalog;
   const translated = new Map<string, Array<{ lines: ReadonlyArray<number>; text: string }>>();
   for (const entry of catalog.entries) {
-    if (!entryTranslation(entry) || entry.keepOriginal) continue;
-    const location = locationOf(entry.file, entry.path);
-    if (Option.isNone(location) || location.value._tag !== "ImageLines") continue;
-    const blocks = translated.get(entry.file) ?? [];
-    blocks.push({ lines: location.value.lines, text: entryTranslation(entry) });
-    translated.set(entry.file, blocks);
+    if (!entryTranslation(entry) || entry.keepOriginal || !isImageText(entry)) continue;
+    const { image, lines } = entry.location;
+    const blocks = translated.get(image) ?? [];
+    blocks.push({ lines, text: entryTranslation(entry) });
+    translated.set(image, blocks);
   }
   const hints: Record<string, ImageTextHint> = {};
   for (const [image, result] of Object.entries(results.images)) {

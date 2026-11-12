@@ -14,7 +14,7 @@ import { sourceScript } from "./checks.ts";
 import { speakerTagName, speakerTagPattern } from "./controlCodes.ts";
 import { entryTranslation, termTranslation, termKind, withGuess } from "./guesses.ts";
 import { gameLanguage } from "./language.ts";
-import { isMessage } from "./location.ts";
+import { isImageText, isMessage, type Placed } from "./location.ts";
 import { isActorName, isSpeakerNameEntry } from "./nameEntries.ts";
 import { type NamedTerm, nameTerm } from "./nameTerm.ts";
 import { collectClues, linesAbout, pronounFromClues } from "./pronouns.ts";
@@ -24,17 +24,19 @@ import { type TermInput, termInputs } from "./termKinds.ts";
 
 /** An entry a run fills in; it replaces the nested values whole, so only the top level changes. */
 export type DraftEntry = Types.Mutable<Entry>;
+/** An entry a run asks about: one of the draft's, or a speaker's name that lives only for the run. */
+export type RunEntry = Types.Mutable<Omit<Entry, "location">> & Placed;
 export type DraftTerm = Types.Mutable<GlossaryTerm>;
 
 /** An entry with its source as a request sends it. */
 export interface Prepared extends RequestText {
-  readonly entry: DraftEntry;
+  readonly entry: RunEntry;
 }
 
 const han = /\p{Script=Han}/u;
 
 /** A name entry whose English is the name itself, so short forms of it follow its spelling. */
-const isOriginName = (entry: Pick<Entry, "file" | "path" | "id">) =>
+const isOriginName = (entry: Pick<Entry, "id"> & Placed) =>
   isActorName(entry) || isSpeakerNameEntry(entry) || entry.id.startsWith("speaker:");
 
 /** How an accepted answer is kept, beyond its translation. */
@@ -59,8 +61,8 @@ export class CatalogDraft {
   readonly #terms: Map<string, DraftTerm>;
   readonly #limits: ReadonlyMap<string, number>;
   readonly #failed = new Set<string>();
-  readonly #reuse: ReturnType<typeof translationReuse<DraftEntry>>;
-  readonly #showTextSpeaker: (entry: DraftEntry) => string | undefined;
+  readonly #reuse: ReturnType<typeof translationReuse<RunEntry>>;
+  readonly #showTextSpeaker: (entry: RunEntry) => string | undefined;
   readonly #run: string | undefined;
 
   /**
@@ -75,8 +77,8 @@ export class CatalogDraft {
     this.#glossary = catalog.glossary.map((term) => ({ ...term }));
     this.#terms = new Map(this.#glossary.map((term) => [term.source, term]));
     this.#limits = limits;
-    this.#showTextSpeaker = showTextSpeakers(this.#entries);
-    this.#reuse = translationReuse(this.translatable, run);
+    this.#showTextSpeaker = showTextSpeakers<RunEntry>(this.#entries);
+    this.#reuse = translationReuse<RunEntry>(this.translatable, run);
     this.#reuse.fillAll();
   }
 
@@ -92,7 +94,10 @@ export class CatalogDraft {
   /** The entries a run translates: all but images the game shows unchanged. */
   get translatable(): ReadonlyArray<DraftEntry> {
     const originals = this.#catalog.unchangedImages ?? [];
-    return this.#entries.filter((entry) => !entry.keepOriginal && !originals.includes(entry.file));
+    return this.#entries.filter(
+      (entry) =>
+        !entry.keepOriginal && !(isImageText(entry) && originals.includes(entry.location.image)),
+    );
   }
 
   /** A copy of the draft as a catalog. */
@@ -141,7 +146,7 @@ export class CatalogDraft {
   }
 
   /** Adds a term for a translated name entry, unless the glossary has one. */
-  seedTerm(entry: DraftEntry) {
+  seedTerm(entry: RunEntry) {
     this.addTerm(entry.source, entryTranslation(entry), isOriginName(entry));
   }
 
@@ -160,7 +165,7 @@ export class CatalogDraft {
    * The entry's source as a request sends it. In a message, a first line that is only a
    * glossary term or the speaker's name is the speaker, kept aside from the text.
    */
-  prepare(entry: DraftEntry): Prepared {
+  prepare(entry: RunEntry): Prepared {
     const request = requestText(entry);
     if (!isMessage(entry)) return { entry, ...request };
     const tag = speakerTagName(request.leading);

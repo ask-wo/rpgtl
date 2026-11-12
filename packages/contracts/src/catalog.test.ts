@@ -15,8 +15,11 @@ describe("Catalog", () => {
         entries: [
           {
             id: "e1",
-            file: "Map001.json",
-            path: ["events", "1", "pages", "0", "list", "0", "parameters", "0"],
+            location: {
+              _tag: "Message",
+              list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+              index: 0,
+            },
             source: "你好",
             translation: { user: "Hello" },
             suggestion: { text: "Hi", reason: "too short" },

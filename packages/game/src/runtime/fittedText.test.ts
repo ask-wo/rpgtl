@@ -5,15 +5,13 @@ test("runtime draws a dotted actor name by its short form only on HUD bitmaps it
   const system = appliedSystem([
     {
       id: "a",
-      file: "Actors.json",
-      path: ["1", "name"],
+      location: { _tag: "RecordField", table: "actors", record: 1, field: "name" },
       source: "藤原·雄一郎",
       translation: { user: "Fujiwara Yuichiro" },
     },
     {
       id: "b",
-      file: "Actors.json",
-      path: ["2", "name"],
+      location: { _tag: "RecordField", table: "actors", record: 2, field: "name" },
       source: "星澜",
       translation: { user: "Xinglan" },
     },
@@ -51,22 +49,19 @@ test("runtime draws a class name wider than the original in a font that fits the
   const system = appliedSystem([
     {
       id: "a",
-      file: "Classes.json",
-      path: ["1", "name"],
+      location: { _tag: "RecordField", table: "classes", record: 1, field: "name" },
       source: "暗影咒术师",
       translation: { user: "Shade Warlock" },
     },
     {
       id: "b",
-      file: "Classes.json",
-      path: ["2", "name"],
+      location: { _tag: "RecordField", table: "classes", record: 2, field: "name" },
       source: "魔剑士",
       translation: { user: "Fencer" },
     },
     {
       id: "c",
-      file: "Classes.json",
-      path: ["3", "name"],
+      location: { _tag: "RecordField", table: "classes", record: 3, field: "name" },
       source: "见习魔导士",
       translation: { user: "Trainee Sorcerer" },
     },

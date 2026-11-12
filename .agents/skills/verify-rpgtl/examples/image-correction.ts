@@ -41,7 +41,10 @@ export default async ({ page, api, run, log }: any) => {
   ]);
   const saved = async (id: string) =>
     (await api(`catalog?id=${id}`)).entries.find(
-      (e: any) => e.file === "img/pictures/Test" && e.path[1] === "1",
+      (e: any) =>
+        e.location._tag === "ImageLines" &&
+        e.location.image === "img/pictures/Test" &&
+        e.location.lines[0] === 1,
     );
   try {
     const id = await openImages(page, run);

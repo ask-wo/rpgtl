@@ -12,6 +12,7 @@ import { isNameEntry, isSpeakerNameEntry } from "./nameEntries.ts";
 import { hasTerm } from "./termMatch.ts";
 import { entryTranslation, termTranslation, termKind } from "./guesses.ts";
 import { gameLanguage } from "./language.ts";
+import type { Placed } from "./location.ts";
 
 // Game dialogue apologizes and refuses too ("I'm sorry, but", "I can't help it"), so only
 // phrases about the request itself count.
@@ -188,7 +189,7 @@ export function translationChecks(glossary: ReadonlyArray<GlossaryTerm>, languag
   const nearTerms = termLookup(terms);
   const nearCapitalisable = termLookup(capitalisable);
   const isName = new Set(names);
-  return (entry: Pick<Entry, "file" | "path" | "source">, translation: string): Finding[] => {
+  return (entry: Pick<Entry, "source"> & Placed, translation: string): Finding[] => {
     const { source } = entry;
     if (!translation) return [];
     const findings: Finding[] = [];

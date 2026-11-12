@@ -1,11 +1,10 @@
 import { assert, it } from "@effect/vitest";
-import type { Entry, GlossaryTerm } from "@rpgtl/contracts";
+import type { Entry, GlossaryTerm, Location } from "@rpgtl/contracts";
 import { termInputs } from "./index.ts";
 
-const entry = (file: string, path: string[], source: string, speaker?: string): Entry => ({
-  id: `${file}:${path.join(".")}`,
-  file,
-  path,
+const entry = (location: Location, source: string, speaker?: string): Entry => ({
+  id: JSON.stringify(location),
+  location,
   source,
   translation: {},
   ...(speaker && { speaker }),
@@ -18,15 +17,37 @@ const glossaryTerm = (source: string, extra: Partial<GlossaryTerm> = {}): Glossa
 });
 
 const entries = [
-  entry("Actors.json", ["1", "name"], "菲奥娜"),
-  entry("Items.json", ["3", "name"], "星辉石"),
-  entry("Map002.json", ["displayName"], "巴伦镇"),
-  entry("Map001.json", ["events", "1", "pages", "0", "list", "0", "parameters", "4"], "NPC"),
-  entry("Map001.json", ["events", "1", "pages", "0", "list", "1", "parameters", "0"], "你好。"),
-  entry("Map001.json", ["events", "2", "list", "1", "parameters", "0"], "\\n<维多利亚>走吧。"),
-  entry("Map001.json", ["events", "3", "list", "1", "parameters", "0"], "看，星辉石！", "菲奥娜"),
-  entry("Map001.json", ["events", "4", "list", "1", "parameters", "0"], "我们去巴伦镇吧。"),
-  entry("System.json", ["terms", "commands", "0"], "星辉石"),
+  entry({ _tag: "RecordField", table: "actors", record: 1, field: "name" }, "菲奥娜"),
+  entry({ _tag: "RecordField", table: "items", record: 3, field: "name" }, "星辉石"),
+  entry({ _tag: "MapName", map: 2 }, "巴伦镇"),
+  entry(
+    {
+      _tag: "CommandText",
+      list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+      index: 0,
+      parameter: 4,
+      keys: [],
+    },
+    "NPC",
+  ),
+  entry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index: 1 },
+    "你好。",
+  ),
+  entry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 2, page: 0 }, index: 1 },
+    "\\n<维多利亚>走吧。",
+  ),
+  entry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 3, page: 0 }, index: 1 },
+    "看，星辉石！",
+    "菲奥娜",
+  ),
+  entry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 4, page: 0 }, index: 1 },
+    "我们去巴伦镇吧。",
+  ),
+  entry({ _tag: "SystemText", keys: ["terms", "commands", "0"] }, "星辉石"),
 ];
 
 it("kind questions say where the game uses a term and quote lines that mention it", () => {

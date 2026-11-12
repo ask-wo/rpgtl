@@ -1,30 +1,23 @@
 import type { Entry, EntryTranslation } from "@rpgtl/contracts";
-import * as Option from "effect/Option";
 import { entryTranslation, isUserValue } from "./guesses.ts";
-import { entryLocation, Location, pathOf } from "./location.ts";
+import { isImageText, listKey, type Placed } from "./location.ts";
+import { isSpeakerNameEntry } from "./nameEntries.ts";
 
-const pathKey = (file: string, path: ReadonlyArray<string>) => JSON.stringify([file, path]);
-
-type Located = Pick<Entry, "source"> & Partial<Pick<Entry, "file" | "path" | "speaker">>;
+type Located = Pick<Entry, "source"> & Partial<Pick<Entry, "speaker">> & Placed;
 
 /**
  * Looks up the MZ Show Text speaker (parameter 4), or the speaker extracted from a dialogue picture.
  */
 export function showTextSpeakers<E extends Located>(entries: ReadonlyArray<E>) {
-  const byPath = new Map<string, E>();
+  const byCommand = new Map<string, E>();
   for (const entry of entries)
-    if (entry.file !== undefined && entry.path) byPath.set(pathKey(entry.file, entry.path), entry);
+    if (isSpeakerNameEntry(entry) && entry.location?._tag === "CommandText")
+      byCommand.set(`${listKey(entry.location.list)} ${entry.location.index}`, entry);
   return (entry: E): string | undefined => {
-    const location = entryLocation(entry);
-    if (
-      entry.file === undefined ||
-      Option.isNone(location) ||
-      !("list" in location.value && "index" in location.value)
-    )
-      return entry.speaker;
-    const { list, index } = location.value;
-    const speaker = Location.CommandText({ list, index: index - 1, parameter: 4, keys: [] });
-    return byPath.get(pathKey(entry.file, pathOf(speaker)))?.source ?? entry.speaker;
+    const { location } = entry;
+    if (location === undefined || !("list" in location)) return entry.speaker;
+    const key = `${listKey(location.list)} ${location.index - 1}`;
+    return byCommand.get(key)?.source ?? entry.speaker;
   };
 }
 
@@ -35,12 +28,7 @@ export function showTextSpeakers<E extends Located>(entries: ReadonlyArray<E>) {
  */
 export function reuseKeys<E extends Located>(entries: ReadonlyArray<E>) {
   const speakerOf = showTextSpeakers(entries);
-  return (entry: E) =>
-    JSON.stringify([
-      entry.source,
-      speakerOf(entry) ?? null,
-      entry.file?.startsWith("img/") ?? false,
-    ]);
+  return (entry: E) => JSON.stringify([entry.source, speakerOf(entry) ?? null, isImageText(entry)]);
 }
 
 type ReusedGuess = NonNullable<EntryTranslation["guess"]>;
@@ -55,7 +43,7 @@ export function translationReuse<
     translation: EntryTranslation;
     suggestion?: Entry["suggestion"];
     previous?: string;
-  } & Partial<Pick<Entry, "file" | "path">>,
+  } & Placed,
 >(entries: ReadonlyArray<E>, run?: string) {
   const keyOf = reuseKeys(entries);
   const keys = new Map(entries.map((entry) => [entry, keyOf(entry)]));

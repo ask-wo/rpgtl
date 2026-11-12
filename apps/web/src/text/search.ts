@@ -1,7 +1,7 @@
-import type { Catalog, Entry, Findings } from "@rpgtl/contracts";
+import type { Catalog, Entry, Findings, Table } from "@rpgtl/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { entryTranslation, isUserValue } from "@rpgtl/domain";
+import { entryTranslation, isImageText, isUserValue, Place } from "@rpgtl/domain";
 
 export const Area = Schema.Literals(["Maps", "Database", "System", "Plugins"]);
 export type Area = typeof Area.Type;
@@ -10,9 +10,9 @@ export const areas = Area.literals;
 export const Shown = Schema.Literals(["all", "untranslated", "failed", "last-run", "flagged"]);
 export type Shown = typeof Shown.Type;
 
-/** What the Text page shows, kept in its address: a file or an area, a search and a filter. */
+/** What the Text page shows, kept in its address: a place or an area, a search and a filter. */
 export const TextSearch = Schema.Struct({
-  file: Schema.optionalKey(Schema.String),
+  place: Schema.optionalKey(Schema.String),
   area: Schema.optionalKey(Area),
   q: Schema.optionalKey(Schema.String),
   show: Schema.optionalKey(Shown),
@@ -28,41 +28,77 @@ export const changedSearch = (
   search: TextSearch,
   change: { readonly [K in keyof TextSearch]?: TextSearch[K] | undefined },
 ): TextSearch => {
-  const { file, area, q, show } = { ...search, ...change };
+  const { place, area, q, show } = { ...search, ...change };
   return {
-    ...(file !== undefined && { file }),
+    ...(place !== undefined && { place }),
     ...(area !== undefined && { area }),
     ...(q !== undefined && q !== "" && { q }),
     ...(show !== undefined && show !== "all" && { show }),
   };
 };
 
-/** Which area of the tree a data file's text is in; image text is on the Images page. */
-export const areaOf = (file: string): Area | undefined =>
-  file.startsWith("img/")
-    ? undefined
-    : /^Map\d+\.json$/.test(file)
-      ? "Maps"
-      : file === "System.json"
-        ? "System"
-        : file.endsWith(".js")
-          ? "Plugins"
-          : "Database";
+/** Which area of the tree a place's text is in; image text is on the Images page. */
+export const areaOf = (place: Place): Area | undefined => {
+  switch (place._tag) {
+    case "Map":
+      return "Maps";
+    case "System":
+      return "System";
+    case "Plugins":
+      return "Plugins";
+    case "Image":
+      return undefined;
+    case "Table":
+    case "CommonEvents":
+    case "Troops":
+      return "Database";
+  }
+};
 
 /** The game's text that the Text page edits: everything but the text in images. */
 export const textEntries = (catalog: Catalog) =>
-  catalog.entries.filter((entry) => areaOf(entry.file) !== undefined);
+  catalog.entries.filter((entry) => !isImageText(entry));
 
-/** Each map file's name from the game's map list, in English once translated. */
+/** Each map's name from the game's map list, in English once translated, by map id. */
 export const mapNames = (catalog: Catalog) =>
   new Map(
-    catalog.entries.flatMap((entry) => {
-      const [id, field] = entry.path;
-      return entry.file === "MapInfos.json" && field === "name" && entry.path.length === 2
-        ? [[`Map${id?.padStart(3, "0")}.json`, entryTranslation(entry) || entry.source] as const]
-        : [];
-    }),
+    catalog.entries.flatMap((entry) =>
+      entry.location._tag === "RecordField" &&
+      entry.location.table === "mapInfos" &&
+      entry.location.field === "name"
+        ? [[entry.location.record, entryTranslation(entry) || entry.source] as const]
+        : [],
+    ),
   );
+
+const tableLabels: Record<Table, string> = {
+  actors: "Actors",
+  classes: "Classes",
+  skills: "Skills",
+  items: "Items",
+  weapons: "Weapons",
+  armors: "Armors",
+  enemies: "Enemies",
+  states: "States",
+  mapInfos: "Map list",
+  tilesets: "Tilesets",
+};
+
+/** How the tree and the entries name a place: a map by its number and name. */
+export const placeLabel = (place: Place, maps: ReadonlyMap<number, string>) =>
+  Place.$match(place, {
+    Map: ({ map }) => {
+      const name = maps.get(map);
+      const number = `Map${String(map).padStart(3, "0")}`;
+      return name ? `${number} · ${name}` : number;
+    },
+    Table: ({ table }) => tableLabels[table],
+    CommonEvents: () => "Common events",
+    Troops: () => "Troops",
+    System: () => "System",
+    Plugins: () => "Plugin settings",
+    Image: ({ image }) => image,
+  });
 
 /** Why an accepted translation is worth a look: its run's flag and what the checks found. */
 export const checkNotes = (entry: Entry, findings: Findings) =>

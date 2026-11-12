@@ -1,4 +1,4 @@
-import { type Catalog, Settings } from "@rpgtl/contracts";
+import { type Catalog, type Entry, type Location, Settings } from "@rpgtl/contracts";
 import * as Schema from "effect/Schema";
 import { useState } from "react";
 import { page } from "vite-plus/test/browser";
@@ -9,13 +9,16 @@ import { GameContext } from "../games/GameContext.ts";
 import { TranslationActions } from "./TranslationActions.tsx";
 import { TranslationCard } from "./TranslationCard.tsx";
 
-const entry = (id: string, file: string, translation: string) => ({
+const entry = (id: string, location: Location, translation: string): Entry => ({
   id,
-  file,
-  path: ["lines", "0"],
+  location,
   source: "你好",
   translation: translation ? { user: translation } : {},
 });
+const text = (id: string, translation: string) =>
+  entry(id, { _tag: "SystemText", keys: [id] }, translation);
+const imageEntry = (id: string, file: string, translation: string) =>
+  entry(id, { _tag: "ImageLines", image: file, lines: [0] }, translation);
 
 const defaults = Schema.decodeSync(Settings)({});
 
@@ -159,9 +162,9 @@ test("the switch turns translation on and shows what the translation holds", asy
     game: { id: game.id, title: game.title, engine: "MV" },
     translate: false,
     entries: [
-      entry("a", "Map001.json", ""),
-      entry("b", "img/pictures/Title", ""),
-      entry("c", "img/pictures/Title", ""),
+      text("a", ""),
+      imageEntry("b", "img/pictures/Title", ""),
+      imageEntry("c", "img/pictures/Title", ""),
     ],
     glossary: [],
   });
@@ -179,7 +182,7 @@ test("a translated game keeps its translations when switched off", async () => {
     version: 1,
     game: { id: game.id, title: game.title, engine: "MV" },
     translate: true,
-    entries: [entry("a", "Map001.json", "Hello"), entry("b", "Map001.json", "Bye")],
+    entries: [text("a", "Hello"), text("b", "Bye")],
     glossary: [{ source: "雨", translation: { user: "Rain" }, kind: { guess: { value: "name" } } }],
   });
   showCard();
@@ -195,7 +198,7 @@ test("a translated game keeps its translations when switched off", async () => {
 });
 
 test("the translator settings save each choice as it is made", async () => {
-  const server = fakeServer(catalogWith([entry("a", "Map001.json", "")]), {
+  const server = fakeServer(catalogWith([text("a", "")]), {
     settings: {
       ...defaults,
       translation: {
@@ -251,7 +254,7 @@ test("the translator settings save each choice as it is made", async () => {
 });
 
 test("the game's language shows the guess from its text until another is chosen, and can go back to it", async () => {
-  const korean = { ...entry("a", "Map001.json", ""), source: "하루는 시장에 갔다." };
+  const korean = { ...text("a", ""), source: "하루는 시장에 갔다." };
   const server = fakeServer(catalogWith([korean]));
   showCard();
   const language = page.getByRole("combobox", { name: "Game language" });
@@ -266,7 +269,7 @@ test("the game's language shows the guess from its text until another is chosen,
 });
 
 test("llama-server offers how many layers' experts stay in system RAM at least", async () => {
-  const server = fakeServer(catalogWith([entry("a", "Map001.json", "")]), {
+  const server = fakeServer(catalogWith([text("a", "")]), {
     models: ["qwen3.6:35b-a3b-q4_K_M"],
     layers: { blockCount: 3, expertCount: 8 },
   });
@@ -285,7 +288,7 @@ test("llama-server offers how many layers' experts stay in system RAM at least",
 });
 
 test("where RPGTL can't run llama-server, the page says why and keeps it from being chosen", async () => {
-  fakeServer(catalogWith([entry("a", "Map001.json", "")]), {
+  fakeServer(catalogWith([text("a", "")]), {
     models: ["qwen3.6:35b-a3b-q4_K_M"],
     llamaServerUnavailable: "RPGTL starts Ollama's bundled llama-server on Linux only.",
   });
@@ -301,7 +304,7 @@ test("where RPGTL can't run llama-server, the page says why and keeps it from be
 });
 
 test("the backup reader recommends Qwen3.6", async () => {
-  fakeServer(catalogWith([entry("a", "Map001.json", "")]), {
+  fakeServer(catalogWith([text("a", "")]), {
     models: ["gemma:9b", "qwen3.6:35b-a3b-q4_K_M"],
   });
   showCard();
@@ -314,7 +317,7 @@ test("the backup reader recommends Qwen3.6", async () => {
 
 test("the local models' settings show while a local model translates or reads images", async () => {
   const claude = { ...defaults.translation, translator: "claude" as const };
-  fakeServer(catalogWith([entry("a", "Map001.json", "")]), {
+  fakeServer(catalogWith([text("a", "")]), {
     settings: { ...defaults, translation: claude, images: { ...defaults.images, model: "qwen" } },
     models: ["qwen"],
   });
@@ -327,9 +330,7 @@ test("the local models' settings show while a local model translates or reads im
 });
 
 test("Clear all asks first, and keeps the translations when told to", async () => {
-  const server = fakeServer(
-    catalogWith([entry("a", "Map001.json", "Hello"), entry("b", "Map001.json", "Bye")]),
-  );
+  const server = fakeServer(catalogWith([text("a", "Hello"), text("b", "Bye")]));
   showCard();
   await expect.element(page.getByText("2 of 2 text entries translated")).toBeVisible();
   await page.getByRole("button", { name: "Clear all…" }).click();
@@ -343,7 +344,7 @@ test("Clear all asks first, and keeps the translations when told to", async () =
 });
 
 test("Import shows what the chosen file changes, sends it once confirmed, and says when it isn't JSON", async () => {
-  const server = fakeServer(catalogWith([entry("a", "Map001.json", "")]));
+  const server = fakeServer(catalogWith([text("a", "")]));
   showCard();
   const picker = page.getByLabelText("Translation file to import");
   await picker.upload(new File(["{ not json"], "broken.json", { type: "application/json" }));
@@ -390,7 +391,7 @@ function Switching() {
 
 test("a preview that answers after another game opened asks nothing there", async () => {
   const { promise: answered, resolve: answer } = Promise.withResolvers<void>();
-  const server = fakeServer(catalogWith([entry("a", "Map001.json", "")]), {
+  const server = fakeServer(catalogWith([text("a", "")]), {
     previewWaitsFor: answered,
   });
   render(<Switching />);
@@ -407,7 +408,7 @@ test("a preview that answers after another game opened asks nothing there", asyn
 });
 
 test("the import and clear questions close once a run takes the game", async () => {
-  const server = fakeServer(catalogWith([entry("a", "Map001.json", "Hello")]));
+  const server = fakeServer(catalogWith([text("a", "Hello")]));
   showCard();
   server.activity(idle);
   await page.getByRole("button", { name: "Clear all…" }).click();
@@ -420,7 +421,7 @@ test("the import and clear questions close once a run takes the game", async () 
 });
 
 test("an import going counts its images on the Import button and holds the other actions, but not the shared settings", async () => {
-  const server = fakeServer(catalogWith([entry("a", "Map001.json", "")]));
+  const server = fakeServer(catalogWith([text("a", "")]));
   showCard();
   server.activity({ ...idle, importing: { done: 3, total: 9 } });
   const button = page.getByRole("button", { name: /Importing images: 3 of 9/ });
@@ -455,8 +456,8 @@ test("Export writes the images' erased backgrounds as base64 patches, as the ser
   fakeServer(
     {
       ...catalogWith([
-        { ...entry("a", "Map001.json", ""), translation: { guess: { value: "Hello", run } } },
-        entry("b", "Map001.json", "Bye"),
+        { ...text("a", ""), translation: { guess: { value: "Hello", run } } },
+        text("b", "Bye"),
       ]),
       runs,
     },

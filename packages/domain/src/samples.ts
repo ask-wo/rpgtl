@@ -2,23 +2,21 @@ import type { Catalog, Entry, SampleGroup, Samples } from "@rpgtl/contracts";
 import * as Option from "effect/Option";
 import { CatalogDraft } from "./catalogDraft.ts";
 import { speakerTagPattern } from "./controlCodes.ts";
-import { entryLocation, EventListRef } from "./location.ts";
+import { EventListRef } from "@rpgtl/contracts";
 
 const dialogueScenes = 6;
 const sceneLines = 10;
 
 /** The event list an entry's command is in, when it is in one. */
-const eventListOf = (entry: Entry) =>
-  Option.flatMap(entryLocation(entry), (location) =>
-    location._tag === "Message" || location._tag === "CommandText" || location._tag === "ScriptText"
-      ? Option.some(location.list)
-      : Option.none(),
-  );
+const eventListOf = ({ location }: Entry) =>
+  location._tag === "Message" || location._tag === "CommandText" || location._tag === "ScriptText"
+    ? Option.some(location.list)
+    : Option.none();
 
-const describeList = EventListRef.$match({
+const describeList = EventListRef.match({
   CommonEvent: ({ event }) => `common event ${event}`,
   TroopPage: ({ troop, page }) => `troop ${troop} page ${page + 1}`,
-  MapEventPage: ({ event, page }) => `event ${event} page ${page + 1}`,
+  MapEventPage: ({ map, event, page }) => `map ${map} event ${event} page ${page + 1}`,
 });
 
 const hasSpeakerTag = (entry: Entry) => entry.source.search(speakerTagPattern) >= 0;
@@ -35,14 +33,10 @@ export function pickSamples(catalog: Pick<Catalog, "game" | "entries">): Samples
   for (const entry of catalog.entries) {
     const list = eventListOf(entry);
     if (Option.isNone(list)) continue;
-    const key = JSON.stringify([entry.file, list.value]);
+    const key = JSON.stringify(list.value);
     const found = lists.get(key);
     if (found) found.entries.push(entry);
-    else
-      lists.set(key, {
-        label: `${entry.file.replace(/\.json$/, "")} ${describeList(list.value)}`,
-        entries: [entry],
-      });
+    else lists.set(key, { label: describeList(list.value), entries: [entry] });
   }
 
   const groups: Array<SampleGroup> = [];
@@ -70,31 +64,23 @@ export function pickSamples(catalog: Pick<Catalog, "game" | "entries">): Samples
     scenes++;
   }
 
-  const located = catalog.entries.flatMap((entry) =>
-    Option.match(entryLocation(entry), {
-      onNone: () => [],
-      onSome: (location) => [{ entry, location }],
-    }),
-  );
   add(
     "Menu terms",
-    located
+    catalog.entries
       .filter(({ location }) => location._tag === "SystemText" && location.keys[0] === "terms")
-      .slice(0, 20)
-      .map(({ entry }) => entry),
+      .slice(0, 20),
   );
   add(
     "Descriptions",
-    ["Items.json", "Skills.json", "Weapons.json", "Armors.json"].flatMap((file) =>
-      located
+    (["items", "skills", "weapons", "armors"] as const).flatMap((table) =>
+      catalog.entries
         .filter(
-          ({ entry, location }) =>
-            entry.file === file &&
+          ({ location }) =>
             location._tag === "RecordField" &&
+            location.table === table &&
             location.field === "description",
         )
-        .slice(0, 3)
-        .map(({ entry }) => entry),
+        .slice(0, 3),
     ),
   );
   add(
@@ -118,10 +104,9 @@ export function sampleCatalog(catalog: Catalog, samples: Samples): Catalog {
     glossary: whole.catalog.glossary,
     entries: catalog.entries
       .filter((entry) => ids.has(entry.id))
-      .map(({ id, file, path, source, speaker, keepOriginal }) => ({
+      .map(({ id, location, source, speaker, keepOriginal }) => ({
         id,
-        file,
-        path,
+        location,
         source,
         translation: samples.fixed?.[id] ? { user: samples.fixed[id] } : {},
         ...(speaker !== undefined && { speaker }),

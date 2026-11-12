@@ -1,10 +1,18 @@
 import { assert, it } from "@effect/vitest";
 import { createHash } from "node:crypto";
-import { collectClues, extractPlugins, newEntry, nonTextParameters, reuseKeys } from "./index.ts";
-import { extractFrom } from "./testUtils/gameFiles.ts";
+import {
+  collectClues,
+  extractPlugins,
+  fileOf,
+  newEntry,
+  nonTextParameters,
+  pathOf,
+  reuseKeys,
+} from "../../index.ts";
+import { extractFrom } from "../../testUtils/gameFiles.ts";
 
 it("an entry's id is the start of the SHA-256 of its file, path and source", () => {
-  const entry = newEntry("Map001.json", ["events", "1", "name"], "客人1号");
+  const entry = newEntry({ _tag: "EventName", map: 1, event: 1 }, "客人1号");
   const expected = createHash("sha256")
     .update(JSON.stringify(["Map001.json", ["events", "1", "name"], "客人1号"]))
     .digest("hex")
@@ -24,7 +32,7 @@ it("sound names stay hidden and event, switch and variable names need CJK text",
     ],
   };
   assert.deepStrictEqual(
-    extractFrom("Map001.json", map).map((entry) => [entry.path, entry.source]),
+    extractFrom("Map001.json", map).map((entry) => [pathOf(entry.location), entry.source]),
     [
       [["events", "1", "name"], "客人1号"],
       [["displayName"], "大厅"],
@@ -36,7 +44,7 @@ it("sound names stay hidden and event, switch and variable names need CJK text",
     titleBgm: { name: "标题", volume: 90, pitch: 100, pan: 0 },
   };
   assert.deepStrictEqual(
-    extractFrom("System.json", system).map((entry) => [entry.path, entry.source]),
+    extractFrom("System.json", system).map((entry) => [pathOf(entry.location), entry.source]),
     [
       [["switches", "1"], "门开了"],
       [["variables", "2"], "好感度"],
@@ -60,7 +68,7 @@ it("MZ plugin commands and variable text in scripts are extracted", () => {
     fileNames: new Set(),
   });
   assert.deepStrictEqual(
-    entries.map((entry) => [entry.path.slice(3), entry.source]),
+    entries.map((entry) => [pathOf(entry.location).slice(3), entry.source]),
     [
       [["parameters", "3", "text"], "生命值"],
       [["parameters", "3", "Detail", "Title"], "任务"],
@@ -84,7 +92,10 @@ it("note tags are extracted when they hold text codes, line breaks or sentences"
     '<Script>if (a < b ? "低" : "高")\nif (x > 1)</Script>',
   ].join("\n");
   assert.deepStrictEqual(
-    extractFrom("Armors.json", [null, { id: 1, name: "", note }]).map((e) => [e.path, e.source]),
+    extractFrom("Armors.json", [null, { id: 1, name: "", note }]).map((e) => [
+      pathOf(e.location),
+      e.source,
+    ]),
     [
       [["1", "note", "noteText", "1"], "\\C[4]品级      \\C[0]普通"],
       [["1", "note", "noteText", "3"], "河边住着一只老乌龟。\n它从不说话"],
@@ -114,7 +125,7 @@ it("plugin parameters give their Chinese text, but not disabled plugins, files o
     fileNames: new Set(["se/合成物品"]),
   });
   assert.deepStrictEqual(
-    entries.map((entry) => [entry.file, entry.path, entry.source]),
+    entries.map((entry) => [fileOf(entry.location), pathOf(entry.location), entry.source]),
     [
       ["plugins.js", ["Credits", "Command Name"], "致谢"],
       ["plugins.js", ["Credits", "Lines", "0"], "第一行"],

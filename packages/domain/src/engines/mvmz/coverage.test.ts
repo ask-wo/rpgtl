@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import { type GameContents, missingText, newEntry, textInLogic } from "./index.ts";
+import { type GameContents, missingText, newEntry, textInLogic } from "../../index.ts";
 
 const map = {
   events: [
@@ -41,19 +41,28 @@ const contents: GameContents = {
 const catalog = {
   entries: [
     {
-      ...newEntry("System.json", ["terms", "commands", "0"], "致谢"),
+      ...newEntry({ _tag: "SystemText", keys: ["terms", "commands", "0"] }, "致谢"),
       translation: { user: "Credits" },
     },
     {
-      ...newEntry("Map009.json", ["events", "1", "pages", "0", "list", "1"], "人类"),
+      ...newEntry(
+        { _tag: "Message", list: { _tag: "MapEventPage", map: 9, event: 1, page: 0 }, index: 1 },
+        "人类",
+      ),
       translation: { user: "Human" },
     },
     {
-      ...newEntry("Items.json", ["3", "note", "noteText", "0"], "它在门后。"),
+      ...newEntry(
+        { _tag: "NoteTag", owner: { _tag: "Record", table: "items", record: 3 }, tag: 0 },
+        "它在门后。",
+      ),
       translation: { user: "It is behind the door." },
     },
     {
-      ...newEntry("Items.json", ["3", "note", "noteText", "1"], "河边住着一只老乌龟。\n它从不说话"),
+      ...newEntry(
+        { _tag: "NoteTag", owner: { _tag: "Record", table: "items", record: 3 }, tag: 1 },
+        "河边住着一只老乌龟。\n它从不说话",
+      ),
       translation: { user: "An old turtle lives by the river.\nIt never speaks." },
     },
   ],

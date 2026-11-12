@@ -1,6 +1,6 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { Catalog, Entry, Game, ImageReadResults, ImageResult } from "@rpgtl/contracts";
-import { gameLanguage, withTranslation, withImageText } from "@rpgtl/domain";
+import { gameLanguage, placeKey, placeOf, withTranslation, withImageText } from "@rpgtl/domain";
 import * as Exit from "effect/Exit";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { useEffect, useRef, useState } from "react";
@@ -156,7 +156,7 @@ function Images({
           else next.delete(key);
           return next;
         });
-        return error && `${entry.file}, ${entry.source}: ${error}`;
+        return error && `${placeKey(placeOf(entry.location))}, ${entry.source}: ${error}`;
       },
       delay,
     );

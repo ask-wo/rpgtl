@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { Catalog, Entry, Findings, GameActivity, RunStatus } from "@rpgtl/contracts";
+import type { Catalog, Entry, Findings, GameActivity, Location, RunStatus } from "@rpgtl/contracts";
 import { useState } from "react";
 import { page } from "vite-plus/test/browser";
 import { beforeAll, expect, test, vi } from "vite-plus/test";
@@ -16,10 +16,15 @@ beforeAll(() => page.viewport(1280, 800));
 
 const lastRun = "2026-11-04T10:00:00.000Z";
 
-const line = (id: string, file: string, source: string, translation: string): Entry => ({
+const message = (map: number, index: number): Location => ({
+  _tag: "Message",
+  list: { _tag: "MapEventPage", map, event: 1, page: 0 },
+  index,
+});
+
+const line = (id: string, location: Location, source: string, translation: string): Entry => ({
   id,
-  file,
-  path: ["events", "1", "pages", "0", "list", id],
+  location,
   source,
   translation: translation ? { user: translation } : {},
 });
@@ -28,20 +33,25 @@ const saved: Catalog = {
   version: 1,
   game: { id: game.id, title: game.title, engine: "MV" },
   entries: [
-    { ...line("m1", "MapInfos.json", "客厅", "Living Room"), path: ["1", "name"] },
-    { ...line("1", "Map001.json", "你好", "Hello"), speaker: "阿琳" },
+    line(
+      "m1",
+      { _tag: "RecordField", table: "mapInfos", record: 1, field: "name" },
+      "客厅",
+      "Living Room",
+    ),
+    { ...line("1", message(1, 1), "你好", "Hello"), speaker: "阿琳" },
     {
-      ...line("2", "Map001.json", "下雨了", ""),
+      ...line("2", message(1, 2), "下雨了", ""),
       suggestion: { text: "下雨 rain", reason: "source text left" },
     },
     {
-      ...line("3", "Map002.json", "再见", ""),
+      ...line("3", message(2, 3), "再见", ""),
       translation: { guess: { value: "Bye", run: lastRun } },
       previous: "Farewell",
     },
-    line("4", "Items.json", "药水", "Potion"),
-    line("5", "System.json", "开始", ""),
-    line("6", "img/pictures/Title", "标题", ""),
+    line("4", { _tag: "RecordField", table: "items", record: 4, field: "name" }, "药水", "Potion"),
+    line("5", { _tag: "SystemText", keys: ["terms", "commands", "0"] }, "开始", ""),
+    line("6", { _tag: "ImageLines", image: "img/pictures/Title", lines: [0] }, "标题", ""),
   ],
   glossary: [
     { source: "阿琳", translation: { user: "Arlene" }, kind: { guess: { value: "character" } } },
@@ -156,7 +166,7 @@ test("the tree lists the game's text files by area, and a file or a search narro
   await expect.element(entries().getByText("Map001 · Living Room · Arlene")).toBeVisible();
 
   await tree().getByRole("button", { name: "Map002 1" }).click();
-  expect(searches.at(-1)).toEqual({ file: "Map002.json" });
+  expect(searches.at(-1)).toEqual({ place: "map2" });
   await expect.element(entries().getByText("再见")).toBeVisible();
   await expect.element(entries().getByText("你好")).not.toBeInTheDocument();
 

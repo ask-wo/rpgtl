@@ -11,11 +11,13 @@ import {
 } from "./index.ts";
 
 const greeting = newEntry(
-  "Map001.json",
-  ["events", "1", "pages", "0", "list", "0"],
+  { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index: 0 },
   "你好 \\N[1]!",
 );
-const label = newEntry("img/menus/main/commands/Recalled", ["lines", "0"], "鉴赏");
+const label = newEntry(
+  { _tag: "ImageLines", image: "img/menus/main/commands/Recalled", lines: [0] },
+  "鉴赏",
+);
 const current: Catalog = {
   version: 1,
   game: { id: "g", title: "G", engine: "MZ" },
@@ -117,22 +119,25 @@ it("an import from another version of the game takes the entries it still has an
   );
 });
 
-const line = (index: string, source: string) =>
-  newEntry("Map001.json", ["events", "1", "pages", "0", "list", index], source);
+const line = (index: number, source: string) =>
+  newEntry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index },
+    source,
+  );
 
 it("a line that moved in another version of the game takes the English of the same Chinese, unless the file gives that Chinese different English", () => {
-  const moved = line("5", "走吧");
-  const twice = line("6", "好");
+  const moved = line(5, "走吧");
+  const twice = line(6, "好");
   const version: Catalog = { ...current, entries: [greeting, moved, twice] };
   const file = Result.getOrThrow(
     decodeTranslationFile({
       ...version,
       entries: [
         { ...greeting, translation: { user: "Hello \\N[1]!" } },
-        { ...line("4", "走吧"), translation: user("Let's go") },
-        { ...line("2", "好"), translation: user("OK") },
-        { ...line("3", "好"), translation: user("Fine") },
-        { ...line("1", "再见"), translation: user("Bye") },
+        { ...line(4, "走吧"), translation: user("Let's go") },
+        { ...line(2, "好"), translation: user("OK") },
+        { ...line(3, "好"), translation: user("Fine") },
+        { ...line(1, "再见"), translation: user("Bye") },
       ],
     }),
   );
@@ -180,7 +185,7 @@ it("an imported glossary has trimmed terms listed once, and only characters keep
 });
 
 it("a renamed glossary term renames the entries that are exactly that term", () => {
-  const rain = newEntry("Map001.json", ["events", "2", "name"], "雨");
+  const rain = newEntry({ _tag: "EventName", map: 1, event: 2 }, "雨");
   const named: Catalog = {
     ...current,
     entries: [{ ...rain, translation: { user: "Rain" } }],

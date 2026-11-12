@@ -2,10 +2,9 @@ import { assert, it } from "@effect/vitest";
 import type { Entry } from "@rpgtl/contracts";
 import { isNameEntry, nameGroups } from "./index.ts";
 
-const system = (path: ReadonlyArray<string>, source: string): Entry => ({
-  id: path.join("."),
-  file: "System.json",
-  path,
+const system = (keys: ReadonlyArray<string>, source: string): Entry => ({
+  id: keys.join("."),
+  location: { _tag: "SystemText", keys },
   source,
   translation: {},
 });

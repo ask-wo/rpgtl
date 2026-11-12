@@ -2,7 +2,6 @@ import { assert, it } from "@effect/vitest";
 import type { Catalog } from "@rpgtl/contracts";
 import {
   assetNames,
-  bootEngines,
   entryTranslation,
   mediaNames,
   mediaReferences,
@@ -11,13 +10,6 @@ import {
   missingFiles,
   newEntry,
 } from "./index.ts";
-
-it("the engine the boot code loads wins over the other engine's core files", () => {
-  assert.deepStrictEqual(bootEngines('<script src="js/rpg_core.js"></script>', ""), ["MV"]);
-  assert.deepStrictEqual(bootEngines("", 'Utils.RPGMAKER_NAME = "MV"'), ["MV"]);
-  assert.deepStrictEqual(bootEngines("", 'loadScript("js/rmmz_core.js")'), ["MZ"]);
-  assert.deepStrictEqual(bootEngines('<!-- <script src="js/rpg_core.js"> -->', ""), ["MZ", "MV"]);
-});
 
 it("audio and video NW.js can't play are named unless a counterpart it can play is there", () => {
   const files = ["audio/bgm/Town.m4a", "audio/bgm/Town.ogg", "audio/se/Door.M4A", "movies/Op.mp4"];
@@ -108,9 +100,9 @@ it("asset names are the paths below img, audio and movies, with and without thei
 });
 
 it("inspecting again keeps the saved translations and settings of the entries still there", () => {
-  const kept = newEntry("Map001.json", ["events", "1", "name"], "客人");
-  const gone = newEntry("Map001.json", ["events", "2", "name"], "旧");
-  const added = newEntry("Map001.json", ["events", "3", "name"], "新");
+  const kept = newEntry({ _tag: "EventName", map: 1, event: 1 }, "客人");
+  const gone = newEntry({ _tag: "EventName", map: 1, event: 2 }, "旧");
+  const added = newEntry({ _tag: "EventName", map: 1, event: 3 }, "新");
   const game = { id: "g", title: "G", engine: "MV" as const };
   const codex = {
     translator: "codex",
@@ -167,7 +159,10 @@ it("inspecting again keeps the saved translations and settings of the entries st
 
 it("inspecting again keeps an image text the user corrected", () => {
   const game = { id: "0123456789abcdef0123", title: "雨", engine: "MV" as const };
-  const read = { ...newEntry("img/pictures/Sign", ["lines", "0"], "开使"), translation: {} };
+  const read = {
+    ...newEntry({ _tag: "ImageLines", image: "img/pictures/Sign", lines: [0] }, "开使"),
+    translation: {},
+  };
   const previous: Catalog = {
     version: 1,
     game,
@@ -178,8 +173,11 @@ it("inspecting again keeps an image text the user corrected", () => {
   assert.deepStrictEqual(inspectedCatalog(game, [read], previous).entries, previous.entries);
 });
 
-const line = (index: string, source: string) =>
-  newEntry("Map001.json", ["events", "1", "pages", "0", "list", index], source);
+const line = (index: number, source: string) =>
+  newEntry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index },
+    source,
+  );
 
 it("a line that moved keeps the English of its Chinese, unless the old lines gave that Chinese different English", () => {
   const game = { id: "g", title: "G", engine: "MV" as const };
@@ -187,15 +185,15 @@ it("a line that moved keeps the English of its Chinese, unless the old lines gav
     version: 1,
     game,
     entries: [
-      { ...line("1", "走吧"), translation: { user: "Let's go" } },
-      { ...line("2", "好"), translation: { user: "OK" } },
-      { ...line("3", "好"), translation: { user: "Fine" } },
+      { ...line(1, "走吧"), translation: { user: "Let's go" } },
+      { ...line(2, "好"), translation: { user: "OK" } },
+      { ...line(3, "好"), translation: { user: "Fine" } },
     ],
     glossary: [],
     translate: true,
   };
   assert.deepStrictEqual(
-    inspectedCatalog(game, [line("2", "走吧"), line("4", "好")], previous).entries.map(
+    inspectedCatalog(game, [line(2, "走吧"), line(4, "好")], previous).entries.map(
       entryTranslation,
     ),
     ["Let's go", ""],

@@ -24,7 +24,8 @@ The words the code and these docs are built from. Use them in code, tests, docs 
 | Entry | One unit of translatable text in the catalog, with its source, translation and where it is. A message is one entry, not one per line. |
 | Guess, user value | Two layers of an entry's English and of a glossary term's English, kind and pronoun (`Guessed`). The guess is what a run gave, with the run's start time, or RPGTL's rules, without one; the user value is the player's own and wins over the guess. Runs and rules write only guesses and the player only user values, so the user value never hides what the run said, and **Use it** goes back to the guess. A user value equal to the guess isn't kept. |
 | Name entry | An entry that is a name, such as an actor's or a map's. The glossary pass translates these. |
-| Entry path, location | Where an entry's text is. The entry path is the list of keys a saved catalog holds; a location is that path read into what it names (`Location`). Code works with locations. |
+| Location | Where an entry's text is (`Location`), such as a message in a map event's page, a field of a database record or lines of an image, with the map, table or image it is in. The catalog keeps each entry's location; only the code for MV and MZ turns one into a data file and the keys inside it. |
+| Place | The part of the game a location is in: a map, a database table, the common events, the troops, the system settings, the plugins or an image (`Place`). Batches and the Text page's tree group text by place. |
 | Message | One Show Text or scrolling text command with all its lines, as one message window shows it. |
 | Control code | Text the engine or a plugin interprets instead of showing, such as `\C[2]`, `%1` or a `\n<Name>` speaker tag. A translation keeps it unchanged. |
 | Extract, apply | Extracting reads a game's files into entries; applying writes translations into the game's data as it loads, never into its files. |

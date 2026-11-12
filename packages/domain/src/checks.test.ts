@@ -23,8 +23,11 @@ const check = translationChecks(glossary, "chinese");
 const line = (source: string, translation: string) =>
   check(
     {
-      file: "Map001.json",
-      path: ["events", "1", "pages", "0", "list", "0"],
+      location: {
+        _tag: "Message",
+        list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+        index: 0,
+      },
       source,
     },
     translation,
@@ -70,8 +73,11 @@ it("In a Japanese game, 他 means other, not he", () => {
   const japanese = translationChecks(glossary, "japanese");
   const findings = japanese(
     {
-      file: "Map001.json",
-      path: ["events", "1", "pages", "0", "list", "0"],
+      location: {
+        _tag: "Message",
+        list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+        index: 0,
+      },
       source: "他の店へ行こうか。",
     },
     "Shall she try another shop?",

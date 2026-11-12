@@ -1,4 +1,5 @@
 export * from "./catalog.ts";
+export * from "./location.ts";
 export * from "./game.ts";
 export * from "./gameData.ts";
 export * from "./checks.ts";

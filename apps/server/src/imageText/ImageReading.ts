@@ -33,6 +33,7 @@ import {
   readResults,
   readVersion,
   withImageEntries,
+  isImageText,
 } from "@rpgtl/domain";
 import * as AiError from "effect/ai/AiError";
 import * as Arr from "effect/Array";
@@ -354,7 +355,7 @@ const make = Effect.gen(function* () {
       const next = withImageEntries(yield* catalogs.get(id), read, before);
       yield* imageTexts.save(id, readResults(read.images, runs));
       yield* catalogs.write(next);
-      const entries = next.entries.filter((entry) => entry.file.startsWith("img/")).length;
+      const entries = next.entries.filter(isImageText).length;
       yield* update((now) => ({ ...now, entries }));
     }).pipe(Effect.uninterruptible);
 
@@ -735,7 +736,7 @@ const make = Effect.gen(function* () {
         const current = yield* catalogs.get(id);
         const next = {
           ...current,
-          entries: current.entries.filter((entry) => !entry.file.startsWith("img/")),
+          entries: current.entries.filter((entry) => !isImageText(entry)),
         };
         yield* Effect.uninterruptible(Effect.andThen(catalogs.save(next), imageTexts.clear(id)));
         yield* SubscriptionRef.update(statuses, (runs) => {

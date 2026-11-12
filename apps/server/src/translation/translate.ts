@@ -6,7 +6,7 @@ import {
   batchVerdict,
   type CatalogDraft,
   checkAnswer,
-  type DraftEntry,
+  type RunEntry,
   isSuggestible,
   kindQuestion,
   nameGroups,
@@ -120,8 +120,7 @@ const timedOut = () =>
 
 const loggedEntry = ({ entry }: Prepared) => ({
   id: entry.id,
-  file: entry.file,
-  path: [...entry.path],
+  ...(entry.location && { location: entry.location }),
   source: entry.source,
   translation: entryTranslation(entry),
 });
@@ -213,7 +212,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
   /** Translates groups of entries, `translator.parallel` at a time, in one pass. */
   const translateGroups = Effect.fn("translate.groups")(function* (
     pass: Pass,
-    groups: ReadonlyArray<ReadonlyArray<DraftEntry>>,
+    groups: ReadonlyArray<ReadonlyArray<RunEntry>>,
     names: boolean,
   ) {
     const queue = translator.packsScenes ? packGroups(groups, translator.batchSize) : groups;
@@ -261,9 +260,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
       );
     });
 
-    const translateGroup = Effect.fn("translate.group")(function* (
-      group: ReadonlyArray<DraftEntry>,
-    ) {
+    const translateGroup = Effect.fn("translate.group")(function* (group: ReadonlyArray<RunEntry>) {
       const prepared = group.map((entry) => draft.prepare(entry));
       for (const item of prepared) {
         if (entryTranslation(item.entry)) {

@@ -4,8 +4,13 @@ import type { Catalog, Entry } from "@rpgtl/contracts";
 
 const entry = (id: string, source: string, translation = ""): Entry => ({
   id,
-  file: "Map001.json",
-  path: ["events", id],
+  location: {
+    _tag: "CommandText",
+    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+    index: 0,
+    parameter: 0,
+    keys: ["0"],
+  },
   source,
   translation: translation ? { user: translation } : {},
 });

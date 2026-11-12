@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import { Location } from "./location.ts";
 import { Effort, RetrySampling, RunKind, Sampling } from "./translation.ts";
 
 /** Why a run turned down a model's answer for an entry. */
@@ -111,8 +112,8 @@ export const RequestLine = Schema.Struct({
   entries: Schema.Array(
     Schema.Struct({
       id: Schema.String,
-      file: Schema.String,
-      path: Schema.Array(Schema.String),
+      /** None for a speaker's name, which only the run asks about. */
+      location: Schema.optionalKey(Location),
       source: Schema.String,
       translation: Schema.String,
     }),

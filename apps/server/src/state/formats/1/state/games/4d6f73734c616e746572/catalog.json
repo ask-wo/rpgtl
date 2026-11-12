@@ -5,7 +5,7 @@
     {
       "id": "e1",
       "file": "Map001.json",
-      "path": ["events", "1", "pages", "0", "list", "3"],
+      "path": ["events", "1", "pages", "0", "list", "3", "parameters", "0"],
       "source": "\\N[1]，灯油快用完了。",
       "translation": {
         "guess": {
@@ -20,7 +20,7 @@
     },
     {
       "id": "e2",
-      "file": "img/pictures/Sign.png",
+      "file": "img/pictures/Sign",
       "path": ["lines", "0"],
       "source": "苔灯",
       "readerText": "苔丁",

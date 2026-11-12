@@ -3,6 +3,7 @@ import { assert, layer } from "@effect/vitest";
 import {
   type Catalog,
   type Entry,
+  type Location,
   RunLogLine,
   type RunStatus,
   type Settings,
@@ -32,18 +33,16 @@ import * as SavedSettings from "../settings/Settings.ts";
 import * as Runs from "./Runs.ts";
 import { entryTranslation, termTranslation } from "@rpgtl/domain";
 
-const entry = (id: string, file: string, path: ReadonlyArray<string>, source: string): Entry => ({
+const entry = (id: string, location: Location, source: string): Entry => ({
   id,
-  file,
-  path: [...path],
+  location,
   source,
   translation: {},
 });
 const dialogue = (id: string, index: number, source: string) =>
   entry(
     id,
-    "Map001.json",
-    ["events", "1", "pages", "0", "list", String(index), "parameters", "0"],
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index },
     source,
   );
 
@@ -52,7 +51,7 @@ const catalog: Catalog = {
   game: { id: game.id, title: game.title, engine: "MV" },
   translate: true,
   entries: [
-    entry("actor", "Actors.json", ["1", "name"], "艾琳"),
+    entry("actor", { _tag: "RecordField", table: "actors", record: 1, field: "name" }, "艾琳"),
     dialogue("hello", 0, "你好"),
     dialogue("arrives", 1, "艾琳来了"),
   ],

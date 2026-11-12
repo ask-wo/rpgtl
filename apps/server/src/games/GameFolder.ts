@@ -10,6 +10,7 @@ import {
   GameFileInvalid,
   type GameImage,
   imageExtension,
+  mapOf,
   mediaNames,
   mediaReferences,
   mediaWarnings,
@@ -379,7 +380,7 @@ const make = Effect.gen(function* () {
     const system = yield* systemHeader(game.webRoot);
     const files = yield* filesUnder(path.join(game.webRoot, "img"));
     const maps = yield* Effect.forEach(
-      game.files.filter((file) => /^Map\d+\.json$/.test(file)),
+      game.files.filter((file) => mapOf(file) !== undefined),
       (file) => dataFile(game, file),
     );
     const images = textImages({

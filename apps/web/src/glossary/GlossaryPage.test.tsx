@@ -1,4 +1,11 @@
-import type { Catalog, GameActivity, GlossaryTerm, RunStatus, TermEdit } from "@rpgtl/contracts";
+import type {
+  Catalog,
+  Entry,
+  GameActivity,
+  GlossaryTerm,
+  RunStatus,
+  TermEdit,
+} from "@rpgtl/contracts";
 import { withGlossary } from "@rpgtl/domain";
 import { Result } from "effect";
 import { page } from "vite-plus/test/browser";
@@ -11,10 +18,13 @@ import { GlossaryPage } from "./GlossaryPage.tsx";
 // The list and the term's details sit side by side, as on a desktop screen.
 beforeAll(() => page.viewport(1280, 800));
 
-const line = (id: string, source: string, translation: string) => ({
+const line = (id: string, source: string, translation: string): Entry => ({
   id,
-  file: "Map001.json",
-  path: ["events", "1", "pages", "0", "list", id],
+  location: {
+    _tag: "Message",
+    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+    index: Number(id),
+  },
   source,
   translation: translation ? { user: translation } : {},
 });

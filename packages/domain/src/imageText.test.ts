@@ -186,7 +186,7 @@ it("image text hints give each image of a series the blocks of the others", () =
   };
   const entries = imageEntries(results).map((entry) => ({
     ...entry,
-    translation: { user: entry.file.endsWith("1") ? "Load Game" : "Start" },
+    translation: { user: entry.location.image.endsWith("1") ? "Load Game" : "Start" },
   }));
   const hints = imageTextHints(results, { entries }, (file) => file);
   assert.deepStrictEqual(
@@ -274,8 +274,7 @@ it("an image read again keeps the work on its texts whose lines or text changed"
       })),
       {
         id: "m",
-        file: "Map001.json",
-        path: ["events"],
+        location: { _tag: "EventName", map: 1, event: 1 },
         source: "退出",
         translation: { user: "Leave" },
       },

@@ -1,6 +1,6 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { Catalog, Entry } from "@rpgtl/contracts";
-import { entryTranslation, termTranslation } from "@rpgtl/domain";
+import { entryTranslation, type Place, placeKey, placeOf, termTranslation } from "@rpgtl/domain";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import * as Exit from "effect/Exit";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
@@ -27,6 +27,7 @@ import {
   isShown,
   mapNames,
   matches,
+  placeLabel,
   type Shown,
   type ShownContext,
   type TextSearch,
@@ -52,7 +53,7 @@ const filters: ReadonlyArray<{
 /** How many entries a page of the list holds. */
 const pageSize = 50;
 
-/** The game's text, by file, to read and correct; the address keeps the file, search and filter. */
+/** The game's text, by place, to read and correct; the address keeps the place, search and filter. */
 export function TextPage() {
   const search = useSearch({ from: "/games/$gameId/text" });
   const navigate = useNavigate({ from: "/games/$gameId/text" });
@@ -79,9 +80,9 @@ export function TextEditor({
   });
 }
 
-const selectionOf = ({ file, area }: TextSearch): Selection =>
-  file !== undefined
-    ? { kind: "file", file }
+const selectionOf = ({ place, area }: TextSearch): Selection =>
+  place !== undefined
+    ? { kind: "place", place }
     : area !== undefined
       ? { kind: "area", area }
       : { kind: "all" };
@@ -89,18 +90,12 @@ const selectionOf = ({ file, area }: TextSearch): Selection =>
 const inSelection = (entry: Entry, selection: Selection) =>
   selection.kind === "all" ||
   (selection.kind === "area"
-    ? areaOf(entry.file) === selection.area
-    : entry.file === selection.file);
+    ? areaOf(placeOf(entry.location)) === selection.area
+    : placeKey(placeOf(entry.location)) === selection.place);
 
 const oneLine = (text: string) => {
   const line = text.replace(/\s*\n\s*/g, " ");
   return line.length > 40 ? `${line.slice(0, 40)}…` : line;
-};
-
-const fileLabel = (file: string, maps: ReadonlyMap<string, string>) => {
-  const name = maps.get(file);
-  const base = file.replace(/\.(json|js)$/, "");
-  return name ? `${base} · ${name}` : base;
 };
 
 function Text({
@@ -137,7 +132,7 @@ function Text({
   // doesn't leave the Untranslated list while it is being typed into.
   const [kept, setKept] = useState<ReadonlySet<string>>(new Set());
   const view = JSON.stringify([
-    search.file,
+    search.place,
     search.area,
     search.show,
     search.q?.trim().toLowerCase(),
@@ -220,14 +215,20 @@ function Text({
   const pages = Math.max(1, Math.ceil(shown.length / pageSize));
 
   const maps = mapNames(saved);
-  const counts = new Map<string, number>();
-  for (const entry of text) counts.set(entry.file, 0);
-  for (const entry of listed) counts.set(entry.file, (counts.get(entry.file) ?? 0) + 1);
+  const places = new Map<string, { place: Place; count: number }>();
+  for (const entry of text) {
+    const place = placeOf(entry.location);
+    places.set(placeKey(place), { place, count: 0 });
+  }
+  for (const entry of listed) {
+    const known = places.get(placeKey(placeOf(entry.location)));
+    if (known) known.count++;
+  }
   const tree: ReadonlyArray<TreeArea> = areas.map((area) => {
-    const files = [...counts]
-      .filter(([file]) => areaOf(file) === area)
-      .map(([file, count]) => ({ file, label: fileLabel(file, maps), count }));
-    return { area, files, count: files.reduce((sum, file) => sum + file.count, 0) };
+    const inArea = [...places]
+      .filter(([, { place }]) => areaOf(place) === area)
+      .map(([key, { place, count }]) => ({ key, label: placeLabel(place, maps), count }));
+    return { area, places: inArea, count: inArea.reduce((sum, place) => sum + place.count, 0) };
   });
   const english = new Map(
     saved.glossary.map((term) => [term.source, termTranslation(term).trim()]),
@@ -252,7 +253,7 @@ function Text({
           onSelect={(next) =>
             onSearch(
               changedSearch(search, {
-                file: next.kind === "file" ? next.file : undefined,
+                place: next.kind === "place" ? next.place : undefined,
                 area: next.kind === "area" ? next.area : undefined,
               }),
             )
@@ -304,7 +305,7 @@ function Text({
                   key={entry.id}
                   entry={entry}
                   value={drafts.get(entry.id) ?? entryTranslation(entry)}
-                  where={fileLabel(entry.file, maps)}
+                  where={placeLabel(placeOf(entry.location), maps)}
                   speaker={
                     entry.speaker === undefined
                       ? undefined

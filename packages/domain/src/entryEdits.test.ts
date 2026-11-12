@@ -4,12 +4,18 @@ import * as Result from "effect/Result";
 import { newEntry, withEntryEdits } from "./index.ts";
 
 const line = (index: number, source: string, translation: string) => ({
-  ...newEntry("Map001.json", ["events", "1", "pages", "0", "list", String(index)], source),
+  ...newEntry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index: index },
+    source,
+  ),
   translation: translation ? { user: translation } : {},
 });
 const run = "2026-11-04T10:00:00.000Z";
 const hello = {
-  ...newEntry("Map001.json", ["events", "1", "pages", "0", "list", "0"], "你好"),
+  ...newEntry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index: 0 },
+    "你好",
+  ),
   translation: { guess: { value: "Hello", run, flag: "Check the tone" } },
 };
 const bye = {
@@ -58,7 +64,7 @@ it("an edit that drops a control code, or names an entry the catalog lacks, save
 
 it("an image text keeps or drops its original artwork without touching its English", () => {
   const title = {
-    ...newEntry("img/pictures/Title", ["lines", "0"], "标题"),
+    ...newEntry({ _tag: "ImageLines", image: "img/pictures/Title", lines: [0] }, "标题"),
     translation: { guess: { value: "Title", run } },
   };
   const images = { ...catalog, entries: [title] };
@@ -75,12 +81,12 @@ it("an image text keeps or drops its original artwork without touching its Engli
 
 it("a corrected image text drops the run's English for the old text, keeps the user's, and the text read restores it", () => {
   const start = {
-    ...newEntry("img/pictures/Title", ["lines", "0"], "开使"),
+    ...newEntry({ _tag: "ImageLines", image: "img/pictures/Title", lines: [0] }, "开使"),
     translation: { guess: { value: "Open", run } },
     suggestion: { text: "开使 open", reason: "source text left" },
   };
   const quit = {
-    ...newEntry("img/pictures/Title", ["lines", "1"], "退山"),
+    ...newEntry({ _tag: "ImageLines", image: "img/pictures/Title", lines: [1] }, "退山"),
     translation: { guess: { value: "Retreat mountain", run }, user: "Quit" },
   };
   const images = { ...catalog, entries: [...catalog.entries, start, quit] };
@@ -93,8 +99,7 @@ it("a corrected image text drops the run's English for the old text, keeps the u
   assert.deepStrictEqual(fixed.entries.slice(3), [
     {
       id: start.id,
-      file: start.file,
-      path: start.path,
+      location: start.location,
       source: "开始",
       readerText: "开使",
       translation: {},
@@ -105,8 +110,7 @@ it("a corrected image text drops the run's English for the old text, keeps the u
   const back = Result.getOrThrow(withEntryEdits(fixed, [{ id: start.id, text: "开使" }]));
   assert.deepStrictEqual(back.entries[3], {
     id: start.id,
-    file: start.file,
-    path: start.path,
+    location: start.location,
     source: "开使",
     translation: {},
     previous: "Open",

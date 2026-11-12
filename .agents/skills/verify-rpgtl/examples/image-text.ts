@@ -351,7 +351,7 @@ export default async ({ page, openPage, api, run, log }: any) => {
     await page.waitFor('[role="alertdialog"]');
     await page.clickText("Clear image text", '[role="alertdialog"]');
     await page.waitUntil(`document.body.textContent.includes("Cleared the image text")`);
-    if (saved(id).entries.some((entry: any) => entry.file.startsWith("img/")))
+    if (saved(id).entries.some((entry: any) => entry.location._tag === "ImageLines"))
       throw new Error("image entries left after clearing");
     if (existsSync(`${run.state}/games/${id}/images.json`)) throw new Error("read results left");
     log("Clear image text removed the image entries and the read results");

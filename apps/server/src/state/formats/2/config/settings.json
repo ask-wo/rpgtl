@@ -1,0 +1,31 @@
+{
+  "sharpPixels": true,
+  "sharpText": true,
+  "ollama": {
+    "endpoint": "http://127.0.0.1:11500",
+    "runner": "llama-server",
+    "minExpertLayersInRam": 12
+  },
+  "translation": {
+    "translator": "claude",
+    "ollama": {
+      "model": "made-up-model:30b",
+      "glossaryModel": "made-up-model:30b",
+      "sampling": "qwen",
+      "effort": "on"
+    },
+    "claude": {
+      "model": "made-up-claude",
+      "glossaryModel": "made-up-claude",
+      "effort": "low",
+      "glossaryEffort": "high"
+    },
+    "codex": {
+      "model": "made-up-codex",
+      "glossaryModel": "made-up-codex",
+      "effort": "medium",
+      "glossaryEffort": "low"
+    }
+  },
+  "images": { "model": "made-up-vision", "includeFaint": true }
+}
