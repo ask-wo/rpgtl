@@ -26,8 +26,8 @@ export const GameBuild = Schema.Struct({
    * hand without RPG Maker.
    */
   sha256: Schema.String,
-  /** The version in the folder's name, such as `v0.41`, or else the date of the newest data file. */
-  label: Schema.String,
+  /** The version in the folder's name, its parent's name or else the game's title, such as `v0.41`. */
+  version: Schema.optionalKey(Schema.String),
 });
 export type GameBuild = typeof GameBuild.Type;
 
@@ -38,6 +38,7 @@ export const Game = Schema.Struct({
   root: Schema.String,
   webRoot: Schema.String,
   engine: Engine,
+  /** System.json's title, or else the folder's name, without its version. */
   title: Schema.String,
   files: Schema.Array(Schema.String),
   encryptedAssets: Schema.Boolean,
@@ -63,8 +64,8 @@ export const OtherVersion = Schema.Struct({
   titleTranslation: Schema.optionalKey(Schema.String),
   /** The game's data says so, as MZ's game id does; otherwise only the title matches. */
   sure: Schema.Boolean,
-  /** The opened folder's version label. */
-  label: Schema.String,
+  /** The opened folder's version. */
+  version: Schema.optionalKey(Schema.String),
 });
 export type OtherVersion = typeof OtherVersion.Type;
 

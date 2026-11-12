@@ -31,7 +31,7 @@ it.effect("a game is found in its folder, its www folder, or beside a file in it
     });
     assert.deepStrictEqual(identity, {});
     assert.match(build?.sha256 ?? "", /^[0-9a-f]{64}$/);
-    assert.match(build?.label ?? "", /^\d{4}-\d{2}-\d{2}$/);
+    assert.isUndefined(build?.version);
     assert.deepStrictEqual(yield* gameFolder.inspect(path.join(root, "Game.exe")), game);
     assert.deepStrictEqual(yield* gameFolder.inspect(webRoot), { ...game, root: webRoot });
   }).pipe(Effect.provide(services)),
@@ -41,19 +41,24 @@ const inFolder = (name: string, files: Record<string, string>) =>
   Object.fromEntries(Object.entries(files).map(([file, text]) => [`${name}/${file}`, text]));
 
 it.effect(
-  "a game's identity comes from System.json, and its build from its data, plugins and folder name",
+  "a game's identity comes from System.json, its build from its data and plugins, and its version from its folder's name, its parent's name or else its title",
   () =>
     Effect.gen(function* () {
       const gameFolder = yield* GameFolder.GameFolder;
       const path = yield* Path.Path;
       const system = {
-        gameTitle: "雨",
+        gameTitle: "雨 Ver 0.2",
         versionId: 7,
         encryptionKey: "0f",
         advanced: { gameId: 12345 },
       };
       const dir = yield* folderWith({
         ...inFolder("Rain v0.41", { ...mvGame, "www/data/System.json": JSON.stringify(system) }),
+        ...inFolder("Rain", {
+          ...mvGame,
+          "www/data/System.json": JSON.stringify(system),
+        }),
+        ...inFolder("Rain Patreon 0-1-1/rain", { ...mvGame }),
         ...inFolder("Rain Ver1.05", {
           ...mvGame,
           "www/data/System.json": JSON.stringify(system),
@@ -62,11 +67,15 @@ it.effect(
       });
       const first = yield* gameFolder.inspect(path.join(dir, "Rain v0.41"));
       const patched = yield* gameFolder.inspect(path.join(dir, "Rain Ver1.05"));
+      const unnamed = yield* gameFolder.inspect(path.join(dir, "Rain"));
       assert.deepStrictEqual(first.identity, { gameId: 12345, encryptionKey: "0f" });
       assert.deepStrictEqual(
-        [first.build?.versionId, first.build?.label, patched.build?.label],
-        [7, "v0.41", "Ver1.05"],
+        [first.title, first.build?.versionId, first.build?.version, patched.build?.version],
+        ["雨", 7, "v0.41", "v1.05"],
       );
+      assert.deepStrictEqual([unnamed.title, unnamed.build?.version], ["雨", "v0.2"]);
+      const nested = yield* gameFolder.inspect(path.join(dir, "Rain Patreon 0-1-1", "rain"));
+      assert.strictEqual(nested.build?.version, "v0.1.1");
       assert.notStrictEqual(first.build?.sha256, patched.build?.sha256);
     }).pipe(Effect.provide(services)),
 );

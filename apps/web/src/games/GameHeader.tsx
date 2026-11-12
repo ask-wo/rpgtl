@@ -20,7 +20,7 @@ export function GameHeader() {
         )}
         <Badge variant="secondary">{game.engine}</Badge>
         <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground" title={game.root}>
-          {game.root}
+          {[game.build?.version, game.root].filter(Boolean).join(" · ")}
         </p>
       </div>
       <SaveStatus gameId={game.id} />

@@ -168,7 +168,7 @@ it.effect(
         [game.id, undefined],
         [other.id, undefined],
       ]);
-      yield* catalogs.save({ ...catalog, entries: [hello, title("Rain")] });
+      yield* catalogs.save({ ...catalog, entries: [hello, title("Rain Ver 0.2")] });
       assert.deepStrictEqual(yield* titles, [
         [game.id, "Rain"],
         [other.id, undefined],

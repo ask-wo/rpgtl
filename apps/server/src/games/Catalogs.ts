@@ -458,7 +458,7 @@ const make = Effect.gen(function* () {
       return {
         otherVersion: {
           ...others[0],
-          label: found.build?.label ?? "",
+          ...(found.build?.version !== undefined && { version: found.build.version }),
           ...(Option.isSome(english) && { titleTranslation: english.value }),
         },
       };

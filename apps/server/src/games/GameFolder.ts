@@ -5,7 +5,6 @@ import {
   coreScripts,
   decodeGameFile,
   decodePlugins,
-  folderVersion,
   gameEntries,
   type GameContents,
   GameFileInvalid,
@@ -16,10 +15,10 @@ import {
   mediaWarnings,
   missingFiles,
   referencedFolders,
+  splitVersion,
   textImages,
 } from "@rpgtl/domain";
 import * as Context from "effect/Context";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -241,17 +240,6 @@ const make = Effect.gen(function* () {
     return Option.none();
   });
 
-  /** The day the newest of the data files was changed, as `2024-05-01`. */
-  const newestDate = Effect.fnUntraced(function* (dataDir: string, files: ReadonlyArray<string>) {
-    const times = yield* Effect.forEach(files, (file) =>
-      fs.stat(path.join(dataDir, file)).pipe(
-        Effect.map((info) => Option.getOrElse(Option.map(info.mtime, Number), () => 0)),
-        Effect.mapError(unreadable(path.join(dataDir, file))),
-      ),
-    );
-    return DateTime.formatIsoDateUtc(DateTime.makeUnsafe(Math.max(0, ...times)));
-  });
-
   const gameAt = Effect.fn("GameFolder.gameAt")(function* (
     root: string,
     webRoot: string,
@@ -281,11 +269,16 @@ const make = Effect.gen(function* () {
       ),
     );
     const missing = missingFiles(asked, folders);
+    const named = splitVersion(system.gameTitle || path.basename(root));
+    const version =
+      splitVersion(path.basename(root)).version ??
+      splitVersion(path.basename(path.dirname(root))).version ??
+      named.version;
     return {
       root,
       webRoot,
       engine,
-      title: system.gameTitle || path.basename(root),
+      title: named.name,
       files,
       encryptedAssets: Boolean(system.hasEncryptedImages || system.hasEncryptedAudio),
       mediaWarnings: mediaWarnings(yield* filesUnder(webRoot)),
@@ -298,7 +291,7 @@ const make = Effect.gen(function* () {
       build: {
         ...(system.versionId !== undefined && { versionId: system.versionId }),
         sha256: hash.digest("hex"),
-        label: folderVersion(path.basename(root)) ?? (yield* newestDate(dataDir, files)),
+        ...(version !== undefined && { version }),
       },
     } satisfies FolderGame;
   });

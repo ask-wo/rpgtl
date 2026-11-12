@@ -69,6 +69,9 @@ export function GamesNav() {
               ) : (
                 value.map((game) => {
                   const runs = queued.filter((run) => run.game.id === game.id);
+                  const subtitle = [game.build?.version, game.titleTranslation]
+                    .filter(Boolean)
+                    .join(" · ");
                   return (
                     <SidebarMenuItem key={game.id}>
                       <SidebarMenuButton
@@ -102,16 +105,16 @@ export function GamesNav() {
                               </Badge>
                             </span>
                           </span>
-                          {game.titleTranslation && (
+                          {subtitle && (
                             <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
-                              {game.titleTranslation}
+                              {subtitle}
                             </span>
                           )}
                         </span>
                       </SidebarMenuButton>
                       <SidebarMenuAction
                         showOnHover
-                        className={cn("md:right-4", game.titleTranslation ? "top-2!" : "top-4!")}
+                        className={cn("md:right-4", subtitle ? "top-2!" : "top-4!")}
                         aria-label={`Remove ${game.title} from the list`}
                         title="Remove from the list"
                         disabled={sending}

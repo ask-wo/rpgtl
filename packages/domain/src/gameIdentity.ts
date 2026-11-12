@@ -1,10 +1,28 @@
 import type { Game, SavedGame } from "@rpgtl/contracts";
 
 const versionInName =
-  /(?:^|[^a-z0-9])((?:v|ver|version)[ ._]?\d+(?:\.\d+)*[a-z]?|\d+(?:\.\d+)+[a-z]?)(?![a-z0-9])/i;
+  /(?:^|[^a-z0-9])((?:v|ver|version)[ ._]?(\d+(?:[._-]\d+)*[a-z]?)|(?<!\d[._-])(\d{1,2}(?:\.\d+)+[a-z]?|\d{1,2}(?:[_-]\d{1,3}){2,}[a-z]?))(?![a-z0-9])/i;
 
-/** The version in a game folder's name, such as `v0.41`, `1.2.3` or `Ver1.05`. */
-export const folderVersion = (name: string) => versionInName.exec(name)?.[1];
+/**
+ * A game's name without its version, and the version when the name has one, written as `v` and its
+ * number: `Ver 1.05` and `1.05` are both `v1.05`, and `0-1-1` is `v0.1.1`. A bare number needs a
+ * short first part, and three parts when dashes or underscores split them, so a date such as
+ * `2022-08-06` or `2022.08.06` isn't a version.
+ */
+export function splitVersion(name: string): { readonly name: string; readonly version?: string } {
+  const found = versionInName.exec(name);
+  const written = found?.[1];
+  const number = found?.[2] ?? found?.[3];
+  if (!found || written === undefined || number === undefined) return { name };
+  const start = found.index + found[0].length - written.length;
+  const rest = [
+    name.slice(0, start).replace(/[\s_\-([（【]+$/u, ""),
+    name.slice(start + written.length).replace(/^[\s_\-)\]）】]+/u, ""),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return { name: rest || name, version: `v${number.toLowerCase().replaceAll(/[_-]/g, ".")}` };
+}
 
 type Identified = Pick<Game, "engine" | "title" | "identity">;
 

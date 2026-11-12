@@ -1,13 +1,14 @@
 import type { Catalog, Entry, GlossaryTerm, Pronoun, RunModels } from "@rpgtl/contracts";
 import * as Struct from "effect/Struct";
+import { splitVersion } from "./gameIdentity.ts";
 import { entryTranslation, isUserValue, withUser } from "./guesses.ts";
 
-/** The English of the game's title in System.json, if it has any. */
+/** The English of the game's title in System.json without its version, if it has any. */
 export const titleTranslation = ({ entries }: Pick<Catalog, "entries">) => {
   const entry = entries.find(
     (each) => each.file === "System.json" && each.path.length === 1 && each.path[0] === "gameTitle",
   );
-  return entry ? entryTranslation(entry).trim() || undefined : undefined;
+  return entry ? splitVersion(entryTranslation(entry)).name.trim() || undefined : undefined;
 };
 
 /**

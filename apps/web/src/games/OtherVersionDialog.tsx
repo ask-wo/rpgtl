@@ -24,9 +24,9 @@ function OtherVersionDialog({
   readonly other: OtherVersion;
   readonly onAnswer: (choice: VersionChoice | undefined) => void;
 }) {
-  const { game, sure, label } = other;
+  const { game, sure, version } = other;
   const name = other.titleTranslation ?? game.title;
-  const was = game.build?.label;
+  const was = game.build?.version;
   return (
     <AlertDialog open onOpenChange={(open) => !open && onAnswer(undefined)}>
       <AlertDialogContent>
@@ -40,9 +40,9 @@ function OtherVersionDialog({
             {was && ` (${was})`} in {game.root}.
           </AlertDialogDescription>
           <p className="text-sm text-muted-foreground">
-            <strong>Replace</strong> moves its translations to this version ({label}). Lines that
-            changed lose theirs, and the old translations are backed up first.{" "}
-            <strong>Keep both</strong> adds this version as a new game.
+            <strong>Replace</strong> moves its translations to this version
+            {version && ` (${version})`}. Lines that changed lose theirs, and the old translations
+            are backed up first. <strong>Keep both</strong> adds this version as a new game.
           </p>
         </AlertDialogHeader>
         <AlertDialogFooter>
