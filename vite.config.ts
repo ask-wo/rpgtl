@@ -50,6 +50,7 @@ export default defineConfig({
             "_rpgtlWrap",
             "_rpgtlColumns",
             "_data",
+            "_phase",
             "_commandWindow",
             "_list",
             "_scene",
