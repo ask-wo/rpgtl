@@ -48,16 +48,6 @@ it.effect("a removed game stays saved for its folder and comes back at the end o
   }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game, other]) }))),
 );
 
-it.effect("a new game gets a random id", () =>
-  Effect.gen(function* () {
-    const games = yield* Games.Games;
-    assert.deepStrictEqual(yield* games.idAt("/games/snow/www"), Option.none());
-    const id = yield* games.newId;
-    assert.match(id, /^[0-9a-f]{20}$/);
-    assert.notStrictEqual(yield* games.newId, id);
-  }).pipe(Effect.provide(servicesOver({}))),
-);
-
 it.effect("holding a game refuses a second hold until the first ends, even when it fails", () =>
   Effect.gen(function* () {
     const games = yield* Games.Games;

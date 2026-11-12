@@ -164,6 +164,6 @@ it.effect("on Ollama a model that can't read images isn't started", () =>
         ),
       ),
     );
-    assert.strictEqual(error.message, "qwen can't read images.");
+    assert.deepInclude(error, { _tag: "NoVisionError", model: "qwen" });
   }),
 );

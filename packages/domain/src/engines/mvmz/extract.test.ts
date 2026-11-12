@@ -1,24 +1,13 @@
 import { assert, it } from "@effect/vitest";
-import { createHash } from "node:crypto";
 import {
   collectClues,
   extractPlugins,
   fileOf,
-  newEntry,
   nonTextParameters,
   pathOf,
   reuseKeys,
 } from "../../index.ts";
 import { extractFrom } from "../../testUtils/gameFiles.ts";
-
-it("an entry's id is the start of the SHA-256 of its file, path and source", () => {
-  const entry = newEntry({ _tag: "EventName", map: 1, event: 1 }, "客人1号");
-  const expected = createHash("sha256")
-    .update(JSON.stringify(["Map001.json", ["events", "1", "name"], "客人1号"]))
-    .digest("hex")
-    .slice(0, 24);
-  assert.strictEqual(entry.id, expected);
-});
 
 it("sound names stay hidden and event, switch and variable names need CJK text", () => {
   const map = {

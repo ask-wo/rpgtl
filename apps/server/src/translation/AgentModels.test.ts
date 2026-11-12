@@ -111,6 +111,6 @@ it.effect("says when Codex isn't logged in", () =>
   Effect.gen(function* () {
     const agentModels = yield* AgentModels.AgentModels;
     const error = yield* Effect.flip(agentModels.codex);
-    assert.include(error.message, "not logged in");
+    assert.deepInclude(error, { _tag: "AgentModelsError", problem: "loggedOut" });
   }).pipe(Effect.provide(services({ FAKE_CODEX_LOGGED_OUT: "1" }))),
 );

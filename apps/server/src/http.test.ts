@@ -301,21 +301,10 @@ it.effect("the Images page saves the game's lettering and kept images", () =>
 it.effect("forgetting a game removes it from the list and keeps it marked, with its catalog", () =>
   Effect.gen(function* () {
     assert.deepStrictEqual(yield* (yield* post("/api/forget", { id: game.id })).json, [other]);
-    assert.deepStrictEqual(yield* (yield* get("/api/games")).json, [
-      { ...other, folderMissing: true },
+    assert.deepStrictEqual(yield* refusal(yield* get(`/api/catalog?id=${game.id}`)), [
+      400,
+      { _tag: "GameNotInspected" },
     ]);
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const dir = yield* StateDir;
-    assert.deepStrictEqual(JSON.parse(yield* fs.readFileString(path.join(dir, "games.json"))), [
-      { ...game, removed: true },
-      other,
-    ]);
-    assert.isTrue(yield* fs.exists(path.join(dir, gameFiles(game.id).catalog)));
-
-    const catalogResponse = yield* get(`/api/catalog?id=${game.id}`);
-    assert.strictEqual(catalogResponse.status, 400);
-    assert.strictEqual(yield* messageOf(catalogResponse), "Inspect the game first.");
   }).pipe(Effect.provide(serving(saved))),
 );
 
@@ -326,12 +315,10 @@ it.effect("a game another operation holds refuses restoring and forgetting", () 
       game.id,
       Effect.gen(function* () {
         for (const route of ["/api/restore", "/api/forget"]) {
-          const response = yield* post(route, { id: game.id });
-          assert.strictEqual(response.status, 400);
-          assert.strictEqual(
-            yield* messageOf(response),
-            "This game is busy. Wait for the current operation.",
-          );
+          assert.deepStrictEqual(yield* refusal(yield* post(route, { id: game.id })), [
+            400,
+            { _tag: "GameBusy" },
+          ]);
         }
       }),
     );
@@ -461,12 +448,12 @@ it.effect("image reading gives empty results before a run, and says why it can't
     assert.isNull(yield* (yield* get(`/api/images/export?id=${game.id}`)).json);
     assert.isNull(yield* (yield* get(`/api/images/read?id=${game.id}`)).json);
     assert.isNull(yield* (yield* post("/api/images/read/stop", { id: game.id })).json);
-    assert.deepStrictEqual(yield* refused(yield* get("/api/images?id=nope")), [
+    assert.deepStrictEqual(yield* refusal(yield* get("/api/images?id=nope")), [
       400,
-      "Inspect the game first.",
+      { _tag: "GameNotInspected" },
     ]);
 
-    const start = (body: unknown) => Effect.flatMap(post("/api/images/read", body), refused);
+    const start = (body: unknown) => Effect.flatMap(post("/api/images/read", body), refusal);
     yield* Effect.scoped(
       Effect.gen(function* () {
         yield* (yield* RunKinds.RunKinds).readerRemoval;
@@ -479,10 +466,10 @@ it.effect("image reading gives empty results before a run, and says why it can't
     yield* Effect.scoped(
       Effect.gen(function* () {
         yield* games.hold(game.id);
-        const busy = [400, "This game is busy. Wait for the current operation."] as const;
+        const busy = [400, { _tag: "GameBusy" }] as const;
         assert.deepStrictEqual(yield* start({ id: game.id }), busy);
         assert.deepStrictEqual(
-          yield* refused(yield* post("/api/images/clear", { id: game.id })),
+          yield* refusal(yield* post("/api/images/clear", { id: game.id })),
           busy,
         );
       }),

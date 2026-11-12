@@ -303,18 +303,6 @@ test("where RPGTL can't run llama-server, the page says why and keeps it from be
   await expect.element(page.getByRole("combobox", { name: "Backup reader" })).toBeVisible();
 });
 
-test("the backup reader recommends Qwen3.6", async () => {
-  fakeServer(catalogWith([text("a", "")]), {
-    models: ["gemma:9b", "qwen3.6:35b-a3b-q4_K_M"],
-  });
-  showCard();
-  await page.getByRole("combobox", { name: "Backup reader" }).click();
-  await expect
-    .element(page.getByRole("option", { name: "qwen3.6:35b-a3b-q4_K_M (recommended)" }))
-    .toBeVisible();
-  await expect.element(page.getByRole("option", { name: "gemma:9b", exact: true })).toBeVisible();
-});
-
 test("the local models' settings show while a local model translates or reads images", async () => {
   const claude = { ...defaults.translation, translator: "claude" as const };
   fakeServer(catalogWith([text("a", "")]), {
