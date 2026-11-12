@@ -12,7 +12,8 @@ import type {
 } from "@rpgtl/contracts";
 import { sourceScript } from "./checks.ts";
 import { sourceText } from "./engines/mvmz/extract.ts";
-import { isImageText, newEntry } from "./location.ts";
+import { newEntry } from "./engines/mvmz/location.ts";
+import { isImageText } from "./location.ts";
 import { entryTranslation, isUserValue, withoutGuess } from "./guesses.ts";
 
 type ImageEntry = Entry & { readonly location: Extract<Location, { readonly _tag: "ImageLines" }> };

@@ -14,6 +14,7 @@ export * from "./engines/mvmz/apply.ts";
 export * from "./engines/mvmz/extract.ts";
 export * from "./engines/mvmz/gameFile.ts";
 export * from "./location.ts";
+export * from "./engines/mvmz/location.ts";
 export * from "./catalog.ts";
 export * from "./guesses.ts";
 export * from "./imageText.ts";

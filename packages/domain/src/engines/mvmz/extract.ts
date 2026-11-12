@@ -14,7 +14,8 @@ import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import { GameFile } from "./gameFile.ts";
 import { assetNames } from "../../inspect.ts";
-import { newEntry, type Placed } from "../../location.ts";
+import type { Placed } from "../../location.ts";
+import { newEntry } from "./location.ts";
 
 // Chinese, Japanese or Korean text. Other values are settings, numbers or English labels.
 export const sourceText = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uff66-\uff9d\uac00-\ud7af]/;

@@ -20,7 +20,8 @@ import { measuredText } from "../../controlCodes.ts";
 import { messageRun } from "./extract.ts";
 import { listFocus, pluginFocus, textFocus } from "./focus.ts";
 import { GameFile } from "./gameFile.ts";
-import { fileOf, isMessage, listKey } from "../../location.ts";
+import { isMessage, listKey } from "../../location.ts";
+import { fileOf } from "./location.ts";
 import { givenNameTranslation } from "../../shortNames.ts";
 import { entryTranslation } from "../../guesses.ts";
 
