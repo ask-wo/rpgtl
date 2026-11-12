@@ -1,4 +1,5 @@
 import type { Game, ImageResult } from "@rpgtl/contracts";
+import { imageExtension } from "@rpgtl/domain";
 import * as Schema from "effect/Schema";
 
 /** `load`'s promise, kept under `key` until it fails, so the next call tries again. */
@@ -59,7 +60,7 @@ async function imageAddress(game: Game, file: string) {
   const { hasEncryptedImages, encryptionKey } = await system(game);
   const url = `/game/${game.id}/${file.split("/").map(encodeURIComponent).join("/")}`;
   if (!hasEncryptedImages || !encryptionKey) return `${url}.png`;
-  const response = await fetch(url + (game.engine === "MV" ? ".rpgmvp" : ".png_"));
+  const response = await fetch(url + imageExtension(game.engine, true));
   if (!response.ok) throw new Error(`Could not load ${file}.`);
   const bytes = new Uint8Array((await response.arrayBuffer()).slice(16));
   for (const [i, byte] of bytes.subarray(0, 16).entries())
