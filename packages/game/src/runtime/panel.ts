@@ -120,8 +120,9 @@ export function mountPanel(
   document.body.append(host);
   const shadow = host.attachShadow({ mode: "open" });
   shadow.innerHTML = `<style>${style}</style>${markup}`;
-  // Keep the game from reacting to input meant for the panel.
-  for (const type of ["keydown", "keyup", "mousedown", "touchstart", "wheel"])
+  // Keep the game from reacting to input meant for the panel. A key let go goes through, or the
+  // game would hold a key that was down when the panel took the focus.
+  for (const type of ["keydown", "mousedown", "touchstart", "wheel"])
     host.addEventListener(type, (event) => event.stopPropagation());
 
   const panel = shadow.querySelector("section")!;

@@ -13,7 +13,9 @@ import {
   until,
 } from "./realMv.ts";
 
-test("keys reach the game again once the panel closes", async ({ openGame }) => {
+test("the game sees keys let go in the panel and pressed right after it closes", async ({
+  openGame,
+}) => {
   const game = await (await openGame("real-MV")).play();
   const errors = gameErrors(game);
   await newGame(game);
@@ -28,6 +30,16 @@ test("keys reach the game again once the panel closes", async ({ openGame }) => 
   await until(game, "$gamePlayer.isMoving()");
   await game.keyboard.up("ArrowRight");
   await idle(game);
+
+  // Let go while a control in the panel has the focus.
+  await game.keyboard.down("ArrowLeft");
+  await until(game, "$gamePlayer.isMoving()");
+  await game.keyboard.press("F8");
+  await game.locator("#gold").click();
+  await game.keyboard.up("ArrowLeft");
+  await game.keyboard.press("F8");
+  await idle(game);
+  expect(await game.evaluate("Input.isPressed('left')")).toBe(false);
 
   await expectNoErrors(game, errors);
 });
