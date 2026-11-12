@@ -120,11 +120,11 @@ for (const engine of ["MV", "MZ"] as const)
     message.contents.height = 144;
     expect(message.convertEscapeCharacters(short).split("\n")).toHaveLength(3);
     expect(message.contents.fontSize).toBe(24);
-    // Four rows need two pages even at the smallest size. Two words a row still fit on two
-    // pages, so the last page doesn't get one word alone.
+    // Four rows need two pages even at the smallest size. Each page gets two of them, so the
+    // last page doesn't get one word alone.
     const pages = message.convertEscapeCharacters(long).split("\f");
     expect(message.contents.fontSize).toBe(24);
-    expect(pages.map((page) => page.split("\n").filter(Boolean).length)).toEqual([3, 2]);
+    expect(pages.map((page) => page.split("\n").filter(Boolean).length)).toEqual([2, 2]);
   });
 
 test("runtime places MV picture dialogue by the rows the engine draws, not lineHeight()", async () => {
@@ -303,6 +303,21 @@ test("runtime shrinks help text that is too tall for the window until it fits", 
   help.convertEscapeCharacters("Short.");
   help.resetFontSettings();
   expect(help.contents.fontSize).toBe(28);
+});
+
+test("runtime keeps a message that overflows onto a second page at the window's width", async () => {
+  const { message } = await loadRuntime("MV");
+  // Four words fit a row, and the window shows four rows, so the name and four rows need two pages.
+  const text = `Speaker\n${Array.from({ length: 13 }, () => "abcdefghi").join(" ")}`;
+  const pages = message.convertEscapeCharacters(text).split("\f");
+  expect(pages.map((page) => page.split("\n").filter(Boolean))).toEqual([
+    [
+      "Speaker",
+      "abcdefghi abcdefghi abcdefghi abcdefghi",
+      "abcdefghi abcdefghi abcdefghi abcdefghi",
+    ],
+    ["abcdefghi abcdefghi abcdefghi abcdefghi", "abcdefghi"],
+  ]);
 });
 
 for (const engine of ["MV", "MZ"] as const)

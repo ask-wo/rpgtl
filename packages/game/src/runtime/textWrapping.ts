@@ -120,9 +120,10 @@ function pageStateCodes(text: string) {
   return font + color;
 }
 
-// Text on more than one page gets the narrowest lines that need no further page, shared evenly,
-// so that no page holds only a word or two. Both engines skip one line break after a form feed,
-// so each page after the first starts with one.
+// Text on more than one page keeps the number of lines it has at full width, narrowed only as far
+// as that allows, and shares them evenly, so that no page holds only a word or two. Narrowing to
+// fill the pages' rows would squeeze a line of overflow into half-width lines. Both engines skip
+// one line break after a form feed, so each page after the first starts with one.
 function messagePages(
   win: TextWindow,
   text: string,
@@ -135,11 +136,12 @@ function messagePages(
   const count = (wrapped: string) => pageCount(lineHeights(win, wrapped), area);
   const pages = count(lines);
   if (pages === 1) return leading + lines;
+  const lineCount = lines.split("\n").length;
   let low = start + 1;
   let high = max;
   while (low < high) {
     const right = Math.floor((low + high) / 2);
-    if (count(wrapText(win, text, start, right)) === pages) high = right;
+    if (wrapText(win, text, start, right).split("\n").length === lineCount) high = right;
     else low = right + 1;
   }
   lines = wrapText(win, text, start, high);
