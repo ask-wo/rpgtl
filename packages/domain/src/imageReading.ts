@@ -34,10 +34,6 @@ export interface GameImage {
   readonly file: string;
 }
 
-/** The extension of the game's image files. */
-export const imageExtension = (engine: "MV" | "MZ", encrypted: boolean) =>
-  encrypted ? (engine === "MV" ? ".rpgmvp" : ".png_") : ".png";
-
 const textFolders = ["pictures", "titles1", "titles2", "system"];
 // The engines' own sheets of emotes, icons, damage numbers, shadows, weapons and window parts,
 // whose drawings read as text, and MV's RPG Maker logo. ButtonSet stays: MV's has an OK button,

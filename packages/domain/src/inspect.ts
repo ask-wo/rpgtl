@@ -1,23 +1,8 @@
-import type { Catalog, Engine, Entry, Game, MissingFile } from "@rpgtl/contracts";
+import type { Catalog, Entry, Game, MissingFile } from "@rpgtl/contracts";
 import * as Predicate from "effect/Predicate";
 import { guessRuns } from "./catalog.ts";
 import { entryTranslation } from "./guesses.ts";
 import { isImageText } from "./location.ts";
-
-/** The script each engine's boot code loads first. */
-export const coreScripts: Record<Engine, string> = { MV: "rpg_core.js", MZ: "rmmz_core.js" };
-
-/**
- * The engines the boot code of `index.html` and `js/main.js` may start, most likely first. Some
- * games ship both engines' core files, so the one the boot code loads wins.
- */
-export function bootEngines(html: string, main: string): ReadonlyArray<Engine> {
-  const boot = html.replace(/<!--[\s\S]*?-->/g, "") + main;
-  if (/src\s*=\s*["'][^"']*rpg_core\.js|Utils\.RPGMAKER_NAME\s*=\s*["']MV/i.test(boot))
-    return ["MV"];
-  if (/rmmz_core\.js/.test(boot)) return ["MZ"];
-  return ["MZ", "MV"];
-}
 
 /** Audio and video that NW.js can't play, for files given as paths below the web root. */
 export const mediaWarnings = (files: ReadonlyArray<string>) => {

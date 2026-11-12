@@ -2,7 +2,6 @@ import { assert, it } from "@effect/vitest";
 import type { Catalog } from "@rpgtl/contracts";
 import {
   assetNames,
-  bootEngines,
   entryTranslation,
   mediaNames,
   mediaReferences,
@@ -11,13 +10,6 @@ import {
   missingFiles,
   newEntry,
 } from "./index.ts";
-
-it("the engine the boot code loads wins over the other engine's core files", () => {
-  assert.deepStrictEqual(bootEngines('<script src="js/rpg_core.js"></script>', ""), ["MV"]);
-  assert.deepStrictEqual(bootEngines("", 'Utils.RPGMAKER_NAME = "MV"'), ["MV"]);
-  assert.deepStrictEqual(bootEngines("", 'loadScript("js/rmmz_core.js")'), ["MZ"]);
-  assert.deepStrictEqual(bootEngines('<!-- <script src="js/rpg_core.js"> -->', ""), ["MZ", "MV"]);
-});
 
 it("audio and video NW.js can't play are named unless a counterpart it can play is there", () => {
   const files = ["audio/bgm/Town.m4a", "audio/bgm/Town.ogg", "audio/se/Door.M4A", "movies/Op.mp4"];
