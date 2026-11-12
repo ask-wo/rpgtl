@@ -44,3 +44,7 @@ export * from "./engines/mvmz/coverage.ts";
 export * from "./llamaPlacement.ts";
 export * from "./samples.ts";
 export * from "./playtime.ts";
+export * from "./engines/xp/archive.ts";
+export * from "./engines/xp/extract.ts";
+export * from "./engines/xp/gameFile.ts";
+export * from "./engines/xp/location.ts";
