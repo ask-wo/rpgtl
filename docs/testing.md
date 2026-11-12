@@ -76,7 +76,7 @@ This checks the logic, not the look: fonts, face graphics and plugins only show 
 
 `pnpm run e2e:archive` builds the Linux download and runs the same tests against it (`RPGTL_E2E_ARCHIVE`). CI runs them this way, which catches what only breaks in the download: an import the bundle leaves out, the prebuilt page, the launcher.
 
-A test that plays MV's real engine presses keys with `key` from `e2e/realMv.ts` (verify-rpgtl's: `examples/real-mv.ts`), never a bare `keyboard.press`, and waits for what the game does, never for a fixed time. The engine reads input once per update and runs several updates in one frame when it falls behind, so on a busy CI runner a bare press is missed or repeated although it passes locally. To check that such a test holds up under load, run it with its page slowed down by CDP's `Emulation.setCPUThrottlingRate` at 20 to 40.
+A test that plays MV's real engine presses keys with `key` from `e2e/realMv.ts` (verify-rpgtl's: `examples/real-mv.ts`), never a bare `keyboard.press`, and waits for what the game does, never for a fixed time. The engine reads input once per update and runs several updates in one frame when it falls behind, so on a busy CI runner a bare press is missed or repeated although it passes locally. The end-to-end tests play it at four times its speed, so a state that lasts only a few updates, such as a step next to a wall, can begin and end between two polls: let the game record it, as `holdUntilStep` does. To check that such a test holds up under load, run it with its page slowed down by CDP's `Emulation.setCPUThrottlingRate` at 20 to 40.
 
 ## State files
 

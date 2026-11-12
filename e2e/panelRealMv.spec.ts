@@ -2,7 +2,7 @@
 // itself, shows the level-up message and decides whether the player dashes.
 import type { Page } from "@playwright/test";
 import { expect, test } from "./rpgtl.ts";
-import { closeMessage, idle, newGame, scene, sceneIs, until } from "./realMv.ts";
+import { closeMessage, holdUntilStep, idle, newGame, scene, sceneIs, until } from "./realMv.ts";
 
 test("the game sees keys let go in the panel and pressed right after it closes", async ({
   openGame,
@@ -16,14 +16,12 @@ test("the game sees keys let go in the panel and pressed right after it closes",
   await game.locator("#through").check();
   // Walking right away, in the frame the panel closes.
   await game.keyboard.press("F8");
-  await game.keyboard.down("ArrowRight");
-  await until(game, "$gamePlayer.isMoving()");
+  await holdUntilStep(game, "ArrowRight");
   await game.keyboard.up("ArrowRight");
   await idle(game);
 
   // Let go while a control in the panel has the focus.
-  await game.keyboard.down("ArrowLeft");
-  await until(game, "$gamePlayer.isMoving()");
+  await holdUntilStep(game, "ArrowLeft");
   await game.keyboard.press("F8");
   await game.locator("#gold").click();
   await game.keyboard.up("ArrowLeft");
@@ -34,9 +32,7 @@ test("the game sees keys let go in the panel and pressed right after it closes",
 
 /** Starts walking with an arrow key and tells whether the player dashes on that step. */
 async function dashes(game: Page, arrow: string) {
-  await game.keyboard.down(arrow);
-  await until(game, "$gamePlayer.isMoving()");
-  const dashing = await game.evaluate<boolean>("$gamePlayer.isDashing()");
+  const dashing = await holdUntilStep(game, arrow);
   await game.keyboard.up(arrow);
   await until(game, "!Input.isPressed('left') && !Input.isPressed('right')");
   await idle(game);

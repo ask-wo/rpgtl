@@ -164,6 +164,12 @@ export const test = base.extend<
           game.on("pageerror", (error) => errors.push(error.stack ?? error.message));
           gameErrors.set(game, errors);
           games.push(game);
+          // MV's engine runs four updates for each frame it draws, so fades, text and walking
+          // take a quarter of the time.
+          if (kind === "real-MV")
+            await game.addInitScript({
+              content: 'addEventListener("load", () => (SceneManager._deltaTime = 1 / 240));',
+            });
           await game.goto(`${rpgtl.url}/game/${id}/`);
           return game;
         },
