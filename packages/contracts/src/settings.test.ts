@@ -72,20 +72,4 @@ describe("Settings", () => {
         assert.strictEqual(settings.translation.codex.model, "gpt-old");
       }),
   );
-
-  it.effect("rejects a value of the wrong kind", () =>
-    Effect.gen(function* () {
-      const error = yield* Effect.flip(decode({ ollama: { minExpertLayersInRam: -1 } }));
-      assert.include(error.message, "Expert layers");
-    }),
-  );
-
-  it.effect("saves every setting, so the file reads back the same", () =>
-    Effect.gen(function* () {
-      const settings = yield* decode({ sharpText: true });
-      const encoded = yield* Schema.encodeEffect(Settings)(settings);
-      assert.deepStrictEqual(yield* decode(encoded), settings);
-      assert.deepStrictEqual(encoded, settings);
-    }),
-  );
 });

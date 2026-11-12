@@ -117,7 +117,7 @@ it.live("a reader that isn't set up says to set it up", () =>
   Effect.gen(function* () {
     const reader = yield* ImageReader.ImageReader;
     const error = yield* Effect.flip(reader.start);
-    assert.strictEqual(error.message, "The image reader isn't set up. Set it up in Settings.");
+    assert.deepInclude(error, { _tag: "ImageReaderMissingError", missing: "reader" });
   }).pipe(
     Effect.provide(
       ImageReader.layer.pipe(
