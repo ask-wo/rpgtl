@@ -80,6 +80,26 @@ export async function key(game: Page, name: string, holdMs?: number) {
   await until(game, `!Input._previousState[Input.keyMapper[${keyCodes[name]}]]`);
 }
 
+/**
+ * Holds an arrow key down until the player starts a step, and tells whether that step is a dash.
+ * The game records the step itself: next to a wall, the player can stop again between two polls.
+ */
+export async function holdUntilStep(game: Page, arrow: string) {
+  await game.evaluate(`(() => {
+    const executeMove = Game_Player.prototype.executeMove;
+    window.rpgtlStep = undefined;
+    Game_Player.prototype.executeMove = function (direction) {
+      executeMove.call(this, direction);
+      if (!this.isMoving()) return;
+      Game_Player.prototype.executeMove = executeMove;
+      window.rpgtlStep = { dashing: this.isDashing() };
+    };
+  })()`);
+  await game.keyboard.down(arrow);
+  await until(game, "window.rpgtlStep");
+  return game.evaluate<boolean>("rpgtlStep.dashing");
+}
+
 /** Waits until a window is open and takes input, then presses Enter in it. */
 export async function confirm(game: Page, window: string) {
   await until(game, `${window}?.isOpen() && ${window}.active`);

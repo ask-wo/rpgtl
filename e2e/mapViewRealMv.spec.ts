@@ -5,6 +5,7 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "./rpgtl.ts";
 import {
   closeMessage,
+  holdUntilStep,
   idle,
   loadFromTitle,
   newGame,
@@ -84,8 +85,7 @@ test("the map view on MV's real engine", async ({ openGame }) => {
   })()`);
 
   // MV's Graphics set every element's z-index to 0 once the game starts.
-  await game.keyboard.down("ArrowRight");
-  await until(game, "$gamePlayer.isMoving()");
+  await holdUntilStep(game, "ArrowRight");
   await openView();
   expect(await view.evaluate((element) => getComputedStyle(element).zIndex)).toBe("2147483647");
   expect(
