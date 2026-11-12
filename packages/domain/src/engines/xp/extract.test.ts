@@ -78,6 +78,56 @@ it.effect("reads messages, choices, names and script texts from an XP game's arc
   }),
 );
 
+const indented = (indent: number, code: number, ...parameters: unknown[]) =>
+  rubyObject("RPG::EventCommand", { code, indent, parameters });
+
+it.effect(
+  "a variable that scripts set to repeating names before messages gives their speaker, in its branch",
+  () =>
+    Effect.gen(function* () {
+      // 24 messages, each after the speaker variable, a variable that always gets the same text,
+      // a counter's text and sometimes a comment, and the speaker cleared and a wait after each.
+      const list = Array.from({ length: 24 }, (_, at) => [
+        command(355, `$who = "${at % 2 ? "乙" : "甲"}"`),
+        command(355, '$place = "城"'),
+        command(355, `$line = "第${at}行"`),
+        ...(at % 2 ? [command(108, "note")] : []),
+        command(101, `话${at}`),
+        command(355, "$who = nil"),
+        command(106, 20),
+      ]).flat();
+      list.push(
+        command(355, '$who = "乙"'),
+        indented(0, 111, 12, "$game_switches[1]"),
+        indented(1, 355, '$who = "甲"'),
+        indented(1, 101, "分支一"),
+        indented(0, 411),
+        indented(1, 101, "分支二"),
+        indented(0, 412),
+        command(355, "$who = nil"),
+        command(101, "旁白"),
+      );
+      const entries = yield* entriesOf({
+        "CommonEvents.rxdata": [null, rubyObject("RPG::CommonEvent", { list })],
+      });
+      assert.deepStrictEqual(
+        entries
+          .filter(({ location }) => location._tag === "Message")
+          .map(({ source, speaker }) => [source, speaker])
+          .filter((_, at, all) => at < 4 || at >= all.length - 3),
+        [
+          ["话0", "甲"],
+          ["话1", "乙"],
+          ["话2", "甲"],
+          ["话3", "乙"],
+          ["分支一", "甲"],
+          ["分支二", "乙"],
+          ["旁白", undefined],
+        ],
+      );
+    }),
+);
+
 it.effect("refuses an archive that ends in the middle of a file", () =>
   Effect.gen(function* () {
     const archive = xpArchive({ "Items.rxdata": [] }).slice(0, -2);
