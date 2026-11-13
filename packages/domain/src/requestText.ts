@@ -3,7 +3,7 @@ import { codeOrBackslash, controlCodePattern, isPauseCode, shownText } from "./c
 import { creditLine, keepsLineBreaks } from "./engines/mvmz/extract.ts";
 import { pauseMarker, pausesIn, withPauses, type Pause, type Pauses } from "./pauses.ts";
 import type { Placed } from "./location.ts";
-import { nameTagPattern } from "./engines/xp/nameTags.ts";
+import { tagPattern } from "./engines/xp/databaseTags.ts";
 
 // Korean puts spaces between words, so a line break between Hangul joins with a space.
 const unspacedCharacter = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}　-〿！-｠⏸]/u;
@@ -33,8 +33,8 @@ const keptAside = (codes: string, edge: string) => ({
 });
 const plainPatterns = keptAside(codeOrBackslash.source, edgePart);
 const tagPatterns = keptAside(
-  `${nameTagPattern.source}|${codeOrBackslash.source}`,
-  `${nameTagPattern.source}|${edgePart}`,
+  `${tagPattern.source}|${codeOrBackslash.source}`,
+  `${tagPattern.source}|${edgePart}`,
 );
 const placeholder = /\{(\d+)\}/g;
 

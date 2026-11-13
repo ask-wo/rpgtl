@@ -13,7 +13,7 @@ import { answerSuggestion } from "./answers.ts";
 import { sourceScript } from "./checks.ts";
 import { speakerTagName, speakerTagPattern } from "./controlCodes.ts";
 import { entryTranslation, termTranslation, termKind, withGuess } from "./guesses.ts";
-import { keepsNameTags, withoutNameTags } from "./engines/xp/nameTags.ts";
+import { keepsTags, withoutTags } from "./engines/xp/databaseTags.ts";
 import { gameLanguage } from "./language.ts";
 import { isImageText, isMessage, type Placed } from "./location.ts";
 import { isActorName, isSpeakerNameEntry } from "./nameEntries.ts";
@@ -157,13 +157,13 @@ export class CatalogDraft {
    */
   #seed(entry: RunEntry, translation: string): DraftTerm | undefined {
     if (!this.keepsTags(entry)) return this.addTerm(entry.source, translation, isOriginName(entry));
-    this.addTerm(withoutNameTags(entry.source), withoutNameTags(translation), isOriginName(entry));
+    this.addTerm(withoutTags(entry.source), withoutTags(translation), isOriginName(entry));
     return undefined;
   }
 
   /** Whether the entry's name tags stay as they are, kept aside from requests. */
   keepsTags(entry: Placed) {
-    return keepsNameTags(this.#catalog.game.engine, entry);
+    return keepsTags(this.#catalog.game.engine, entry);
   }
 
   /** Adds the names the model found, such as Claude's reading of the game, with its kinds. */

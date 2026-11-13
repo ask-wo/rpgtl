@@ -9,7 +9,7 @@ import type {
   SourceLanguage,
 } from "@rpgtl/contracts";
 import { controlCodePattern, plainText, speakerTagPattern } from "./controlCodes.ts";
-import { keepsNameTags, withoutNameTags } from "./engines/xp/nameTags.ts";
+import { keepsTags, withoutTags } from "./engines/xp/databaseTags.ts";
 import { isNameEntry, isSpeakerNameEntry } from "./nameEntries.ts";
 import { hasTerm } from "./termMatch.ts";
 import { entryTranslation, termTranslation, termKind } from "./guesses.ts";
@@ -197,9 +197,9 @@ export function translationChecks(
   const isName = new Set(names);
   return (entry: Pick<Entry, "source"> & Placed, written: string): Finding[] => {
     if (!written) return [];
-    const tags = keepsNameTags(engine, entry);
-    const source = tags ? withoutNameTags(entry.source) : entry.source;
-    const translation = tags ? withoutNameTags(written) : written;
+    const tags = keepsTags(engine, entry);
+    const source = tags ? withoutTags(entry.source) : entry.source;
+    const translation = tags ? withoutTags(written) : written;
     const findings: Finding[] = [];
     const add = (check: CheckName, detail?: string) =>
       findings.push(detail === undefined ? { check } : { check, detail });
