@@ -40,10 +40,9 @@ it("unambiguous short forms of dotted names supply clues and model context", () 
   assert.deepStrictEqual(
     linesAbout(
       entries,
-      kentaro,
       names.map((source) => name(source, source)),
       "chinese",
-    ),
+    )(kentaro),
     { lines: ["雄一郎说他来"], count: 1 },
   );
   const ambiguous = collectClues(entries, [...names, "另一家·美咲"], "chinese");
@@ -94,7 +93,7 @@ it("the pronoun question also quotes what the character says", () => {
     message("你好。", "维多利亚"),
   ];
   const glossary = [name("菲奥娜", "Fiona"), name("维多利亚", "Victoria")];
-  assert.deepStrictEqual(linesAbout(entries, "菲奥娜", glossary, "chinese"), {
+  assert.deepStrictEqual(linesAbout(entries, glossary, "chinese")("菲奥娜"), {
     lines: ["菲奥娜来了", "菲奥娜: 本小姐才不怕"],
     count: 2,
   });
@@ -163,11 +162,11 @@ it("a name alone on a message's first line is its speaker, not a mention", () =>
   assert.deepStrictEqual(found.get("ミナ"), { she: 1, he: 0 });
   assert.deepStrictEqual(found.get("ソラ"), { she: 0, he: 0 });
   const glossary = names.map((source) => name(source, source));
-  assert.deepStrictEqual(linesAbout(entries, "ミナ", glossary, "japanese"), {
+  assert.deepStrictEqual(linesAbout(entries, glossary, "japanese")("ミナ"), {
     lines: ["ミナ: あたしが行くよ"],
     count: 1,
   });
-  assert.deepStrictEqual(linesAbout(entries, "ソラ", glossary, "japanese"), {
+  assert.deepStrictEqual(linesAbout(entries, glossary, "japanese")("ソラ"), {
     lines: ["ソラ: 彼女はどこ"],
     count: 1,
   });

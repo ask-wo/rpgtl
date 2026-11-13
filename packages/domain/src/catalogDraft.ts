@@ -19,9 +19,11 @@ import { isImageText, isMessage, type Placed } from "./location.ts";
 import { isActorName, isSpeakerNameEntry } from "./nameEntries.ts";
 import { type NamedTerm, nameTerm } from "./nameTerm.ts";
 import { collectClues, linesAbout, pronounFromClues } from "./pronouns.ts";
-import { type RequestText, requestText } from "./requestText.ts";
+import { type RequestText, requestText, withoutCodes } from "./requestText.ts";
 import { showTextSpeakers, translationReuse } from "./reuse.ts";
 import { type TermInput, termInputs } from "./termKinds.ts";
+
+const hasWords = (source: string) => withoutCodes(source).trim() !== "";
 
 /** An entry a run fills in; it replaces the nested values whole, so only the top level changes. */
 export type DraftEntry = Types.Mutable<Entry>;
@@ -135,7 +137,8 @@ export class CatalogDraft {
   addTerm(source: string, translation: string, fromOrigin: boolean): DraftTerm | undefined {
     const trimmedSource = source.trim();
     const trimmedTranslation = translation.trim();
-    if (!trimmedSource || !trimmedTranslation || this.#terms.has(trimmedSource)) return undefined;
+    if (!hasWords(trimmedSource) || !trimmedTranslation || this.#terms.has(trimmedSource))
+      return undefined;
     const named = nameTerm(trimmedSource, trimmedTranslation, fromOrigin, this.language);
     const term: DraftTerm = {
       source: named.source,
@@ -301,7 +304,7 @@ export class CatalogDraft {
   termsToSort(): ReadonlyArray<{ readonly term: DraftTerm; readonly input: TermInput }> {
     const terms = this.#glossary.filter(
       (term) =>
-        term.source.trim() &&
+        hasWords(term.source) &&
         term.kind.guess.run === undefined &&
         term.kind.user === undefined &&
         term.pronoun?.user === undefined,
@@ -330,7 +333,10 @@ export class CatalogDraft {
     readonly lines: ReadonlyArray<string>;
   }> {
     const names = this.#glossary.filter(
-      (term) => termKind(term) === "character" && Array.from(term.source.trim()).length >= 2,
+      (term) =>
+        termKind(term) === "character" &&
+        hasWords(term.source) &&
+        Array.from(term.source.trim()).length >= 2,
     );
     const unset = names.filter(
       ({ pronoun }) =>
@@ -345,18 +351,15 @@ export class CatalogDraft {
       names.map((term) => term.source.trim()),
       this.language,
     );
+    let about: ReturnType<typeof linesAbout> | undefined;
     return unset.flatMap((term) => {
       const found = clues.get(term.source.trim());
       if (!found) return [];
       const guess = pronounFromClues(found);
       term.pronoun = { guess };
       if (guess.value !== "unknown") return [];
-      const { lines } = linesAbout(
-        this.#entries,
-        term.source.trim(),
-        this.#glossary,
-        this.language,
-      );
+      about ??= linesAbout(this.#entries, this.#glossary, this.language);
+      const { lines } = about(term.source.trim());
       return lines.length ? [{ term, lines }] : [];
     });
   }

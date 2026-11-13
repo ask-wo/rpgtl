@@ -1,5 +1,5 @@
 import type { Catalog } from "@rpgtl/contracts";
-import { entryTranslation, isImageText } from "@rpgtl/domain";
+import { entryTranslation, isImageText, isNameEntry } from "@rpgtl/domain";
 
 export const number = (count: number) => count.toLocaleString("en");
 
@@ -15,10 +15,13 @@ export const counted = (count: number, one: string, many: string) =>
 export const catalogCounts = ({ entries, glossary, unchangedImages = [] }: Catalog) => {
   const text = entries.filter((entry) => !isImageText(entry));
   const images = entries.filter(isImageText);
+  const names = text.filter(isNameEntry);
   const translated = (list: typeof entries) =>
     list.filter((entry) => entryTranslation(entry)).length;
   return {
     text: { all: text.length, translated: translated(text) },
+    /** The text's names, which the glossary pass translates. */
+    names: { all: names.length, translated: translated(names) },
     images: {
       files: new Set(images.map((entry) => entry.location.image)).size,
       all: images.length,

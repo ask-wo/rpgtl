@@ -229,6 +229,8 @@ layer(Services)((it) => {
           phase: { _tag: "Running" },
           total: 3,
           done: 0,
+          pass: "names",
+          names: { total: 1, done: 0, failed: 0 },
           left: 3,
         });
 
@@ -236,6 +238,8 @@ layer(Services)((it) => {
         assert.deepInclude(last, {
           phase: { _tag: "Finished" },
           done: 3,
+          pass: "text",
+          names: { total: 1, done: 1, failed: 0 },
           translated: 3,
           left: 0,
         });

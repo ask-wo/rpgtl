@@ -54,6 +54,8 @@ const running: RunStatus = {
   phase: { _tag: "Running" },
   total: 2,
   done: 0,
+  pass: "text",
+  names: { total: 0, done: 0, failed: 0 },
   translated: 1,
   failed: [],
   left: 2,
@@ -163,8 +165,13 @@ test("Translate starts a run, and the counts grow while it saves", async () => {
   await vi.waitFor(() => expect(server.started).toHaveLength(1));
   expect(server.started[0]).toEqual({ id: game.id, kind: "translate" });
 
+  server.activity({
+    ...idle,
+    translation: { ...running, total: 5, pass: "names", names: { total: 3, done: 1, failed: 0 } },
+  });
+  await expect.element(bar.getByText("Translating names · 1 of 3 names translated")).toBeVisible();
   server.activity({ ...idle, translation: running });
-  await expect.element(bar.getByText("Translating · 0 of 2 entries translated")).toBeVisible();
+  await expect.element(bar.getByText("Translating text · 0 of 2 entries translated")).toBeVisible();
   await expect.element(page.getByRole("button", { name: "Stop" })).toBeVisible();
   await expect.element(page.getByRole("switch")).toBeDisabled();
   await expect.element(page.getByRole("button", { name: "Import…" })).toBeDisabled();
@@ -223,7 +230,12 @@ test("on the Glossary page the bar offers Build glossary, and says how building 
   await vi.waitFor(() => expect(server.started).toHaveLength(1));
   expect(server.started[0]).toMatchObject({ kind: "build-glossary" });
 
-  const building: RunStatus = { ...running, kind: "build-glossary" };
+  const building: RunStatus = {
+    ...running,
+    kind: "build-glossary",
+    pass: "names",
+    names: { total: 2, done: 0, failed: 0 },
+  };
   server.activity({ ...idle, translation: building });
   await expect
     .element(bar.getByText("Building the glossary · 0 of 2 names translated"))
@@ -248,7 +260,7 @@ test("a step such as loading the model shows with a spinner until translating st
   await expect.element(bar.getByText("Loading the model")).toBeVisible();
   await expect.element(bar.getByRole("status", { name: "Loading" })).toBeVisible();
   server.activity({ ...idle, translation: running });
-  await expect.element(bar.getByText("Translating")).toBeVisible();
+  await expect.element(bar.getByText("Translating text")).toBeVisible();
   expect(bar.getByRole("status", { name: "Loading" }).query()).toBeNull();
 });
 

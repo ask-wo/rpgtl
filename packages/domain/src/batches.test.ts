@@ -1,6 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import type { Entry } from "@rpgtl/contracts";
-import { batchRequest, CatalogDraft, packGroups, sceneBatches, textGroups } from "./index.ts";
+import { batchRequest, CatalogDraft, packGroups, textGroups } from "./index.ts";
 
 const line = (id: string, index: number, list: number): Entry => ({
   id,
@@ -38,7 +38,7 @@ it("a menu's button images go to the translator together, each naming its image"
     button("img/titles1/Commands", "菜单"),
     button("img/pictures/Command_2", "退出"),
   ];
-  const groups = textGroups(entries);
+  const groups = textGroups(entries, 40);
   assert.deepStrictEqual(
     groups.map((group) => group.map((entry) => entry.source)),
     [["开始冒险", "读取存档"], ["菜单"], ["退出"]],
@@ -60,16 +60,20 @@ it("a menu's button images go to the translator together, each naming its image"
   ]);
 });
 
-const entriesOf = (length: number) => Array.from({ length }, (_, i) => i);
+const description = (record: number): Entry => ({
+  id: `skill-${record}`,
+  location: { _tag: "RecordField", table: "skills", record, field: "description" },
+  source: "火を放つ。",
+  translation: {},
+});
 
-it("a scene up to its limit goes in one request, and a longer one a batch at a time", () => {
-  assert.deepStrictEqual(
-    sceneBatches(entriesOf(120), 40, 150).map((b) => b.length),
-    [120],
+it("a long table goes a batch at a time side by side, while an event list stays whole in order", () => {
+  const groups = textGroups(
+    [...Array.from({ length: 5 }, (_, record) => description(record + 1)), ...scene(1, 5)],
+    2,
   );
   assert.deepStrictEqual(
-    sceneBatches(entriesOf(170), 40, 150).map((b) => b.length),
-    [40, 40, 40, 40, 10],
+    groups.map((group) => group.length),
+    [2, 2, 1, 5],
   );
-  assert.deepStrictEqual(sceneBatches(entriesOf(0), 40, 150), []);
 });

@@ -21,11 +21,17 @@ export const imageResultsKey = (id: string) => ({ imageResults: [id] });
 /**
  * The game's catalog and what the checks find in it, as the server sends them: whole at first,
  * then the entries each write changes, so a run's batch doesn't fetch the whole catalog again.
+ * A large game's whole catalog is over the 10 MiB that Effect's SSE parser takes by default, and
+ * `following` would then fetch it again every second without ever showing it.
  */
 const followed = Atom.family((id: string) =>
   Rpgtl.runtime.atom(
     following(
-      Stream.unwrap(Rpgtl.use((client) => client.catalogs.changes({ query: { id } }))),
+      Stream.unwrap(
+        Rpgtl.use((client) =>
+          client.catalogs.changes({ query: { id }, sseOptions: { maxEventSize: Infinity } }),
+        ),
+      ),
       Schema.is(Schema.Union([GameNotInspected, StateFileFailed])),
     ).pipe(
       Stream.mapAccum(

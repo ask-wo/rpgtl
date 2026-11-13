@@ -89,6 +89,7 @@ const failureMessage = (failure: unknown): string => {
       case "InvalidRequestError":
       case "InternalProviderError":
       case "InvalidOutputError":
+      case "ContentPolicyError":
         // RPGTL's own translators write these descriptions for the page.
         return reason.description ?? reason.message;
       default:
@@ -222,6 +223,7 @@ const make = Effect.gen(function* () {
     translator,
     current,
     missing,
+    names,
     log,
     started,
     models,
@@ -231,6 +233,8 @@ const make = Effect.gen(function* () {
     readonly translator: Effect.Success<ReturnType<typeof translatorFor>>;
     readonly current: SubscriptionRef.SubscriptionRef<RunStatus>;
     readonly missing: ReadonlySet<string>;
+    /** Of `missing`, the names. */
+    readonly names: ReadonlySet<string>;
     readonly log: RunLogs.RunLogWriter;
     /** When the run started, as its log and the entries it translates say. */
     readonly started: string;
@@ -252,6 +256,11 @@ const make = Effect.gen(function* () {
           yield* SubscriptionRef.update(current, (now) => ({
             ...now,
             done,
+            names: {
+              total: names.size,
+              done: translated.filter((entry) => names.has(entry.id)).length,
+              failed: failed.filter((failedId) => names.has(failedId)).length,
+            },
             translated: translated.length,
             failed,
             left: now.total - done - failed.length,
@@ -267,6 +276,7 @@ const make = Effect.gen(function* () {
             : now,
         );
       }),
+      textPass: SubscriptionRef.update(current, (now) => ({ ...now, pass: "text" as const })),
       warn: Effect.fn("RunReport.warn")(function* (message: string) {
         const added = yield* SubscriptionRef.modify(current, (now) =>
           now.warnings.includes(message)
@@ -330,24 +340,31 @@ const make = Effect.gen(function* () {
         .filter((entry) => !entryTranslation(entry) && (kind === "translate" || isNameEntry(entry)))
         .map((entry) => entry.id),
     );
+    const names = new Set(
+      catalog.entries
+        .filter((entry) => missing.has(entry.id) && isNameEntry(entry))
+        .map((entry) => entry.id),
+    );
     const going: RunStatus = {
       kind,
       phase: { _tag: "Running" },
       total: missing.size,
       done: 0,
+      pass: "names",
+      names: { total: names.size, done: 0, failed: 0 },
       translated: catalog.entries.filter((entry) => entryTranslation(entry)).length,
       failed: [],
       left: missing.size,
       warnings: [],
     };
-    return { catalog, missing, going };
+    return { catalog, missing, names, going };
   });
 
   /** Readies the translator with `settings` and runs it on the held game. */
   const translate = Effect.fn("Runs.translate")(function* (
     kind: RunKind,
     settings: TranslationSettings,
-    { catalog, missing }: Effect.Success<ReturnType<typeof begin>>,
+    { catalog, missing, names }: Effect.Success<ReturnType<typeof begin>>,
     current: SubscriptionRef.SubscriptionRef<RunStatus>,
     opened: Ref.Ref<Option.Option<RunLogs.RunLogWriter>>,
   ) {
@@ -376,7 +393,7 @@ const make = Effect.gen(function* () {
       entries: missing.size,
     });
     yield* Ref.set(opened, Option.some(log));
-    yield* run({ catalog, kind, translator, current, missing, log, started, models });
+    yield* run({ catalog, kind, translator, current, missing, names, log, started, models });
   });
 
   const start = Effect.fn("Runs.start")(function* (id: string, kind: RunKind) {
@@ -408,6 +425,8 @@ const make = Effect.gen(function* () {
                 phase: begun,
                 total: 0,
                 done: 0,
+                pass: "names",
+                names: { total: 0, done: 0, failed: 0 },
                 translated: 0,
                 failed: [],
                 left: 0,

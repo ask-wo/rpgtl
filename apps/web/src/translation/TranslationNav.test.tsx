@@ -19,6 +19,13 @@ const text = (id: string, translation: string) =>
 const imageText = (id: string, file: string, translation: string) =>
   entry(id, { _tag: "ImageLines", image: file, lines: [0] }, translation);
 
+const item = (id: string, translation: string) =>
+  entry(
+    id,
+    { _tag: "RecordField", table: "items", record: Number(id), field: "name" },
+    translation,
+  );
+
 const showNav = (saved: Catalog) => {
   const stream = events();
   serveApi((request) => {
@@ -64,4 +71,10 @@ test("the sidebar shows how many entries have English, or only the total once al
   await expect.element(nav.getByRole("link", { name: "Glossary 1" })).toBeVisible();
   await expect.element(nav.getByRole("link", { name: "Text 3" })).toBeVisible();
   await expect.element(nav.getByRole("link", { name: "Images 0/2" })).toBeVisible();
+});
+
+test("the glossary shows how many names have English until all do", async () => {
+  const nav = showNav(catalog([item("1", "Potion"), item("2", ""), text("3", "")]));
+  await expect.element(nav.getByRole("link", { name: "Glossary 1/2" })).toBeVisible();
+  await expect.element(nav.getByRole("link", { name: "Text 1/3" })).toBeVisible();
 });

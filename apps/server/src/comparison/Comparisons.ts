@@ -110,6 +110,7 @@ const make = Effect.gen(function* () {
     const append = (line: RunLogLine) => Ref.update(lines, (all) => [...all, line]);
     const report = RunReport.of({
       step: Effect.fn("RunReport.step")(function* () {}),
+      textPass: Effect.void,
       warn: Effect.fn("RunReport.warn")(function* (message: string) {
         const at = yield* now;
         yield* Ref.update(lines, (all): ReadonlyArray<RunLogLine> =>
@@ -141,7 +142,7 @@ const make = Effect.gen(function* () {
               draft,
               setup.batchSize === undefined
                 ? translator
-                : { ...translator, batchSize: setup.batchSize, sceneSize: setup.batchSize },
+                : { ...translator, batchSize: setup.batchSize },
               "translate",
             );
           }),

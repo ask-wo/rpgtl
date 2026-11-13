@@ -187,6 +187,10 @@ export const RunStatus = Schema.Struct({
   total: Schema.Int,
   /** Of those, the ones translated so far. */
   done: Schema.Int,
+  /** The pass the run is in: the glossary pass translates names first, then the text pass the rest. */
+  pass: Schema.Literals(["names", "text"]),
+  /** Of the run's entries, the names, which the glossary pass translates. */
+  names: Schema.Struct({ total: Schema.Int, done: Schema.Int, failed: Schema.Int }),
   /** Translated entries in the whole catalog, including ones from earlier runs. */
   translated: Schema.Int,
   /** Entries the run gave up on, by id. */

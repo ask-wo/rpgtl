@@ -42,7 +42,6 @@ export class EndpointRejectedError extends Schema.TaggedError<EndpointRejectedEr
 /** Batches for Claude and Codex, whose requests each start a CLI process. */
 const agentBatches = {
   batchSize: 40,
-  sceneSize: 150,
   contextLines: 10,
   packsScenes: true,
   capsAnswers: false,
@@ -50,7 +49,7 @@ const agentBatches = {
 } as const;
 
 /** Claude and Codex need no GPU, and each request mostly waits for its CLI to start. */
-const agentParallel = 8;
+const agentParallel = 16;
 
 const byLength = (response: LanguageModel.GenerateTextResponse<{}>) =>
   response.finishReason === "length";
@@ -313,7 +312,6 @@ const ollama = Effect.fn("translators.ollama")(function* (
   );
   const local = {
     batchSize: 10,
-    sceneSize: 10,
     contextLines: 4,
     packsScenes: false,
     cachesPrompt: false,

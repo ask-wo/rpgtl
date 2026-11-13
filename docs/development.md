@@ -54,7 +54,7 @@ Import matches a file entry to the game's entry of the same id, which comes from
 - To go through a proxy that holds the subscription logins, set `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` before starting RPGTL. RPGTL drops every other `ANTHROPIC_*` and `CLAUDE_*` variable.
 - Claude gets RPGTL's prompt only, with no tools, settings, CLAUDE.md files or MCP servers. Each request is a Claude Code session of its own in `~/.local/state/rpgtl/claude-sessions`.
 - Dialogue batches skip the prompt cache: the CLI writes each whole prompt to it at 1.25 times the input price, and these requests never repeat. The glossary pass keeps it, cached for 5 minutes, since running it again soon sends the same requests.
-- Each request costs a CLI start and about 900 tokens of the CLI's own text, so requests are large: a scene goes out whole up to 150 entries, and short event lists are packed together.
+- Each request costs a CLI start and about 900 tokens of the CLI's own text, so requests are large: 40 entries each, with short event lists packed together.
 - Claude always decides itself whether to think: Opus 5.5 can't turn thinking off, and Sonnet 5.5 thinks even when asked not to. In the meaning comparison, low effort left 4 meaning errors in 184 lines against 5 at medium, within chance.
 
 **Codex** runs `codex exec` from the player's own [Codex CLI](https://developers.openai.com/codex/cli) install (`codex` on `PATH`, or npm's `codex.cmd` on Windows) and counts against the ChatGPT plan's Codex limits.

@@ -41,17 +41,19 @@ export const sourceScript =
 
 const quotedCharacter = /[「『](.)[」』]/gu;
 const quotedInEnglish = /["“'‘「『](.)["”'’」』]/gu;
+const shootingStar = /[★☆]ミ/g;
 
 /**
  * Whether the translation still has source writing in it. A single quoted character of the source
- * may stay quoted, since a line about the writing itself (「ァ」と「ア」) can't translate it.
+ * may stay quoted, since a line about the writing itself (「ァ」と「ア」) can't translate it, and so
+ * may the ミ of ★ミ, which draws a shooting star's tail.
  */
 export function sourceLeft(source: string, translation: string) {
   const quoted = new Set(Array.from(source.matchAll(quotedCharacter), (match) => match[1]));
   return sourceScript.test(
-    translation.replace(quotedInEnglish, (all, character: string) =>
-      quoted.has(character) ? "" : all,
-    ),
+    translation
+      .replace(shootingStar, "")
+      .replace(quotedInEnglish, (all, character: string) => (quoted.has(character) ? "" : all)),
   );
 }
 const sourceCharacters = new RegExp(sourceScript.source, "gu");
@@ -179,12 +181,6 @@ export function translationChecks(
   const terms = glossary
     .filter((term) => term.source.trim() && termTranslation(term).trim())
     .toSorted((a, b) => b.source.length - a.source.length);
-  const capitalisable = terms.filter(
-    (term) =>
-      termKind(term) === "word" &&
-      (term.kind.guess.run !== undefined || term.kind.user !== undefined) &&
-      termTranslation(term).split(/\s+/).some(capitalisedWord),
-  );
   // A one-character term such as 月 is often part of an ordinary word.
   const names = terms.filter(
     (term) =>
@@ -193,7 +189,6 @@ export function translationChecks(
       !sourceScript.test(termTranslation(term)),
   );
   const nearTerms = termLookup(terms);
-  const nearCapitalisable = termLookup(capitalisable);
   const isName = new Set(names);
   return (entry: Pick<Entry, "source"> & Placed, written: string): Finding[] => {
     if (!written) return [];
@@ -214,12 +209,6 @@ export function translationChecks(
     if (repeatsSpeaker(translation)) add("speaker name repeated");
     if (lengthUnlike(source, translation)) add("length unlike the source");
     const sourceText = plainText(source);
-    for (const term of nearCapitalisable(sourceText))
-      if (
-        hasTerm(sourceText, term.source) &&
-        capitalisedMidSentence(translation, termTranslation(term))
-      )
-        add("glossary word capitalised mid-sentence", `${term.source} → ${termTranslation(term)}`);
     const text = plainText(translation);
     for (const term of termsIn(sourceText, nearTerms(sourceText)).filter((found) =>
       isName.has(found),

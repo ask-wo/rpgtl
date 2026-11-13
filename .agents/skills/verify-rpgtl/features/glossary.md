@@ -15,7 +15,7 @@ The glossary holds fixed English names and terms that translators get with each 
 
 ## How to get to it (user POV)
 
-- **Glossary** under the open game in the sidebar, shown while the open game's translation is on, with the number of terms; or `/games/<id>/glossary`.
+- **Glossary** under the open game in the sidebar, shown while the open game's translation is on, with how many names have English as `<done>/<all>` until all do, then the number of terms; or `/games/<id>/glossary`.
 
 ## Driving it with drive.ts
 

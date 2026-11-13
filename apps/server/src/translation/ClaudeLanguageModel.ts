@@ -98,7 +98,7 @@ const failure = (reason: AiError.AiErrorReason) =>
   AiError.make({ module: "ClaudeLanguageModel", method: "generateText", reason });
 
 /** The reason for an error result, from the SDK's code for it. */
-const errorReason = (code: string | undefined): AiError.AiErrorReason => {
+const errorReason = (code: string | undefined, said: string | undefined): AiError.AiErrorReason => {
   switch (code) {
     // The subscription's usage window, which resets after some hours.
     case "rate_limit":
@@ -117,6 +117,13 @@ const errorReason = (code: string | undefined): AiError.AiErrorReason => {
         kind: "InsufficientPermissions",
         description: "Claude's account can't be used. Check it with the claude CLI.",
       });
+    // The SDK has no code for safeguards that flagged the request; only the result's text says so.
+    case "invalid_request":
+      return said?.includes("safeguards flagged")
+        ? new AiError.ContentPolicyError({
+            description: "Claude's safeguards flagged the request.",
+          })
+        : new AiError.UnknownError({ description: "Claude answered with an error." });
     case "overloaded":
     case "server_error":
       return new AiError.InternalProviderError({
@@ -250,7 +257,7 @@ const make = Effect.fn("ClaudeLanguageModel.make")(function* (options: { readonl
     if (!result || !("is_error" in result) || result.is_error) {
       const said = result && ("is_error" in result ? result.result : result.errors.join("; "));
       yield* Effect.logWarning("Claude answered with an error.", assistantError, said);
-      return yield* failure(errorReason(assistantError));
+      return yield* failure(errorReason(assistantError, said));
     }
     const usage = Object.values(result.modelUsage);
     const sum = (count: (item: (typeof usage)[number]) => number) =>

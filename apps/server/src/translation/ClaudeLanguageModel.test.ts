@@ -143,33 +143,46 @@ it.effect("without Claude Code on PATH Claude can't be used at all", () =>
   }),
 );
 
-it.effect("the usage limit, an error result and no result at all are each their own error", () =>
-  Effect.gen(function* () {
-    const limit = yield* reasonOf(LanguageModel.generateText({ prompt: "limit" }));
-    assert.strictEqual(limit._tag, "QuotaExhaustedError");
-    const failed = yield* reasonOf(LanguageModel.generateText({ prompt: "fail" }));
-    assert.strictEqual(failed._tag, "UnknownError");
-    const nothing = yield* reasonOf(LanguageModel.generateText({ prompt }));
-    assert.strictEqual(nothing._tag, "InvalidOutputError");
-  }).pipe(
-    Effect.provide(
-      claudeAnswering(({ prompt: asked }) =>
-        messagesOf(
-          asked === "fail"
-            ? [{ ...success, is_error: true, result: "Claude failed" }]
-            : asked === "limit"
-              ? [
-                  { type: "assistant", error: "rate_limit" },
-                  { ...success, is_error: true, result: "You've hit your limit" },
-                ]
-              : [],
-          asked === "fail" || asked === "limit"
-            ? new Error("Claude Code returned an error result")
-            : undefined,
+it.effect(
+  "the usage limit, flagged lines, an error result and no result at all are each their own error",
+  () =>
+    Effect.gen(function* () {
+      const limit = yield* reasonOf(LanguageModel.generateText({ prompt: "limit" }));
+      assert.strictEqual(limit._tag, "QuotaExhaustedError");
+      const flagged = yield* reasonOf(LanguageModel.generateText({ prompt: "flagged" }));
+      assert.strictEqual(flagged._tag, "ContentPolicyError");
+      const failed = yield* reasonOf(LanguageModel.generateText({ prompt: "fail" }));
+      assert.strictEqual(failed._tag, "UnknownError");
+      const nothing = yield* reasonOf(LanguageModel.generateText({ prompt }));
+      assert.strictEqual(nothing._tag, "InvalidOutputError");
+    }).pipe(
+      Effect.provide(
+        claudeAnswering(({ prompt: asked }) =>
+          messagesOf(
+            asked === "fail"
+              ? [{ ...success, is_error: true, result: "Claude failed" }]
+              : asked === "limit"
+                ? [
+                    { type: "assistant", error: "rate_limit" },
+                    { ...success, is_error: true, result: "You've hit your limit" },
+                  ]
+                : asked === "flagged"
+                  ? [
+                      { type: "assistant", error: "invalid_request" },
+                      {
+                        ...success,
+                        is_error: true,
+                        result: "API Error: Haiku 5.5's safeguards flagged this message.",
+                      },
+                    ]
+                  : [],
+            asked === "fail" || asked === "limit" || asked === "flagged"
+              ? new Error("Claude Code returned an error result")
+              : undefined,
+          ),
         ),
       ),
     ),
-  ),
 );
 
 it.live("stopping a request stops the CLI, and no error escapes", () =>
