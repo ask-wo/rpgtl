@@ -278,9 +278,11 @@ const make = Effect.gen(function* () {
     Schema.fromJsonString(Schema.Record(Schema.String, Schema.String)),
   );
   /** What a patched data file is made from: the game's file, its English and RPGTL's code. */
-  const fingerprint = (name: string, bytes: Uint8Array, entries: ReadonlyArray<Entry>) => {
+  const fingerprint = (name: string, bytes: Uint8Array, entries?: ReadonlyArray<Entry>) => {
     const hash = createHash("sha256").update(writer).update(name).update(bytes);
-    for (const entry of entries) hash.update(JSON.stringify([entry.id, entryTranslation(entry)]));
+    for (const entry of entries ?? [])
+      hash.update(JSON.stringify([entry.id, entryTranslation(entry)]));
+    if (entries) hash.update("translated");
     return hash.digest("hex");
   };
 
@@ -310,15 +312,17 @@ const make = Effect.gen(function* () {
     const files = yield* gameFolder.xpData(game);
     const prints: Record<string, string> = {};
     for (const [name, bytes] of files) {
-      const entries = translated.get(name) ?? [];
+      const entries = translated.get(name);
       const print = fingerprint(name, bytes, entries);
       const file = path.join(data, name);
-      if (written[name] === print && (!entries.length || (yield* fs.exists(file)))) {
+      if (written[name] === print && (!entries || (yield* fs.exists(file)))) {
         prints[name] = print;
         continue;
       }
       yield* fs.remove(file, { force: true });
-      const patched = applyXpTranslations(name, bytes, entries);
+      const patched = entries
+        ? applyXpTranslations(name, bytes, entries)
+        : Result.succeed(undefined);
       if (Result.isFailure(patched)) {
         yield* Effect.logWarning(`${name} plays untranslated.`, patched.failure);
         continue;

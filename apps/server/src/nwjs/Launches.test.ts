@@ -13,7 +13,7 @@ import * as Catalogs from "../games/Catalogs.ts";
 import * as Games from "../games/Games.ts";
 import * as Settings from "../settings/Settings.ts";
 import { folderWith, mvGame } from "../testUtils/gameFolder.ts";
-import { command, rubyObject, xpFile, xpMap } from "@rpgtl/domain/testUtils/xpGame";
+import { command, rubyObject, xpFile, xpMap, xpScripts } from "@rpgtl/domain/testUtils/xpGame";
 import { noPrograms, opened, playServices, servicesWith, StateDir } from "../testUtils/state.ts";
 import * as Launches from "./Launches.ts";
 import * as Nwjs from "./Nwjs.ts";
@@ -209,6 +209,7 @@ it.live(
         "Data/System.rxdata": xpFile(rubyObject("RPG::System", {})),
         "Data/Map001.rxdata": xpFile(xpMap({ 1: [command(101, "你好")] })),
         "Data/Items.rxdata": xpFile([null, rubyObject("RPG::Item", { name: "苔藓" })]),
+        "Data/Scripts.rxdata": xpFile(xpScripts({ Main: "begin_game" })),
       });
       const { game, catalog } = yield* opened(catalogs.inspect(dir));
       yield* catalogs.save({
@@ -234,8 +235,9 @@ it.live(
         gameFolder: game.root,
         patches: [patches],
       });
-      assert.deepStrictEqual(yield* fs.readDirectory(path.join(patches, "Data")), [
+      assert.sameMembers(yield* fs.readDirectory(path.join(patches, "Data")), [
         "Map001.rxdata",
+        "Scripts.rxdata",
       ]);
 
       const map = path.join(patches, "Data", "Map001.rxdata");

@@ -54,7 +54,10 @@ function textWidth(text: string) {
   return width;
 }
 
-/** The lines of `text` broken between words to fit the message window. */
+/**
+ * The lines of `text` broken between words to fit the message window. A line that a break ends
+ * keeps a space at its end, so that the game, measuring in its own font, can join and break them again.
+ */
 function wrappedLines(text: string) {
   return text.split("\n").flatMap((line) => {
     const lines: string[] = [];
@@ -62,7 +65,7 @@ function wrappedLines(text: string) {
     for (const word of line.split(" ")) {
       const next = current ? `${current} ${word}` : word;
       if (current && textWidth(next) > lineWidth) {
-        lines.push(current);
+        lines.push(`${current} `);
         current = word;
       } else current = next;
     }
@@ -162,7 +165,16 @@ function newScript(
   texts: ReadonlyMap<number, LiteralText>,
 ): Replaced {
   const { end, code } = scriptAt(list, index);
-  const changed = numberOf(ivar(list[index], "code")) === 355 ? withTexts(code, texts) : undefined;
+  // A request joins the line break after a `\n` code with a space, which would start the line
+  // that a game breaking its text at `\n` shows.
+  const lineStarts = new Map(
+    [...texts].map(([at, { source, text }]) => [
+      at,
+      { source, text: text.replace(/\\n[^\S\n]+/g, "\\n") },
+    ]),
+  );
+  const changed =
+    numberOf(ivar(list[index], "code")) === 355 ? withTexts(code, lineStarts) : undefined;
   return changed === undefined
     ? undefined
     : { end, commands: scriptCommands(list[index], changed) };
@@ -222,10 +234,11 @@ function setText(data: unknown, location: Location, source: string, text: string
 
 /**
  * The translated entries of an XP game by the data file that holds their text, such as
- * `Map001.rxdata`; none of its scripts while it plays them unchanged.
+ * `Map001.rxdata`, and its scripts, which get the script that fits the English, unless it plays
+ * them unchanged.
  */
 export function translatedByXpFile({ entries, originalScripts }: Catalog) {
-  const files = new Map<string, Array<Entry>>();
+  const files = new Map<string, Array<Entry>>(originalScripts ? [] : [[scriptsFile, []]]);
   for (const entry of entries) {
     if (originalScripts && isScriptText(entry)) continue;
     const file = xpFileOf(entry.location);
@@ -239,8 +252,9 @@ export function translatedByXpFile({ entries, originalScripts }: Catalog) {
 
 /**
  * The XP data file `file` (such as `Map001.rxdata`) with the entries' translations in it; none
- * when no entry of the file is translated. Messages are wrapped to fit the default message
- * window. Fails when the file no longer holds an entry's source.
+ * when no entry of the file is translated, except for `Scripts.rxdata`, which always gets the
+ * script that fits English. Messages are wrapped to fit the default message window. Fails when
+ * the file no longer holds an entry's source.
  */
 export function applyXpTranslations(
   file: string,
@@ -253,7 +267,6 @@ export function applyXpTranslations(
       ? [{ entry, text }]
       : [];
   });
-  if (!translated.length) return Result.succeed(undefined);
   if (file === scriptsFile) {
     const texts = new Map<number, Map<number, LiteralText>>();
     for (const { entry, text } of translated) {
@@ -264,6 +277,7 @@ export function applyXpTranslations(
     }
     return applyScriptTexts(file, bytes, texts);
   }
+  if (!translated.length) return Result.succeed(undefined);
   return Result.try({
     try: () => load(bytes, { hash: "wrap", numeric: "wrap", regexp: "wrap" }),
     catch: (error) => new GameFileInvalid({ file, problem: String(error) }),

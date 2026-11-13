@@ -3,6 +3,7 @@ import { assert, it } from "@effect/vitest";
 import * as Result from "effect/Result";
 import { applyXpTranslations, decodeXpFile, xpGameEntries } from "../../index.ts";
 import { command, xpFile, xpMap, xpScripts } from "../../testUtils/xpGame.ts";
+import { textFittingScript } from "./textFitting.ts";
 
 const translated = (entries: ReadonlyArray<Entry>, english: Record<string, string>) =>
   entries.map((entry) => ({ ...entry, translation: { user: english[entry.source] ?? "" } }));
@@ -10,7 +11,7 @@ const translated = (entries: ReadonlyArray<Entry>, english: Record<string, strin
 const entriesOf = (name: string, bytes: Uint8Array) =>
   xpGameEntries([Result.getOrThrow(decodeXpFile(name, bytes))]);
 
-it("puts translations into an XP data file, wrapping messages into as many as they need and scripts into as many lines", () => {
+it("puts translations into an XP data file, wrapping messages into as many as they need and scripts into as many lines, without spaces after their `\\n` codes", () => {
   const map = xpFile(
     xpMap({
       1: [
@@ -28,7 +29,7 @@ it("puts translations into an XP data file, wrapping messages into as many as th
   const long = Array.from({ length: 5 }, (_, at) => `Line ${at} is long enough to need a row`);
   const english = {
     店主: 'The "shop" #1',
-    "\n龙": "\nThe dragon's\nden",
+    "\n龙": "\nThe dragon's \\n lair\nden",
     "第一行\n第二行": `\\N[1] ${long.join(" ")}`,
     买: "Buy",
     走: "Leave",
@@ -43,12 +44,12 @@ it("puts translations into an XP data file, wrapping messages into as many as th
     [
       [355, `$who = "The \\"shop\\" #1"`],
       [355, "say('"],
-      [655, "The dragon\\'s"],
+      [655, "The dragon\\'s \\\\nlair"],
       [655, "den'"],
       [122, 1, 1, 0, 0, -99999999],
-      [101, "\\N[1] Line 0 is long enough to need a row"],
-      [401, "Line 1 is long enough to need a row Line 2 is long"],
-      [101, "enough to need a row Line 3 is long enough to"],
+      [101, "\\N[1] Line 0 is long enough to need a row "],
+      [401, "Line 1 is long enough to need a row Line 2 is long "],
+      [101, "enough to need a row Line 3 is long enough to "],
       [401, "need a row Line 4 is long enough to need a row"],
       [102, ["Buy", "Leave"], 2],
       [402, 0, "Buy"],
@@ -57,10 +58,11 @@ it("puts translations into an XP data file, wrapping messages into as many as th
   );
 });
 
-it("puts translations into an XP game's scripts, keeping their `#{}` code and the strings kept as they are", () => {
+it("puts translations into an XP game's scripts, keeping their `#{}` code and the strings kept as they are, and the script that fits English before Main", () => {
   const scripts = xpFile(
     xpScripts({
       Window_Gold: `draw_text(0, 0, 120, 32, "金币：#{@gold}")\nreturn '盾' if x\ntext = "龙"`,
+      Main: "begin_game",
     }),
   );
   const english = { "金币：#{@gold}": 'Gold "now": #{@gold}', 盾: "Shield's", 龙: "Dragon" };
@@ -74,5 +76,7 @@ it("puts translations into an XP game's scripts, keeping their `#{}` code and th
       name: "Window_Gold",
       code: `draw_text(0, 0, 120, 32, "Gold \\"now\\": #{@gold}")\nreturn 'Shield\\'s' if x\ntext = "龙"`,
     },
+    { name: "RPGTL text fitting", code: textFittingScript },
+    { name: "Main", code: "begin_game" },
   ]);
 });

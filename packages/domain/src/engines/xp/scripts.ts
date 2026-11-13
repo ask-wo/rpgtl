@@ -6,6 +6,7 @@ import { sourceText } from "../mvmz/extract.ts";
 import { GameFile, GameFileInvalid } from "../mvmz/gameFile.ts";
 import { GameDataChanged } from "../mvmz/apply.ts";
 import { type RubyLiteral, rubyLiterals } from "./rubyLiterals.ts";
+import { textFittingScript } from "./textFitting.ts";
 
 const utf8 = new TextDecoder();
 const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
@@ -39,6 +40,8 @@ function scriptRows(file: string, bytes: Uint8Array) {
   });
 }
 
+const nameOf = (name: string | Uint8Array) => (typeof name === "string" ? name : utf8.decode(name));
+
 /**
  * A script's code; none when it doesn't decompress, or isn't UTF-8 as RGSS reads it, since
  * writing it back would change its other bytes. Such a script has no text.
@@ -58,7 +61,7 @@ export const decodeXpScripts = (file: string, bytes: Uint8Array) =>
       try: () =>
         GameFile.Scripts({
           data: rows.map((row) => ({
-            name: typeof row[1] === "string" ? row[1] : utf8.decode(row[1]),
+            name: nameOf(row[1]),
             code: codeOf(row[2]) ?? "",
           })),
         }),
@@ -229,8 +232,10 @@ export function withTexts(code: string, texts: ReadonlyMap<number, LiteralText>)
 }
 
 /**
- * `Scripts.rxdata` with the literals of `texts`, by script and literal index, set to their text.
- * Scripts without text keep their bytes. Fails when a literal isn't its source anymore.
+ * `Scripts.rxdata` with the literals of `texts`, by script and literal index, set to their text,
+ * and the script that fits English into the game's text boxes before `Main`, which starts the
+ * game, or before the last script, which is `Main` in a game that renamed it. Scripts without
+ * text keep their bytes. Fails when a literal isn't its source anymore.
  */
 export const applyScriptTexts = (
   file: string,
@@ -245,5 +250,11 @@ export const applyScriptTexts = (
       if (!row || changed === undefined) return Result.fail(new GameDataChanged({ file }));
       row[2] = zlibSync(new TextEncoder().encode(changed));
     }
+    const main = rows.findLastIndex(([, name]) => nameOf(name).trim().toLowerCase() === "main");
+    rows.splice(main < 0 ? Math.max(rows.length - 1, 0) : main, 0, [
+      0,
+      new TextEncoder().encode("RPGTL text fitting"),
+      zlibSync(new TextEncoder().encode(textFittingScript)),
+    ]);
     return Result.succeed(dump(rows));
   });
