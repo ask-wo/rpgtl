@@ -19,12 +19,16 @@ export function TranslationNav({
 }) {
   const saved = AsyncResult.getOrElse(useAtomValue(catalog(gameId)), () => undefined);
   if (saved === undefined || !saved.translate) return null;
-  const { text, images } = catalogCounts(saved);
+  const { text, names, images } = catalogCounts(saved);
   return (
     <SidebarMenuSub aria-label="Translation" className="mr-0 pr-0">
       <li className="px-2 pt-2 pb-1 text-xs font-medium text-sidebar-foreground/70">Translation</li>
       <Page gameId={gameId} to="glossary" icon={BookAIcon} label="Glossary">
-        <Count title="Glossary terms">{number(saved.glossary.length)}</Count>
+        {names.translated < names.all ? (
+          <Progress done={names.translated} all={names.all} what="names" />
+        ) : (
+          <Count title="Glossary terms">{number(saved.glossary.length)}</Count>
+        )}
       </Page>
       <Page gameId={gameId} to="text" icon={FileTextIcon} label="Text">
         <Progress done={text.translated} all={text.all} what="text entries" />
