@@ -32,6 +32,17 @@ const grouped = (entries: ReadonlyArray<RunEntry>, key: (entry: RunEntry) => str
 const left = (group: ReadonlyArray<RunEntry>) =>
   group.filter((entry) => !entryTranslation(entry)).length;
 
+/** The group cut into groups of at most `batchSize` untranslated entries. */
+const cut = (group: ReadonlyArray<RunEntry>, batchSize: number) => {
+  const groups: Array<Array<RunEntry>> = [[]];
+  for (const entry of group) {
+    const current = groups.at(-1) ?? [];
+    if (!entryTranslation(entry) && left(current) === batchSize) groups.push([entry]);
+    else current.push(entry);
+  }
+  return groups;
+};
+
 /**
  * Name entries by place, which the glossary pass translates into the glossary first, cut into
  * groups of at most `batchSize` untranslated names. A group's batches go one after another, and
@@ -41,21 +52,21 @@ const left = (group: ReadonlyArray<RunEntry>) =>
 export const nameGroups = (entries: ReadonlyArray<RunEntry>, batchSize: number) =>
   grouped(entries.filter(isNameEntry), ({ location }) =>
     location ? placeKey(placeOf(location)) : "",
-  ).flatMap((group) => {
-    const cut: Array<Array<RunEntry>> = [[]];
-    for (const entry of group) {
-      const current = cut.at(-1) ?? [];
-      if (!entryTranslation(entry) && left(current) === batchSize) cut.push([entry]);
-      else current.push(entry);
-    }
-    return cut;
-  });
+  ).flatMap((group) => cut(group, batchSize));
 
-/** The other entries by scene, which see the scene's earlier lines as context. */
-export const textGroups = (entries: ReadonlyArray<RunEntry>) =>
+/**
+ * The other entries by scene, which see the scene's earlier lines as context. Only an event list
+ * needs them in order; a scene outside one, such as a table's thousands of descriptions, is cut
+ * like `nameGroups` so its batches run side by side.
+ */
+export const textGroups = (entries: ReadonlyArray<RunEntry>, batchSize: number) =>
   grouped(
     entries.filter((entry) => !isNameEntry(entry)),
     sceneKey,
+  ).flatMap((group) =>
+    group[0]?.location !== undefined && "list" in group[0].location
+      ? [group]
+      : cut(group, batchSize),
   );
 
 /**

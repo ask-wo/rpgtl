@@ -601,7 +601,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
   if (runKind === "translate") {
     yield* report.textPass;
     yield* translator.text.provide(
-      translateGroups(translator.text, textGroups(draft.translatable), false),
+      translateGroups(translator.text, textGroups(draft.translatable, translator.batchSize), false),
     );
   }
 });

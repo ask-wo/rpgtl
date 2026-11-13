@@ -38,7 +38,7 @@ it("a menu's button images go to the translator together, each naming its image"
     button("img/titles1/Commands", "菜单"),
     button("img/pictures/Command_2", "退出"),
   ];
-  const groups = textGroups(entries);
+  const groups = textGroups(entries, 40);
   assert.deepStrictEqual(
     groups.map((group) => group.map((entry) => entry.source)),
     [["开始冒险", "读取存档"], ["菜单"], ["退出"]],
@@ -58,6 +58,24 @@ it("a menu's button images go to the translator together, each naming its image"
     { id: "1", text: "开始冒险", image: "titles1/Command_0" },
     { id: "2", text: "读取存档", image: "titles1/Command_1" },
   ]);
+});
+
+const description = (record: number): Entry => ({
+  id: `skill-${record}`,
+  location: { _tag: "RecordField", table: "skills", record, field: "description" },
+  source: "火を放つ。",
+  translation: {},
+});
+
+it("a long table goes a batch at a time side by side, while an event list stays whole in order", () => {
+  const groups = textGroups(
+    [...Array.from({ length: 5 }, (_, record) => description(record + 1)), ...scene(1, 5)],
+    2,
+  );
+  assert.deepStrictEqual(
+    groups.map((group) => group.length),
+    [2, 2, 1, 5],
+  );
 });
 
 const entriesOf = (length: number) => Array.from({ length }, (_, i) => i);
