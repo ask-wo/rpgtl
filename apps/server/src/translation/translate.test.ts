@@ -80,7 +80,6 @@ const translated = (entries: Catalog["entries"], batchSize = 40) => {
       names: pass,
       text: pass,
       batchSize,
-      sceneSize: batchSize,
       contextLines: 10,
       packsScenes: true,
       cachesPrompt: false,

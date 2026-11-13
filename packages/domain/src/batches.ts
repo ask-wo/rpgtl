@@ -109,17 +109,6 @@ export function packGroups(groups: ReadonlyArray<ReadonlyArray<RunEntry>>, batch
   return packed;
 }
 
-/**
- * Splits a scene's entries into requests: the whole scene in one when it has at most `sceneSize`,
- * or else `batchSize` at a time.
- */
-export function sceneBatches<A>(items: ReadonlyArray<A>, batchSize: number, sceneSize: number) {
-  const size = items.length <= sceneSize ? Math.max(items.length, 1) : batchSize;
-  return Array.from({ length: Math.ceil(items.length / size) }, (_, i) =>
-    items.slice(i * size, (i + 1) * size),
-  );
-}
-
 /** What a request sends about a batch besides the instructions and the glossary. */
 export interface BatchRequest {
   readonly context: ReadonlyArray<ContextLine>;

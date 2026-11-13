@@ -11,7 +11,6 @@ import {
   kindQuestion,
   nameGroups,
   packGroups,
-  sceneBatches,
   type Prepared,
   pronounQuestion,
   readAnswers,
@@ -30,6 +29,7 @@ import {
   termTranslation,
 } from "@rpgtl/domain";
 import * as AiError from "effect/ai/AiError";
+import * as Arr from "effect/Array";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Clock from "effect/Clock";
 import * as Deferred from "effect/Deferred";
@@ -80,8 +80,6 @@ export interface Translator {
   readonly text: Pass;
   /** Entries per request. */
   readonly batchSize: number;
-  /** Entries of one scene the text pass sends in one request instead of `batchSize` at a time. */
-  readonly sceneSize: number;
   /** Earlier lines of the scene sent with each batch. */
   readonly contextLines: number;
   /**
@@ -486,9 +484,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
 
       // Batches within a group go in order, since later ones use earlier translations as context.
       const missing = prepared.filter((item) => !entryTranslation(item.entry));
-      const sceneSize = names ? translator.batchSize : translator.sceneSize;
-      for (const batch of sceneBatches(missing, translator.batchSize, sceneSize))
-        yield* translateBatch(batch);
+      for (const batch of Arr.chunksOf(missing, translator.batchSize)) yield* translateBatch(batch);
     });
 
     yield* Effect.forEach(queue, translateGroup, {

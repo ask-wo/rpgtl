@@ -142,7 +142,7 @@ const make = Effect.gen(function* () {
               draft,
               setup.batchSize === undefined
                 ? translator
-                : { ...translator, batchSize: setup.batchSize, sceneSize: setup.batchSize },
+                : { ...translator, batchSize: setup.batchSize },
               "translate",
             );
           }),

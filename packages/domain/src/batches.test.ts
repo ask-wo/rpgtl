@@ -1,6 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import type { Entry } from "@rpgtl/contracts";
-import { batchRequest, CatalogDraft, packGroups, sceneBatches, textGroups } from "./index.ts";
+import { batchRequest, CatalogDraft, packGroups, textGroups } from "./index.ts";
 
 const line = (id: string, index: number, list: number): Entry => ({
   id,
@@ -76,18 +76,4 @@ it("a long table goes a batch at a time side by side, while an event list stays 
     groups.map((group) => group.length),
     [2, 2, 1, 5],
   );
-});
-
-const entriesOf = (length: number) => Array.from({ length }, (_, i) => i);
-
-it("a scene up to its limit goes in one request, and a longer one a batch at a time", () => {
-  assert.deepStrictEqual(
-    sceneBatches(entriesOf(120), 40, 150).map((b) => b.length),
-    [120],
-  );
-  assert.deepStrictEqual(
-    sceneBatches(entriesOf(170), 40, 150).map((b) => b.length),
-    [40, 40, 40, 40, 10],
-  );
-  assert.deepStrictEqual(sceneBatches(entriesOf(0), 40, 150), []);
 });
