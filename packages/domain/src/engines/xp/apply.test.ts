@@ -10,11 +10,13 @@ const translated = (entries: ReadonlyArray<Entry>, english: Record<string, strin
 const entriesOf = (name: string, bytes: Uint8Array) =>
   xpGameEntries([Result.getOrThrow(decodeXpFile(name, bytes))]);
 
-it("puts translations into an XP data file, wrapping messages into as many as they need", () => {
+it("puts translations into an XP data file, wrapping messages into as many as they need and scripts into as many lines", () => {
   const map = xpFile(
     xpMap({
       1: [
         command(355, `$who = "店主"`),
+        command(355, "say('"),
+        command(655, "龙'"),
         command(122, 1, 1, 0, 0, -99999999),
         command(101, "第一行"),
         command(401, "第二行"),
@@ -26,6 +28,7 @@ it("puts translations into an XP data file, wrapping messages into as many as th
   const long = Array.from({ length: 5 }, (_, at) => `Line ${at} is long enough to need a row`);
   const english = {
     店主: 'The "shop" #1',
+    "\n龙": "\nThe dragon's\nden",
     "第一行\n第二行": `\\N[1] ${long.join(" ")}`,
     买: "Buy",
     走: "Leave",
@@ -39,6 +42,9 @@ it("puts translations into an XP data file, wrapping messages into as many as th
     list?.map(({ code, parameters }) => [code, ...parameters]),
     [
       [355, `$who = "The \\"shop\\" #1"`],
+      [355, "say('"],
+      [655, "The dragon\\'s"],
+      [655, "den'"],
       [122, 1, 1, 0, 0, -99999999],
       [101, "\\N[1] Line 0 is long enough to need a row"],
       [401, "Line 1 is long enough to need a row Line 2 is long"],

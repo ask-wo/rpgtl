@@ -6,10 +6,9 @@ import { entryTranslation } from "../../guesses.ts";
 import { isScriptText } from "../../location.ts";
 import { GameDataChanged } from "../mvmz/apply.ts";
 import { GameFileInvalid } from "../mvmz/gameFile.ts";
-import { assignedLiteral, literalValue } from "./extract.ts";
 import { scriptsFile } from "./gameFile.ts";
 import { xpFileOf } from "./location.ts";
-import { applyScriptTexts, type LiteralText, rubyLiteral } from "./scripts.ts";
+import { applyScriptTexts, type LiteralText, withTexts } from "./scripts.ts";
 
 const utf8 = new TextDecoder();
 // RGSS1 dumps strings as bytes, which load as such; Ruby 1.9 and later mark them as UTF-8, and
@@ -122,14 +121,51 @@ function messageCommands(list: ReadonlyArray<unknown>, index: number, end: numbe
   );
 }
 
-/** The script with its `literal`th literal set to `text`; none when it isn't `source` anymore. */
-function withLiteral(script: string, literal: number, source: string, text: string) {
-  const match = [...script.matchAll(assignedLiteral)][literal];
-  const [whole, before, quoted] = match ?? [];
-  if (!match || whole === undefined || before === undefined || quoted === undefined) return;
-  if (literalValue(quoted) !== source) return;
-  const at = match.index + before.length;
-  return `${script.slice(0, at)}${rubyLiteral(text, quoted)}${script.slice(at + quoted.length)}`;
+/** The lines of a Script command at `index`, which the 655 commands after it continue. */
+function scriptAt(list: ReadonlyArray<unknown>, index: number) {
+  let end = index + 1;
+  while (numberOf(ivar(list[end], "code")) === 655) end++;
+  const lines = list
+    .slice(index, end)
+    .map((command) => textOf(asList(ivar(command, "parameters"))?.[0]) ?? "");
+  return { end, code: lines.join("\n") };
+}
+
+/** The commands of a Script command whose code is now `code`, which may have more or fewer lines. */
+function scriptCommands(first: unknown, code: string) {
+  if (!(first instanceof RubyObject)) return [];
+  const firstLine = asList(ivar(first, "parameters"))?.[0];
+  return code
+    .split("\n")
+    .map((line, at) => rubyCommand(first, at ? 655 : 355, [stringLike(firstLine, line)]));
+}
+
+/** The commands that replace those from a message's or script's first up to `end`. */
+type Replaced = { readonly end: number; readonly commands: ReadonlyArray<unknown> } | undefined;
+
+/** The message at `index` showing `text`, if it still is `source`. */
+function newMessage(
+  list: ReadonlyArray<unknown>,
+  index: number,
+  source: string,
+  text: string,
+): Replaced {
+  const { end, text: current } = messageAt(list, index);
+  if (numberOf(ivar(list[index], "code")) !== 101 || current !== source) return undefined;
+  return { end, commands: messageCommands(list, index, end, text) };
+}
+
+/** The Script command at `index` with the literals of `texts` set, if they still are their sources. */
+function newScript(
+  list: ReadonlyArray<unknown>,
+  index: number,
+  texts: ReadonlyMap<number, LiteralText>,
+): Replaced {
+  const { end, code } = scriptAt(list, index);
+  const changed = numberOf(ivar(list[index], "code")) === 355 ? withTexts(code, texts) : undefined;
+  return changed === undefined
+    ? undefined
+    : { end, commands: scriptCommands(list[index], changed) };
 }
 
 /** The item with id `id` of a list, or of a hash by id such as a map's events. */
@@ -150,8 +186,8 @@ const commandsOf = (data: unknown, list: EventListRef) =>
   });
 
 /**
- * Sets the text at `location` to `text`, in place, if it still is `source`. Messages are left out,
- * since they change the length of their list.
+ * Sets the text at `location` to `text`, in place, if it still is `source`. Messages and scripts
+ * are left out, since they change the length of their list.
  */
 function setText(data: unknown, location: Location, source: string, text: string): boolean {
   const set = (holder: unknown, key: string | number) => {
@@ -170,18 +206,6 @@ function setText(data: unknown, location: Location, source: string, text: string
       return key === undefined
         ? set(parameters, location.parameter)
         : set(asList(parameters?.[location.parameter]), Number(key));
-    }
-    case "ScriptText": {
-      const parameters = asList(
-        ivar(commandsOf(data, location.list)?.[location.index], "parameters"),
-      );
-      const stored = parameters?.[location.parameter];
-      const script = textOf(stored);
-      const changed =
-        script === undefined ? undefined : withLiteral(script, location.literal, source, text);
-      if (changed === undefined || !parameters) return false;
-      parameters[location.parameter] = stringLike(stored, changed);
-      return true;
     }
     case "RecordField":
       return set(itemAt(data, location.record), location.field);
@@ -245,22 +269,38 @@ export function applyXpTranslations(
     catch: (error) => new GameFileInvalid({ file, problem: String(error) }),
   }).pipe(
     Result.flatMap((data) => {
-      const messages: { list: unknown[]; index: number; source: string; text: string }[] = [];
+      const replaced: Array<{ list: unknown[]; index: number; commands: () => Replaced }> = [];
+      const scripts = new Map<unknown[], Map<number, Map<number, LiteralText>>>();
       for (const { entry, text } of translated) {
         const { location } = entry;
-        if (location._tag === "Message") {
+        if (location._tag === "Message" || location._tag === "ScriptText") {
           const list = commandsOf(data, location.list);
           if (!list) return Result.fail(new GameDataChanged({ file }));
-          messages.push({ list, index: location.index, source: entry.source, text });
+          const { index } = location;
+          if (location._tag === "Message")
+            replaced.push({
+              list,
+              index,
+              commands: () => newMessage(list, index, entry.source, text),
+            });
+          else {
+            const inList = scripts.get(list) ?? new Map<number, Map<number, LiteralText>>();
+            const literals = inList.get(index);
+            if (literals) literals.set(location.literal, { source: entry.source, text });
+            else {
+              const first = new Map([[location.literal, { source: entry.source, text }]]);
+              scripts.set(list, inList.set(index, first));
+              replaced.push({ list, index, commands: () => newScript(list, index, first) });
+            }
+          }
         } else if (!setText(data, location, entry.source, text))
           return Result.fail(new GameDataChanged({ file }));
       }
-      // From the end of each list, so that the indexes of the messages before stay.
-      for (const { list, index, source, text } of messages.toSorted((a, b) => b.index - a.index)) {
-        const { end, text: current } = messageAt(list, index);
-        if (numberOf(ivar(list[index], "code")) !== 101 || current !== source)
-          return Result.fail(new GameDataChanged({ file }));
-        list.splice(index, end - index, ...messageCommands(list, index, end, text));
+      // From the end of each list, so that the indexes of the changes before stay.
+      for (const { list, index, commands } of replaced.toSorted((a, b) => b.index - a.index)) {
+        const changed = commands();
+        if (!changed) return Result.fail(new GameDataChanged({ file }));
+        list.splice(index, changed.end - index, ...changed.commands);
       }
       return Result.succeed(dump(data));
     }),

@@ -76,7 +76,7 @@ const interpolation = /#\{[^{}]*\}/g;
  * The text of a Ruby string literal, with each `#{}` in it kept as it is; none for one whose
  * text isn't plain, such as one with an escape like `\e` or `#@name` in it.
  */
-function literalText(literal: string) {
+export function literalText(literal: string) {
   const body = literal.slice(1, -1);
   if (literal.startsWith("'")) return body.replace(/\\([\\'])/g, "$1");
   let plain = true;
@@ -95,7 +95,7 @@ function literalText(literal: string) {
 }
 
 /** A Ruby string literal of `text` in the quotes `like` uses, with the `#{}` that `like` has kept as code. */
-export function rubyLiteral(text: string, like: string) {
+function rubyLiteral(text: string, like: string) {
   if (like.startsWith("'")) return `'${text.replace(/[\\']/g, "\\$&")}'`;
   const kept = new Set(like.match(interpolation));
   const escaped = text
@@ -173,28 +173,36 @@ function lineBefore(code: string, literals: ReadonlyArray<RubyLiteral>, index: n
   return before + code.slice(at, start);
 }
 
+/**
+ * The text of Ruby code: each string literal with Chinese, Japanese or Korean in it, by its index
+ * among the code's literals, except those the code prints for its author or passes as a file or
+ * font name, and character tables.
+ */
+export function rubyText(code: string) {
+  const literals = rubyLiterals(code);
+  const tables = characterTables(code, literals);
+  return literals.flatMap(({ start, end }, literal) => {
+    if (tables.has(literal)) return [];
+    const text = literalText(code.slice(start, end));
+    if (text === undefined || !sourceText.test(text.replace(interpolation, ""))) return [];
+    if (isNameOrOutput(lineBefore(code, literals, literal))) return [];
+    return [{ literal, text }];
+  });
+}
+
 interface ScriptFound {
   readonly location: Extract<Location, { readonly _tag: "RubyScriptText" }>;
   readonly text: string;
 }
 
-/**
- * The text of an XP game's scripts: each string literal with Chinese, Japanese or Korean in it,
- * except those a script prints for its author or passes as a file or font name, and character
- * tables.
- */
+/** The text of an XP game's scripts. */
 export const scriptsText = (scripts: ReadonlyArray<RubyScript>): ReadonlyArray<ScriptFound> =>
-  scripts.flatMap(({ name, code }, script) => {
-    const literals = rubyLiterals(code);
-    const tables = characterTables(code, literals);
-    return literals.flatMap(({ start, end }, literal) => {
-      if (tables.has(literal)) return [];
-      const text = literalText(code.slice(start, end));
-      if (text === undefined || !sourceText.test(text.replace(interpolation, ""))) return [];
-      if (isNameOrOutput(lineBefore(code, literals, literal))) return [];
-      return [{ location: { _tag: "RubyScriptText", script, name, literal } as const, text }];
-    });
-  });
+  scripts.flatMap(({ name, code }, script) =>
+    rubyText(code).map(({ literal, text }) => ({
+      location: { _tag: "RubyScriptText", script, name, literal } as const,
+      text,
+    })),
+  );
 
 /** A literal's new text, as long as the literal still is `source`. */
 export interface LiteralText {
@@ -203,7 +211,7 @@ export interface LiteralText {
 }
 
 /** The code with each literal at an index of `texts` set to its text; none when one isn't its source anymore. */
-function withTexts(code: string, texts: ReadonlyMap<number, LiteralText>) {
+export function withTexts(code: string, texts: ReadonlyMap<number, LiteralText>) {
   const literals = rubyLiterals(code);
   let changed = "";
   let from = 0;

@@ -1,7 +1,9 @@
 // RPG Maker escape codes such as \C[2], \n<Name>, \! and %1 placeholders, and the `#{}` code
 // that an XP game's Ruby scripts put into their text.
+// A code split by a line break, as an XP event script may write `\C` at a line's end and `[0]`
+// at the next one's start, is kept whole: a game's message script may drop the line break.
 export const controlCodePattern =
-  /\\(?:[A-Za-z]+(?:\[[^\]]*\]|<[^>]*>)|[A-Za-z]+|[{}$.|!><^\\])|%\d+|#\{[^{}]*\}/g;
+  /\\(?:[A-Za-z]+(?:\[[^\]]*\]|<[^>]*>|\n\[\d+\])|[A-Za-z]+|[{}$.|!><^\\])|%\d+|#\{[^{}]*\}/g;
 export const speakerTagPattern = /\\n[a-z]*<([^>]*)>/gi;
 
 export const speakerTagName = (text: string) => [...text.matchAll(speakerTagPattern)][0]?.[1];

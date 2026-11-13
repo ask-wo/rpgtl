@@ -371,3 +371,12 @@ it("A `{2}` in the source is sent as a placeholder, so the answer may keep it", 
   assert.strictEqual(requestText(entry).text, "三重灾难{1}");
   assert.deepStrictEqual(checkAnswer(entry, "Triple Disaster{1}"), accepted("Triple Disaster{2}"));
 });
+
+it("A code that a line break splits is sent as one placeholder and comes back as it was", () => {
+  const entry = messageEntry("回到\\C[2]旧城\\C\n[0]吧");
+  assert.strictEqual(requestText(entry).text, "回到{1}旧城{2}吧");
+  assert.deepStrictEqual(
+    checkAnswer(entry, "Back to {1}the old castle{2}"),
+    accepted("Back to \\C[2]the old castle\\C\n[0]"),
+  );
+});
