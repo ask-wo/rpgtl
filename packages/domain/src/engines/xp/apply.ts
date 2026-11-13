@@ -101,25 +101,17 @@ function messageAt(list: ReadonlyArray<unknown>, index: number) {
 }
 
 /**
- * The commands that show `text` in place of the message from `index` to `end`: its lines
- * wrapped, in as many messages as they need, leaving room for the choices that follow.
+ * The commands that show `text` in place of a message whose first command is `first`: its lines
+ * wrapped, in as many messages as they need. Choices that follow show below the last one's lines
+ * when they fit, and in their own window when they don't.
  */
-function messageCommands(list: ReadonlyArray<unknown>, index: number, end: number, text: string) {
-  const first = list[index];
+function messageCommands(first: unknown, text: string) {
   if (!(first instanceof RubyObject)) return [];
   const firstLine = asList(ivar(first, "parameters"))?.[0];
-  const choices = asList(asList(ivar(list[end], "parameters"))?.[0]);
-  // RGSS1 shows choices in the message only when they fit below its last box's lines.
-  const room = choices ? messageRows - choices.length : 0;
-  const lastRows = numberOf(ivar(list[end], "code")) === 102 && room > 0 ? room : messageRows;
   const lines = wrappedLines(text);
-  const messages: string[][] = [];
-  while (lines.length > lastRows)
-    messages.push(
-      lines.splice(0, lines.length > messageRows ? messageRows : lines.length - lastRows),
-    );
-  messages.push(lines);
-  return messages.flatMap((rows) =>
+  return Array.from({ length: Math.ceil(lines.length / messageRows) }, (_, at) =>
+    lines.slice(at * messageRows, (at + 1) * messageRows),
+  ).flatMap((rows) =>
     rows.map((line, row) => rubyCommand(first, row ? 401 : 101, [stringLike(firstLine, line)])),
   );
 }
@@ -155,7 +147,7 @@ function newMessage(
 ): Replaced {
   const { end, text: current } = messageAt(list, index);
   if (numberOf(ivar(list[index], "code")) !== 101 || current !== source) return undefined;
-  return { end, commands: messageCommands(list, index, end, text) };
+  return { end, commands: messageCommands(list[index], text) };
 }
 
 /** The Script command at `index` with the literals of `texts` set, if they still are their sources. */

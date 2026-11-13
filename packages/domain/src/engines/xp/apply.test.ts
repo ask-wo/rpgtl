@@ -26,7 +26,7 @@ it("puts translations into an XP data file, wrapping messages into as many as th
       ],
     }),
   );
-  const long = Array.from({ length: 5 }, (_, at) => `Line ${at} is long enough to need a row`);
+  const long = Array.from({ length: 7 }, (_, at) => `Line ${at} is long enough to need a row`);
   const english = {
     店主: 'The "shop" #1',
     "\n龙": "\nThe dragon's \\n lair\nden",
@@ -49,8 +49,10 @@ it("puts translations into an XP data file, wrapping messages into as many as th
       [122, 1, 1, 0, 0, -99999999],
       [101, "\\N[1] Line 0 is long enough to need a row "],
       [401, "Line 1 is long enough to need a row Line 2 is long "],
-      [101, "enough to need a row Line 3 is long enough to "],
-      [401, "need a row Line 4 is long enough to need a row"],
+      [401, "enough to need a row Line 3 is long enough to "],
+      [401, "need a row Line 4 is long enough to need a row "],
+      [101, "Line 5 is long enough to need a row Line 6 is long "],
+      [401, "enough to need a row"],
       [102, ["Buy", "Leave"], 2],
       [402, 0, "Buy"],
       [0],
