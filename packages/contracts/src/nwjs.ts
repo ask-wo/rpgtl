@@ -1,11 +1,16 @@
 import * as Schema from "effect/Schema";
 
-/** Whether the pinned NW.js is downloaded, and how far a download got. */
+/** A program RPGTL runs games in: NW.js for MV and MZ, mkxp-z for XP. */
+export const ProgramName = Schema.Literals(["NW.js", "mkxp-z"]);
+export type ProgramName = typeof ProgramName.Type;
+
+/** Whether a pinned program is downloaded, and how far a download got. */
 export const ProgramStatus = Schema.Struct({
+  name: ProgramName,
   version: Schema.String,
   /** Bytes of the download. */
   size: Schema.Int,
-  /** The folder NW.js is kept in, on this computer. */
+  /** The folder the program is kept in, on this computer. */
   folder: Schema.String,
   phase: Schema.Union([
     Schema.TaggedStruct("Ready", {}),
@@ -13,6 +18,8 @@ export const ProgramStatus = Schema.Struct({
     Schema.TaggedStruct("Downloading", { received: Schema.Int }),
     /** Not downloaded; `error` says why the last download failed, if it did. */
     Schema.TaggedStruct("Missing", { error: Schema.optionalKey(Schema.String) }),
+    /** The release doesn't run on this computer's system. */
+    Schema.TaggedStruct("Unsupported", {}),
   ]),
   /**
    * How many downloads started since RPGTL started. A status sent during or after one has its

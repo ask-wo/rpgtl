@@ -23,6 +23,7 @@ import * as StateFolder from "../state/StateFolder.ts";
 import { userFolder } from "../state/userFolders.ts";
 import { OnWindows } from "../OnWindows.ts";
 import * as Nwjs from "./Nwjs.ts";
+import type { ProgramMissingError } from "../downloads/pinnedProgram.ts";
 
 /** The game's app folder or hook couldn't be made, or NW.js didn't start. */
 export class LaunchError extends Schema.TaggedError<LaunchError>()("LaunchError", {
@@ -86,7 +87,7 @@ export class Launches extends Context.Service<
       | Games.GameNotInspectedError
       | Games.GameBusyError
       | Games.EngineUnsupportedError
-      | Nwjs.ProgramMissingError
+      | ProgramMissingError
       | GameRunningError
       | LaunchError
       | Frontend.FrontendFileError

@@ -5,6 +5,7 @@ import { events, render, serveApi } from "../testUtils/fakeApi.tsx";
 import { PlayButtons } from "./PlayButtons.tsx";
 
 const notReady: ProgramStatus = {
+  name: "NW.js",
   version: "v0.117.0",
   size: 100e6,
   folder: "/home/player/.cache/rpgtl/nwjs",

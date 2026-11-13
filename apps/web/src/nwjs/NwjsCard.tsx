@@ -53,7 +53,7 @@ export function NwjsCard() {
                   NW.js {value.version} isn't downloaded yet. It is a one-time download of{" "}
                   {megabytes(value.size)} MB; Play also offers it.
                 </p>
-                {value.phase.error && (
+                {value.phase._tag === "Missing" && value.phase.error && (
                   <p className="text-destructive">The last download failed: {value.phase.error}</p>
                 )}
                 <Button className="self-start" disabled={sending} onClick={fetchNwjs}>

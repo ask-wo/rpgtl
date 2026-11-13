@@ -16,6 +16,7 @@ export const game: Game = {
 /** A game's activity with NW.js downloaded and nothing running. */
 export const idle: GameActivity = {
   program: {
+    name: "NW.js",
     version: "v0.117.0",
     size: 100e6,
     folder: "/home/player/.cache/rpgtl/nwjs",
