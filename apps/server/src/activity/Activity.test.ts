@@ -9,7 +9,7 @@ import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import * as SessionToken from "../auth/SessionToken.ts";
 import { httpClientAnswering } from "../testUtils/ollama.ts";
-import { game, noNwjs, playServices, runServices, servicesWith } from "../testUtils/state.ts";
+import { game, noPrograms, playServices, runServices, servicesWith } from "../testUtils/state.ts";
 import * as Ollama from "../localModels/Ollama.ts";
 import * as Runs from "../translation/Runs.ts";
 import * as Activity from "./Activity.ts";
@@ -41,7 +41,7 @@ const services = Activity.layer.pipe(
         "games.json": JSON.stringify([game]),
         [gameFiles(game.id).catalog]: JSON.stringify(catalog),
       }),
-      noNwjs,
+      noPrograms,
       Layer.succeed(SessionToken.SessionToken, "test-token"),
     ),
   ),
@@ -70,7 +70,7 @@ it.effect("a game's activity follows a translation run started after it was open
       images: null,
       importing: null,
     });
-    assert.deepInclude(seen.at(-1)?.nwjs, { phase: { _tag: "Missing" } });
+    assert.deepInclude(seen.at(-1)?.program, { phase: { _tag: "Missing" } });
     assert.include(seen.at(-1)?.translation, { total: 1 });
   }).pipe(Effect.provide(services)),
 );

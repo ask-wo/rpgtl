@@ -25,7 +25,13 @@ export function GameHeader() {
         </p>
       </div>
       <SaveStatus gameId={game.id} />
-      {engineFeatures[game.engine].play && <PlayButtons key={game.id} gameId={game.id} />}
+      {engineFeatures[game.engine].play && (
+        <PlayButtons
+          key={game.id}
+          gameId={game.id}
+          inBrowser={engineFeatures[game.engine].gameScripts}
+        />
+      )}
     </header>
   );
 }

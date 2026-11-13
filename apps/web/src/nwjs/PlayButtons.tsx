@@ -1,5 +1,5 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import type { NwjsLaunch, NwjsStatus } from "@rpgtl/contracts";
+import type { GameLaunch, ProgramStatus } from "@rpgtl/contracts";
 import * as Exit from "effect/Exit";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { ExternalLinkIcon, PlayIcon, SquareIcon } from "lucide-react";
@@ -19,24 +19,30 @@ import { Spinner } from "~/components/ui/spinner";
 import { failureMessage } from "../app/failure.ts";
 import { activity } from "../games/activity.ts";
 import { megabytes } from "../translation/counts.ts";
-import { download, launch, stop } from "./atoms.ts";
-import { NwjsDownloading } from "./NwjsDownloading.tsx";
+import { downloadProgram, launch, stop } from "./atoms.ts";
+import { ProgramDownloading } from "./ProgramDownloading.tsx";
 
 /**
- * Play starts the game in NW.js, downloading NW.js first once the player agrees, and turns into
- * Stop while it runs; Play in browser opens it in a new tab. Below them: the download's progress
- * and how the last start went.
+ * Play starts the game in its program, NW.js or mkxp-z, downloading the program first once the
+ * player agrees, and turns into Stop while it runs; Play in browser, where `inBrowser`, opens it
+ * in a new tab. Below them: the download's progress and how the last start went.
  */
-export function PlayButtons({ gameId }: { readonly gameId: string }) {
+export function PlayButtons({
+  gameId,
+  inBrowser,
+}: {
+  readonly gameId: string;
+  readonly inBrowser: boolean;
+}) {
   const result = useAtomValue(activity(gameId));
   const now = AsyncResult.getOrElse(result, () => undefined);
-  const status = now?.nwjs;
+  const status = now?.program;
   const lastStart = now?.launch ?? null;
   // Only a refused request ends the stream; reloading the page connects again.
   const refused = AsyncResult.isFailure(result) ? failureMessage(result.cause) : undefined;
   const start = useAtomSet(launch, { mode: "promiseExit" });
   const end = useAtomSet(stop, { mode: "promiseExit" });
-  const fetchNwjs = useAtomSet(download, { mode: "promiseExit" });
+  const fetchProgram = useAtomSet(downloadProgram, { mode: "promiseExit" });
   const [asking, setAsking] = useState(false);
   // The download the player agreed to, followed until it ends. The status stream can skip
   // statuses, so only a status of that same download may start the game.
@@ -55,7 +61,7 @@ export function PlayButtons({ gameId }: { readonly gameId: string }) {
 
   const downloadThenPlay = async () => {
     setError(undefined);
-    const exit = await fetchNwjs({});
+    const exit = await fetchProgram({ payload: { id: gameId } });
     if (Exit.isFailure(exit)) setError(failureMessage(exit.cause));
     else if (exit.value.phase._tag === "Ready") void play();
     else if (exit.value.phase._tag === "Downloading") setFollowing(exit.value.attempt);
@@ -84,21 +90,28 @@ export function PlayButtons({ gameId }: { readonly gameId: string }) {
           </Button>
         ) : (
           <Button
-            disabled={status === undefined || status.phase._tag === "Downloading" || pending}
+            disabled={
+              status === undefined ||
+              status.phase._tag === "Downloading" ||
+              status.phase._tag === "Unsupported" ||
+              pending
+            }
             onClick={() => (ready ? play() : setAsking(true))}
           >
             {pending ? <Spinner /> : <PlayIcon />}
             Play
           </Button>
         )}
-        <Button
-          variant="outline"
-          nativeButton={false}
-          render={<a href={`/game/${gameId}/`} target="_blank" rel="noreferrer" />}
-        >
-          Play in browser
-          <ExternalLinkIcon />
-        </Button>
+        {inBrowser && (
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<a href={`/game/${gameId}/`} target="_blank" rel="noreferrer" />}
+          >
+            Play in browser
+            <ExternalLinkIcon />
+          </Button>
+        )}
       </div>
       {status && <DownloadProgress status={status} />}
       {(error ?? refused) && (
@@ -106,15 +119,15 @@ export function PlayButtons({ gameId }: { readonly gameId: string }) {
           {error ?? refused}
         </p>
       )}
-      {lastStart && <LastStart start={lastStart} />}
+      {lastStart && status && <LastStart start={lastStart} name={status.name} />}
       {status && (
         <AlertDialog open={asking} onOpenChange={setAsking}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Download NW.js?</AlertDialogTitle>
+              <AlertDialogTitle>Download {status.name}?</AlertDialogTitle>
               <AlertDialogDescription>
-                NW.js {status.version} needs a one-time download of {megabytes(status.size)} MB to{" "}
-                {status.folder}. The game starts once it is done.
+                {status.name} {status.version} needs a one-time download of {megabytes(status.size)}{" "}
+                MB to {status.folder}. The game starts once it is done.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -128,10 +141,21 @@ export function PlayButtons({ gameId }: { readonly gameId: string }) {
   );
 }
 
-function DownloadProgress({ status: { phase, size, version } }: { readonly status: NwjsStatus }) {
+function DownloadProgress({
+  status: { name, phase, size, version },
+}: {
+  readonly status: ProgramStatus;
+}) {
+  if (phase._tag === "Unsupported")
+    return (
+      <p className="max-w-md text-right text-sm text-muted-foreground">
+        {name} runs only on 64-bit Linux for now.
+      </p>
+    );
   if (phase._tag === "Downloading")
     return (
-      <NwjsDownloading
+      <ProgramDownloading
+        name={name}
         version={version}
         received={phase.received}
         size={size}
@@ -141,21 +165,21 @@ function DownloadProgress({ status: { phase, size, version } }: { readonly statu
   if (phase._tag === "Missing" && phase.error)
     return (
       <p className="max-w-md text-right text-sm wrap-anywhere text-destructive">
-        NW.js didn't download: {phase.error}
+        {name} didn't download: {phase.error}
       </p>
     );
   return null;
 }
 
-function LastStart({ start }: { readonly start: NwjsLaunch }) {
+function LastStart({ start, name }: { readonly start: GameLaunch; readonly name: string }) {
   const { phase } = start;
   const failed = phase._tag === "Exited" && phase.exitCode !== 0;
   const summary =
     phase._tag === "Running"
-      ? `Running in NW.js (PID ${start.pid}).`
+      ? `Running in ${name} (PID ${start.pid}).`
       : phase._tag === "Stopped"
-        ? "NW.js was stopped."
-        : `NW.js exited with exit code ${phase.exitCode}.`;
+        ? `${name} was stopped.`
+        : `${name} exited with exit code ${phase.exitCode}.`;
   return (
     <details className="max-w-md text-right text-sm wrap-anywhere">
       <summary className={failed ? "text-destructive" : "text-muted-foreground"}>

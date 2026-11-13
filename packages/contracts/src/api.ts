@@ -23,7 +23,7 @@ import {
   translationFileProblem,
 } from "./translationFile.ts";
 import { EndpointProblem, endpointProblem } from "./localEndpoint.ts";
-import { NwjsLaunch, NwjsStatus } from "./nwjs.ts";
+import { GameLaunch, ProgramStatus } from "./nwjs.ts";
 import { Settings } from "./settings.ts";
 import { AgentModel, QueuedRun, RunKind, RunStatus } from "./translation.ts";
 import {
@@ -235,28 +235,28 @@ export class EngineUnsupported extends Schema.TaggedError<EngineUnsupported>()(
   { httpApiStatus: 400 },
 ) {}
 
-export class NwjsMissing extends Schema.TaggedError<NwjsMissing>()(
-  "NwjsMissing",
-  { message: fixedMessage("Download NW.js first.") },
+export class ProgramMissing extends Schema.TaggedError<ProgramMissing>()(
+  "ProgramMissing",
+  { message: fixedMessage("Download the program the game plays in first.") },
   { httpApiStatus: 400 },
 ) {}
 
-export class NwjsRunning extends Schema.TaggedError<NwjsRunning>()(
-  "NwjsRunning",
-  { message: fixedMessage("The game is already running in NW.js. Close it to start it again.") },
+export class GameRunning extends Schema.TaggedError<GameRunning>()(
+  "GameRunning",
+  { message: fixedMessage("The game is already running. Close it to start it again.") },
   { httpApiStatus: 400 },
 ) {}
 
-/** NW.js couldn't be started, or its app folder for the game couldn't be made; the server logs why. */
-export class NwjsLaunchFailed extends Schema.TaggedError<NwjsLaunchFailed>()(
-  "NwjsLaunchFailed",
-  { message: fixedMessage("Couldn't start the game in NW.js. RPGTL's log says why.") },
+/** The game's program couldn't be started, or its files for the game couldn't be made; the server logs why. */
+export class LaunchFailed extends Schema.TaggedError<LaunchFailed>()(
+  "LaunchFailed",
+  { message: fixedMessage("Couldn't start the game. RPGTL's log says why.") },
   { httpApiStatus: 500 },
 ) {}
 
-/** NW.js didn't end when asked to; the server logs why. */
-export class NwjsStopFailed extends Schema.TaggedError<NwjsStopFailed>()(
-  "NwjsStopFailed",
+/** The game's program didn't end when asked to; the server logs why. */
+export class StopFailed extends Schema.TaggedError<StopFailed>()(
+  "StopFailed",
   { message: fixedMessage("Couldn't stop the game. RPGTL's log says why.") },
   { httpApiStatus: 500 },
 ) {}
@@ -583,30 +583,40 @@ export class NwjsApi extends HttpApiGroup.make("nwjs")
   .add(
     /** NW.js's status now and after each change, as Server-Sent Events. */
     HttpApiEndpoint.get("status", "/nwjs", {
-      success: HttpApiSchema.StreamSse({ data: NwjsStatus }),
+      success: HttpApiSchema.StreamSse({ data: ProgramStatus }),
     }),
     /** Starts downloading NW.js unless it is there or on its way; the status tells how far it got. */
-    HttpApiEndpoint.post("download", "/nwjs/download", { success: NwjsStatus }),
+    HttpApiEndpoint.post("download", "/nwjs/download", { success: ProgramStatus }),
     /**
-     * Starts the game in NW.js, which reads the saved catalog itself, translated while its
-     * translation switch is on, and keeps running after RPGTL exits.
+     * Starts the game, translated while its translation switch is on, and keeps it running after
+     * RPGTL exits: MV and MZ games in NW.js, which reads the saved catalog itself, and XP games in
+     * mkxp-z, which reads translated data files RPGTL writes first.
      */
     HttpApiEndpoint.post("launch", "/launch", {
       payload: GameId,
-      success: NwjsLaunch,
+      success: GameLaunch,
       error: [
         GameNotInspected,
         GameBusy,
         EngineUnsupported,
-        NwjsMissing,
-        NwjsRunning,
-        NwjsLaunchFailed,
+        ProgramMissing,
+        GameRunning,
+        LaunchFailed,
       ],
     }),
-    /** Ends the game's NW.js if RPGTL started it and it still runs. */
+    /**
+     * Starts downloading the program Play starts the game in, unless it is there or on its way; the
+     * game's activity tells how far it got.
+     */
+    HttpApiEndpoint.post("downloadProgram", "/launch/download", {
+      payload: GameId,
+      success: ProgramStatus,
+      error: [GameNotInspected],
+    }),
+    /** Ends the game's program if RPGTL started it and it still runs. */
     HttpApiEndpoint.post("stop", "/launch/stop", {
       payload: GameId,
-      error: [GameNotInspected, NwjsStopFailed],
+      error: [GameNotInspected, StopFailed],
     }),
   )
   .middleware(LocalRequest)
@@ -644,8 +654,8 @@ export class ImageReaderApi extends HttpApiGroup.make("imageReader")
 export class ActivityApi extends HttpApiGroup.make("activity")
   .add(
     /**
-     * What the game's page follows (NW.js, the game's last start, translation run, image reading
-     * and import) now and after each change, as Server-Sent Events.
+     * What the game's page follows (the program the game plays in, the game's last start,
+     * translation run, image reading and import) now and after each change, as Server-Sent Events.
      */
     HttpApiEndpoint.get("changes", "/activity", {
       query: GameId,

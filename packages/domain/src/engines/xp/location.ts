@@ -1,6 +1,6 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
-import { type Entry, type Location, Table } from "@rpgtl/contracts";
+import { type Entry, EventListRef, type Location, Table } from "@rpgtl/contracts";
 
 const tableFiles: Record<Table, string> = {
   actors: "Actors.rxdata",
@@ -26,6 +26,28 @@ const mapFile = (map: number) => `Map${String(map).padStart(3, "0")}.rxdata`;
 export const xpMapOf = (file: string) => {
   const map = /^Map(\d+)\.rxdata$/.exec(file)?.[1];
   return map !== undefined && mapFile(Number(map)) === file ? Number(map) : undefined;
+};
+
+const listFile = EventListRef.match({
+  MapEventPage: ({ map }) => mapFile(map),
+  CommonEvent: () => "CommonEvents.rxdata",
+  TroopPage: () => "Troops.rxdata",
+});
+
+/** The data file below `Data/` that holds the text at `location`; none for one XP has no text at. */
+export const xpFileOf = (location: Location) => {
+  switch (location._tag) {
+    case "Message":
+    case "CommandText":
+    case "ScriptText":
+      return listFile(location.list);
+    case "RecordField":
+      return tableFiles[location.table];
+    case "SystemText":
+      return "System.rxdata";
+    default:
+      return undefined;
+  }
 };
 
 /**

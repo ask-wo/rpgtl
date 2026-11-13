@@ -188,7 +188,7 @@ it("With a run log, the audit summarises the run, its rejections and the answers
   assert.deepStrictEqual(counts(run?.rejections.untranslated ?? []), { "source text left": 1 });
 
   assert.deepStrictEqual([...runAnswers(log).keys()], [answered.id]);
-  assert.deepStrictEqual(runTotals(log, catalog.glossary, "chinese"), {
+  assert.deepStrictEqual(runTotals(log, catalog.glossary, "chinese", "MV"), {
     file: "run.log",
     ...(log.start && { start: log.start }),
     answers: 1,

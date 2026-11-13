@@ -18,12 +18,12 @@ const escape = (value: string) =>
   );
 
 /** What the report shows of one setup's run. */
-function readSetup(setup: ComparedSetup, sample: Comparison["sample"]) {
+function readSetup(setup: ComparedSetup, { sample, game }: Comparison) {
   const { glossary } = sample;
   const language = gameLanguage(sample);
   const log = runLog(setup.label, setup.lines);
   const answers = runAnswers(log);
-  const check = translationChecks(glossary, language);
+  const check = translationChecks(glossary, language, game.engine);
   const seen = new Set<string>();
   let retries = 0;
   for (const request of log.requests) {
@@ -38,7 +38,7 @@ function readSetup(setup: ComparedSetup, sample: Comparison["sample"]) {
     setup,
     log,
     answers,
-    totals: runTotals(log, glossary, language),
+    totals: runTotals(log, glossary, language, game.engine),
     findings: (entry: Entry) => {
       const answer = answers.get(entry.id);
       return answer ? check(answer, answer.translation).map((finding) => finding.check) : [];
@@ -104,7 +104,7 @@ const dataNotice = ({ setup, costUsd }: ReadSetup) =>
 /** The comparison as a page: a summary of each setup's run, then the sample side by side. */
 export function comparisonHtml(comparison: Comparison) {
   const { entries } = comparison.sample;
-  const runs = comparison.setups.map((setup) => readSetup(setup, comparison.sample));
+  const runs = comparison.setups.map((setup) => readSetup(setup, comparison));
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const speakerOf = showTextSpeakers(entries);
   const kept = entries.filter((entry) => entryTranslation(entry)).length;

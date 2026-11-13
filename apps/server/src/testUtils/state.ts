@@ -22,6 +22,7 @@ import * as AgentModels from "../translation/AgentModels.ts";
 import { NvidiaSmi } from "../localModels/FreeMemory.ts";
 import * as LlamaServer from "../localModels/LlamaServer.ts";
 import * as Launches from "../nwjs/Launches.ts";
+import * as Mkxpz from "../mkxpz/Mkxpz.ts";
 import * as Nwjs from "../nwjs/Nwjs.ts";
 import * as Play from "../play/Play.ts";
 import * as Playtime from "../play/Playtime.ts";
@@ -127,8 +128,8 @@ export const runServices = Layer.mergeAll(Runs.layer, ImageReading.layer).pipe(
   Layer.provide(NodeChildProcessSpawner.layer),
 );
 
-/** NW.js in a cache folder that doesn't exist, so it is never downloaded. */
-export const noNwjs = Nwjs.layer.pipe(
+/** NW.js and mkxp-z in a cache folder that doesn't exist, so they are never downloaded. */
+export const noPrograms = Layer.mergeAll(Nwjs.layer, Mkxpz.layer).pipe(
   Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ HOME: "/nowhere" }))),
   Layer.provide(NodeChildProcessSpawner.layer),
 );

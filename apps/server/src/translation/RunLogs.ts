@@ -12,10 +12,9 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import * as ChildProcess from "effect/process/ChildProcess";
-import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
+import { runningCommit } from "../runningCommit.ts";
 import * as StateFolder from "../state/StateFolder.ts";
 
 type Later = Exclude<RunLogLine, RunStartLine>;
@@ -27,9 +26,6 @@ type StartFields = RunStartLine extends infer Line
   : never;
 /** A line after the first, without the time, which the log adds. */
 type LaterLine = Later extends infer Line ? (Line extends Later ? Omit<Line, "at"> : never) : never;
-
-/** The commit the portable download was built from, which its bundler writes in. */
-declare const RPGTL_BUILT_COMMIT: string | undefined;
 
 /** A run's log that can't be read, or holds a line that isn't a run log line. */
 export class RunLogReadError extends Schema.TaggedError<RunLogReadError>()("RunLogReadError", {
@@ -74,21 +70,7 @@ const make = Effect.gen(function* () {
   const folder = yield* StateFolder.StateFolder;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const git = (...args: ReadonlyArray<string>) =>
-    spawner.string(ChildProcess.make("git", ["-C", import.meta.dirname, ...args]));
-  // Read when RPGTL starts, since that is the code it runs; the portable download carries the one
-  // it was built from, and another copy without git has none.
-  const commit = yield* typeof RPGTL_BUILT_COMMIT === "string"
-    ? Effect.succeedSome(RPGTL_BUILT_COMMIT)
-    : Effect.all([
-        git("rev-parse", "--short", "HEAD"),
-        git("status", "--porcelain", "--untracked-files=no"),
-      ]).pipe(
-        Effect.map(([head, changes]) => `${head.trim()}${changes.trim() ? "-dirty" : ""}`),
-        Effect.asSome,
-        Effect.catchTags({ PlatformError: () => Effect.succeedNone }),
-      );
+  const commit = yield* runningCommit;
 
   const open = Effect.fn("RunLogs.open")(function* (id: string, start: StartFields) {
     const file = `${gameFiles(id).logs}/translation-${fileTime(start.started)}.log`;

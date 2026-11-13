@@ -135,6 +135,30 @@ it("a glossary pass answer becomes a glossary term, and the term wins over a lat
   ]);
 });
 
+it("an XP name's tags stay out of its request and its glossary term", () => {
+  const enemy: Entry = {
+    id: "enemy",
+    location: { _tag: "RecordField", table: "enemies", record: 3, field: "name" },
+    source: "[LV9]ホロネ{本体}",
+    translation: {},
+  };
+  const draft = new CatalogDraft(
+    { ...catalogOf([enemy]), game: { id: "0123456789abcdef0123", title: "雨", engine: "XP" } },
+    new Map(),
+    run,
+  );
+  const [entry] = draft.entries;
+  assert.isDefined(entry);
+  const item = draft.prepare(entry);
+  assert.strictEqual(item.text, "ホロネ");
+  draft.accept(item, "[LV9]Horone{本体}", { seedGlossary: true });
+  assert.strictEqual(entryTranslation(entry), "[LV9]Horone{本体}");
+  assert.deepStrictEqual(
+    draft.catalog.glossary.map((term) => [term.source, term.translation.guess?.value]),
+    [["ホロネ", "Horone"]],
+  );
+});
+
 const term = (source: string, kind: GlossaryTerm["kind"]): GlossaryTerm => ({
   source,
   translation: { guess: { value: source, run: "earlier" } },

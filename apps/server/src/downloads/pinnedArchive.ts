@@ -39,6 +39,8 @@ export interface PinnedArchive {
   readonly sha256: string;
   /** The folder in the archive that becomes `target`, or `""` when its files sit at the top. */
   readonly folder: string;
+  /** Whether it is an AppImage, which unpacks itself into `squashfs-root`, not a tar or zip. */
+  readonly appImage?: boolean;
 }
 
 /**
@@ -103,10 +105,21 @@ export const makeFetchPinnedArchive = Effect.gen(function* () {
         .makeTempDirectory({ directory: base, prefix: "unpack-" })
         .pipe(Effect.mapError(failure("save")));
       yield* Effect.gen(function* () {
-        // Windows' tar unpacks zip files too.
-        const code = yield* spawner
-          .exitCode(ChildProcess.make("tar", ["-xf", download, "-C", unpacked]))
-          .pipe(Effect.mapError(failure("unpack")));
+        const code = yield* (
+          archive.appImage
+            ? Effect.andThen(
+                fs.chmod(download, 0o755),
+                spawner.exitCode(
+                  ChildProcess.make(download, ["--appimage-extract"], {
+                    cwd: unpacked,
+                    stdout: "ignore",
+                    stderr: "ignore",
+                  }),
+                ),
+              )
+            : // Windows' tar unpacks zip files too.
+              spawner.exitCode(ChildProcess.make("tar", ["-xf", download, "-C", unpacked]))
+        ).pipe(Effect.mapError(failure("unpack")));
         if (code !== 0) return yield* failure("unpack")();
         yield* Effect.uninterruptible(
           Effect.andThen(

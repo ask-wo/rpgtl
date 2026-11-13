@@ -8,7 +8,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { failureMessage } from "../app/failure.ts";
 import { megabytes } from "../translation/counts.ts";
 import { download, nwjsStatus } from "./atoms.ts";
-import { NwjsDownloading } from "./NwjsDownloading.tsx";
+import { ProgramDownloading } from "./ProgramDownloading.tsx";
 
 /** Whether NW.js, which Play starts games in, is downloaded, and a way to download it. */
 export function NwjsCard() {
@@ -42,7 +42,8 @@ export function NwjsCard() {
             value.phase._tag === "Ready" ? (
               <p>NW.js {value.version} is downloaded.</p>
             ) : value.phase._tag === "Downloading" ? (
-              <NwjsDownloading
+              <ProgramDownloading
+                name={value.name}
                 version={value.version}
                 received={value.phase.received}
                 size={value.size}
@@ -53,7 +54,7 @@ export function NwjsCard() {
                   NW.js {value.version} isn't downloaded yet. It is a one-time download of{" "}
                   {megabytes(value.size)} MB; Play also offers it.
                 </p>
-                {value.phase.error && (
+                {value.phase._tag === "Missing" && value.phase.error && (
                   <p className="text-destructive">The last download failed: {value.phase.error}</p>
                 )}
                 <Button className="self-start" disabled={sending} onClick={fetchNwjs}>

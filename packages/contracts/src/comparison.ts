@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { Entry, GlossaryTerm } from "./catalog.ts";
+import { Engine, Entry, GlossaryTerm } from "./catalog.ts";
 import { RunLogLine } from "./runLog.ts";
 import { TranslationSettings } from "./translation.ts";
 
@@ -46,7 +46,7 @@ export type ComparedSetup = typeof ComparedSetup.Type;
 
 /** What `pnpm run compare` saves next to its HTML report. */
 export const Comparison = Schema.Struct({
-  game: Schema.Struct({ id: Schema.String, title: Schema.String }),
+  game: Schema.Struct({ id: Schema.String, title: Schema.String, engine: Engine }),
   samples: Samples,
   /**
    * The sample's entries, untranslated but for fixed ones, and the glossary with pronouns from

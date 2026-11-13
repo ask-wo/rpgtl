@@ -13,9 +13,11 @@ import * as Catalogs from "../games/Catalogs.ts";
 import * as Games from "../games/Games.ts";
 import * as Settings from "../settings/Settings.ts";
 import { folderWith, mvGame } from "../testUtils/gameFolder.ts";
-import { noNwjs, opened, playServices, servicesWith, StateDir } from "../testUtils/state.ts";
+import { command, rubyObject, xpFile, xpMap } from "@rpgtl/domain/testUtils/xpGame";
+import { noPrograms, opened, playServices, servicesWith, StateDir } from "../testUtils/state.ts";
 import * as Launches from "./Launches.ts";
 import * as Nwjs from "./Nwjs.ts";
+import * as Mkxpz from "../mkxpz/Mkxpz.ts";
 
 /** An `nw` that logs what it was given to its log file, as NW.js does, and fails. */
 const failingNw = `#!/bin/sh
@@ -46,9 +48,30 @@ const nwjsAt = (program: string) =>
     }),
   );
 
-const servicesWithNwjs = <E, R>(nwjs: Layer.Layer<Nwjs.Nwjs, E, R>) =>
+/** An mkxp-z that prints the folder it starts in and the config it finds there, and exits. */
+const printingMkxpz = `#!/bin/sh
+echo "started in $SRCDIR"
+cat "$SRCDIR/mkxp.json"
+exit 3
+`;
+
+/** mkxp-z already downloaded, as the program at `program`. */
+const mkxpzAt = (program: string) =>
+  Layer.succeed(
+    Mkxpz.Mkxpz,
+    Mkxpz.Mkxpz.of({
+      changes: Stream.die("not used"),
+      download: Effect.die("not used"),
+      program: Effect.succeed(program),
+    }),
+  );
+
+const servicesWithNwjs = <E, R>(
+  nwjs: Layer.Layer<Nwjs.Nwjs, E, R>,
+  mkxpz = mkxpzAt("/nowhere/mkxp-z"),
+) =>
   playServices.pipe(
-    Layer.provideMerge(nwjs),
+    Layer.provideMerge(Layer.mergeAll(nwjs, mkxpz)),
     Layer.provideMerge(Layer.succeed(SessionToken.SessionToken, "test-token")),
     Layer.provideMerge(servicesWith({})),
     Layer.provideMerge(NodeServices.layer),
@@ -61,6 +84,16 @@ const withFakeNw = Layer.unwrap(
     const dir = yield* folderWith({ nw: failingNw });
     yield* fs.chmod(path.join(dir, "nw"), 0o755);
     return servicesWithNwjs(nwjsAt(path.join(dir, "nw")));
+  }),
+).pipe(Layer.provide(NodeServices.layer));
+
+const withFakeMkxpz = Layer.unwrap(
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const dir = yield* folderWith({ "mkxp-z": printingMkxpz });
+    yield* fs.chmod(path.join(dir, "mkxp-z"), 0o755);
+    return servicesWithNwjs(nwjsAt("/nowhere/nw"), mkxpzAt(path.join(dir, "mkxp-z")));
   }),
 ).pipe(Layer.provide(NodeServices.layer));
 
@@ -164,6 +197,72 @@ it.live(
 );
 
 it.live(
+  "starts an XP game in mkxp-z with a config that reads the translated data files first",
+  () =>
+    Effect.gen(function* () {
+      const launches = yield* Launches.Launches;
+      const catalogs = yield* Catalogs.Catalogs;
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const state = yield* StateDir;
+      const dir = yield* folderWith({
+        "Data/System.rxdata": xpFile(rubyObject("RPG::System", {})),
+        "Data/Map001.rxdata": xpFile(xpMap({ 1: [command(101, "你好")] })),
+        "Data/Items.rxdata": xpFile([null, rubyObject("RPG::Item", { name: "苔藓" })]),
+      });
+      const { game, catalog } = yield* opened(catalogs.inspect(dir));
+      yield* catalogs.save({
+        ...catalog,
+        translate: true,
+        entries: catalog.entries.map((entry) => ({
+          ...entry,
+          translation: { user: entry.source === "你好" ? "Hello" : "" },
+        })),
+      });
+
+      const started = yield* launches.launch(game.id);
+      const mkxpzDir = path.join(state, gameFiles(game.id).mkxpz);
+      const log = path.join(state, gameFiles(game.id).logs, "mkxpz.log");
+      assert.deepStrictEqual(
+        yield* ended(game.id),
+        Option.some({ ...started, phase: { _tag: "Exited", exitCode: 3 } }),
+      );
+      const [first, ...config] = (yield* fs.readFileString(log)).split("\n");
+      assert.strictEqual(first, `started in ${mkxpzDir}`);
+      const patches = path.join(mkxpzDir, "patches");
+      assert.deepInclude(JSON.parse(config.join("\n")), {
+        gameFolder: game.root,
+        patches: [patches],
+      });
+      assert.deepStrictEqual(yield* fs.readDirectory(path.join(patches, "Data")), [
+        "Map001.rxdata",
+      ]);
+
+      const map = path.join(patches, "Data", "Map001.rxdata");
+      yield* fs.writeFileString(map, "kept");
+      const again = Effect.fnUntraced(function* (english: string, translate = true) {
+        const saved = yield* catalogs.get(game.id);
+        yield* catalogs.save({
+          ...saved,
+          translate,
+          entries: saved.entries.map((entry) =>
+            entry.source === "你好" ? { ...entry, translation: { user: english } } : entry,
+          ),
+        });
+        yield* launches.launch(game.id);
+        yield* ended(game.id);
+      });
+      yield* again("Hello");
+      assert.strictEqual(yield* fs.readFileString(map), "kept");
+      yield* again("Hi there");
+      assert.notStrictEqual(yield* fs.readFileString(map), "kept");
+      yield* again("Hi there", false);
+      assert.deepStrictEqual(yield* fs.readDirectory(path.join(patches, "Data")), []);
+    }).pipe(Effect.provide(withFakeMkxpz)),
+  { timeout: 60_000 },
+);
+
+it.live(
   "a game without a package.json opens in a window of its screen size, and a held game waits",
   () =>
     Effect.gen(function* () {
@@ -210,7 +309,7 @@ it.live("a game running in NW.js isn't started again until it has ended", () =>
       const launches = yield* Launches.Launches;
       const game = yield* inspected(mvGame);
       yield* launches.launch(game.id);
-      assert.strictEqual((yield* Effect.flip(launches.launch(game.id)))._tag, "NwjsRunningError");
+      assert.strictEqual((yield* Effect.flip(launches.launch(game.id)))._tag, "GameRunningError");
 
       yield* fs.writeFileString(path.join(dir, "quit"), "");
       yield* ended(game.id);
@@ -250,8 +349,8 @@ it.live("starting needs NW.js downloaded and a listed game", () =>
     const unknown = yield* Effect.flip(launches.changes("ffffffffffffffffffff"));
     assert.strictEqual(unknown._tag, "GameNotInspectedError");
     const missing = yield* Effect.flip(launches.launch(game.id));
-    assert.strictEqual(missing._tag, "NwjsMissingError");
-  }).pipe(Effect.provide(servicesWithNwjs(noNwjs.pipe(Layer.provide(FetchHttpClient.layer))))),
+    assert.strictEqual(missing._tag, "ProgramMissingError");
+  }).pipe(Effect.provide(servicesWithNwjs(noPrograms.pipe(Layer.provide(FetchHttpClient.layer))))),
 );
 
 it("the command line quotes each word for sh, or for PowerShell on Windows", () => {

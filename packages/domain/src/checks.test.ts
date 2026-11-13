@@ -19,7 +19,7 @@ const glossary: GlossaryTerm[] = [
   { source: "月", translation: { user: "Yue" }, kind: { guess: { value: "character" } } },
   { source: "토키", translation: { user: "Toki" }, kind: { guess: { value: "character" } } },
 ];
-const check = translationChecks(glossary, "chinese");
+const check = translationChecks(glossary, "chinese", "MV");
 const line = (source: string, translation: string) =>
   check(
     {
@@ -70,7 +70,7 @@ it("Pronouns count as unlike the source only against a lone 她 or 他", () => {
 });
 
 it("In a Japanese game, 他 means other, not he", () => {
-  const japanese = translationChecks(glossary, "japanese");
+  const japanese = translationChecks(glossary, "japanese", "MV");
   const findings = japanese(
     {
       location: {
@@ -104,4 +104,18 @@ it("Korean or kana left in the English is flagged, and a Korean line answered wi
     [],
   );
   assert.deepStrictEqual(line("そうですか、わかりました。", "I see, got it."), []);
+});
+
+it("An XP name's tags may keep the source's text, which an MV name's brackets may not", () => {
+  const name = {
+    location: { _tag: "RecordField", table: "skills", record: 2, field: "name" },
+    source: "火花{テスト用}",
+  } as const;
+  assert.deepStrictEqual(
+    translationChecks(glossary, "japanese", "XP")(name, "Spark{テスト用}"),
+    [],
+  );
+  assert.deepStrictEqual(translationChecks(glossary, "japanese", "MV")(name, "Spark{テスト用}"), [
+    { check: "source text left" },
+  ]);
 });

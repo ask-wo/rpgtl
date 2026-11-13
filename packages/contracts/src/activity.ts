@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 import { ImageRunStatus } from "./imageText.ts";
-import { NwjsLaunch, NwjsStatus } from "./nwjs.ts";
+import { GameLaunch, ProgramStatus } from "./nwjs.ts";
 import { RunStatus } from "./translation.ts";
 import { ImportProgress } from "./translationFile.ts";
 
@@ -9,9 +9,10 @@ import { ImportProgress } from "./translationFile.ts";
  * connections to RPGTL. Each part is null until the game has one since RPGTL started.
  */
 export const GameActivity = Schema.Struct({
-  nwjs: NwjsStatus,
-  /** The game's last start in NW.js. */
-  launch: Schema.NullOr(NwjsLaunch),
+  /** The program Play starts the game in: NW.js, or mkxp-z for an XP game. */
+  program: ProgramStatus,
+  /** The game's last start with Play. */
+  launch: Schema.NullOr(GameLaunch),
   /** The game's current or last translation run. */
   translation: Schema.NullOr(RunStatus),
   /** The game's current or last image reading. */

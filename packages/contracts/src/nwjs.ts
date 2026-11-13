@@ -1,11 +1,16 @@
 import * as Schema from "effect/Schema";
 
-/** Whether the pinned NW.js is downloaded, and how far a download got. */
-export const NwjsStatus = Schema.Struct({
+/** A program RPGTL runs games in: NW.js for MV and MZ, mkxp-z for XP. */
+export const ProgramName = Schema.Literals(["NW.js", "mkxp-z"]);
+export type ProgramName = typeof ProgramName.Type;
+
+/** Whether a pinned program is downloaded, and how far a download got. */
+export const ProgramStatus = Schema.Struct({
+  name: ProgramName,
   version: Schema.String,
   /** Bytes of the download. */
   size: Schema.Int,
-  /** The folder NW.js is kept in, on this computer. */
+  /** The folder the program is kept in, on this computer. */
   folder: Schema.String,
   phase: Schema.Union([
     Schema.TaggedStruct("Ready", {}),
@@ -13,6 +18,8 @@ export const NwjsStatus = Schema.Struct({
     Schema.TaggedStruct("Downloading", { received: Schema.Int }),
     /** Not downloaded; `error` says why the last download failed, if it did. */
     Schema.TaggedStruct("Missing", { error: Schema.optionalKey(Schema.String) }),
+    /** The release doesn't run on this computer's system. */
+    Schema.TaggedStruct("Unsupported", {}),
   ]),
   /**
    * How many downloads started since RPGTL started. A status sent during or after one has its
@@ -20,10 +27,10 @@ export const NwjsStatus = Schema.Struct({
    */
   attempt: Schema.Int,
 });
-export type NwjsStatus = typeof NwjsStatus.Type;
+export type ProgramStatus = typeof ProgramStatus.Type;
 
-/** A game started in NW.js since RPGTL started, and how it ended. */
-export const NwjsLaunch = Schema.Struct({
+/** A game started with Play since RPGTL started, and how it ended. */
+export const GameLaunch = Schema.Struct({
   phase: Schema.Union([
     Schema.TaggedStruct("Running", {}),
     Schema.TaggedStruct("Exited", { exitCode: Schema.Int }),
@@ -31,9 +38,9 @@ export const NwjsLaunch = Schema.Struct({
     Schema.TaggedStruct("Stopped", {}),
   ]),
   pid: Schema.Int,
-  /** The file NW.js writes its output to. */
+  /** The file the program writes its output to. */
   log: Schema.String,
   /** The command line that starts the game the same way from a terminal. */
   command: Schema.String,
 });
-export type NwjsLaunch = typeof NwjsLaunch.Type;
+export type GameLaunch = typeof GameLaunch.Type;

@@ -3,6 +3,7 @@ import { codeOrBackslash, controlCodePattern, isPauseCode, shownText } from "./c
 import { creditLine, keepsLineBreaks } from "./engines/mvmz/extract.ts";
 import { pauseMarker, pausesIn, withPauses, type Pause, type Pauses } from "./pauses.ts";
 import type { Placed } from "./location.ts";
+import { tagPattern } from "./engines/xp/databaseTags.ts";
 
 // Korean puts spaces between words, so a line break between Hangul joins with a space.
 const unspacedCharacter = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}　-〿！-｠⏸]/u;
@@ -24,9 +25,17 @@ export function joinLines(text: string, keepLines = false) {
 
 // Codes that stand for a word move with the English word order, so they are never kept aside.
 const wordCode = String.raw`(?:%\d+|\\[NVP]\[[^\]]*\]|\\G(?![A-Za-z[<]))`;
-const edgePart = `(?:\\s|(?!${wordCode})(?:${controlCodePattern.source}))`;
-const leadingPattern = new RegExp(`^${edgePart}*`, "i");
-const trailingPattern = new RegExp(`${edgePart}*$`, "i");
+const edgePart = `\\s|(?!${wordCode})(?:${controlCodePattern.source})`;
+const keptAside = (codes: string, edge: string) => ({
+  leading: new RegExp(`^(?:${edge})*`, "i"),
+  trailing: new RegExp(`(?:${edge})*$`, "i"),
+  inside: new RegExp(codes, "g"),
+});
+const plainPatterns = keptAside(codeOrBackslash.source, edgePart);
+const tagPatterns = keptAside(
+  `${tagPattern.source}|${codeOrBackslash.source}`,
+  `${tagPattern.source}|${edgePart}`,
+);
 const placeholder = /\{(\d+)\}/g;
 
 /** The text as a player reads it: no control codes, and lines joined as `joinLines` does. */
@@ -51,9 +60,9 @@ const colorCode = /\\C\[\d+\]/gi;
 
 // A color at an edge that a color inside the line opens or closes is sent with it, or the model
 // sees only one end of the span and the color runs from the English's start or to its end.
-function edges(source: string) {
-  const leading = leadingPattern.exec(source)?.[0] ?? "";
-  const trailing = trailingPattern.exec(source.slice(leading.length))?.[0] ?? "";
+function edges(source: string, patterns: typeof plainPatterns) {
+  const leading = patterns.leading.exec(source)?.[0] ?? "";
+  const trailing = patterns.trailing.exec(source.slice(leading.length))?.[0] ?? "";
   const body = source.slice(leading.length, source.length - trailing.length);
   if (!body.match(colorCode)) return { leading, trailing };
   const first = leading.search(colorCode);
@@ -90,9 +99,11 @@ function withSpeakerLine(
   };
 }
 
+/** With `keepTags`, the tags of an XP database name or description are kept aside like control codes. */
 export function requestText(
   entry: Pick<Entry, "source"> & Placed,
   isSpeaker?: (name: string) => boolean,
+  keepTags = false,
 ): RequestText {
   const credit = creditLine(entry);
   if (credit)
@@ -103,7 +114,8 @@ export function requestText(
       pauses: pausesIn("", [], false),
       text: credit.role,
     };
-  const edge = edges(entry.source);
+  const patterns = keepTags ? tagPatterns : plainPatterns;
+  const edge = edges(entry.source, patterns);
   const { trailing } = edge;
   const { leading, body, speakerLine } = withSpeakerLine(
     edge.leading,
@@ -115,7 +127,7 @@ export function requestText(
   const found: Array<{ code: string; at: number }> = [];
   let unjoined = "";
   let last = 0;
-  for (const match of body.matchAll(codeOrBackslash)) {
+  for (const match of body.matchAll(patterns.inside)) {
     const [code] = match;
     unjoined += body.slice(last, match.index);
     last = match.index + code.length;
