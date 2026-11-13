@@ -29,7 +29,7 @@ export const ProgramStatus = Schema.Struct({
 });
 export type ProgramStatus = typeof ProgramStatus.Type;
 
-/** A game started in NW.js since RPGTL started, and how it ended. */
+/** A game started with Play since RPGTL started, and how it ended. */
 export const GameLaunch = Schema.Struct({
   phase: Schema.Union([
     Schema.TaggedStruct("Running", {}),
@@ -38,7 +38,7 @@ export const GameLaunch = Schema.Struct({
     Schema.TaggedStruct("Stopped", {}),
   ]),
   pid: Schema.Int,
-  /** The file NW.js writes its output to. */
+  /** The file the program writes its output to. */
   log: Schema.String,
   /** The command line that starts the game the same way from a terminal. */
   command: Schema.String,

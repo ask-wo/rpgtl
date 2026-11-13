@@ -64,7 +64,7 @@ export function Overview() {
           </AlertDescription>
         </Alert>
       )}
-      {engineFeatures[game.engine].play && (
+      {engineFeatures[game.engine].gameScripts && (
         <Card>
           <CardHeader>
             <CardTitle>In-game tools</CardTitle>

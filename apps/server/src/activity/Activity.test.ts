@@ -9,7 +9,7 @@ import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import * as SessionToken from "../auth/SessionToken.ts";
 import { httpClientAnswering } from "../testUtils/ollama.ts";
-import { game, noNwjs, playServices, runServices, servicesWith } from "../testUtils/state.ts";
+import { game, noPrograms, playServices, runServices, servicesWith } from "../testUtils/state.ts";
 import * as Ollama from "../localModels/Ollama.ts";
 import * as Runs from "../translation/Runs.ts";
 import * as Activity from "./Activity.ts";
@@ -41,7 +41,7 @@ const services = Activity.layer.pipe(
         "games.json": JSON.stringify([game]),
         [gameFiles(game.id).catalog]: JSON.stringify(catalog),
       }),
-      noNwjs,
+      noPrograms,
       Layer.succeed(SessionToken.SessionToken, "test-token"),
     ),
   ),

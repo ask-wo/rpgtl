@@ -43,6 +43,7 @@ export function NwjsCard() {
               <p>NW.js {value.version} is downloaded.</p>
             ) : value.phase._tag === "Downloading" ? (
               <ProgramDownloading
+                name={value.name}
                 version={value.version}
                 received={value.phase.received}
                 size={value.size}

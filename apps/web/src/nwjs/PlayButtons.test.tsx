@@ -34,7 +34,7 @@ const fakeServer = () => {
   const requests = serveApi((request) => {
     const { pathname } = new URL(request.url);
     if (pathname === "/api/activity") return stream.response();
-    if (pathname === "/api/nwjs/download")
+    if (pathname === "/api/launch/download")
       return Response.json({ ...downloading, phase: { _tag: "Downloading", received: 0 } });
     if (pathname === "/api/launch") {
       const started: GameLaunch = {
@@ -53,7 +53,7 @@ const fakeServer = () => {
 
 test("Play asks before downloading NW.js, starts the game once it is downloaded, and turns into Stop while it runs", async () => {
   const server = fakeServer();
-  render(<PlayButtons gameId="0f1e2d3c4b5a69788796" />);
+  render(<PlayButtons gameId="0f1e2d3c4b5a69788796" inBrowser />);
   server.activity({});
 
   await page.getByRole("button", { name: "Play", exact: true }).click();
@@ -93,23 +93,23 @@ test("Play asks before downloading NW.js, starts the game once it is downloaded,
 
 test("Not now leaves NW.js undownloaded", async () => {
   const server = fakeServer();
-  render(<PlayButtons gameId="0f1e2d3c4b5a69788796" />);
+  render(<PlayButtons gameId="0f1e2d3c4b5a69788796" inBrowser />);
   server.activity({});
 
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Not now" }).click();
   await expect.element(page.getByText("Download NW.js?")).not.toBeInTheDocument();
-  expect(server.requests).not.toContain("POST /api/nwjs/download");
+  expect(server.requests).not.toContain("POST /api/launch/download");
 });
 
 test("a download that fails before the page sees it says why, and a later download doesn't start the game", async () => {
   const server = fakeServer();
-  render(<PlayButtons gameId="0f1e2d3c4b5a69788796" />);
+  render(<PlayButtons gameId="0f1e2d3c4b5a69788796" inBrowser />);
   server.activity({});
 
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Download and play" }).click();
-  await vi.waitFor(() => expect(server.requests).toContain("POST /api/nwjs/download"));
+  await vi.waitFor(() => expect(server.requests).toContain("POST /api/launch/download"));
   server.activity({
     program: { ...downloading, phase: { _tag: "Missing", error: "Offline" } },
   });
@@ -126,7 +126,7 @@ test("a long log path wraps instead of widening the page", async () => {
   const frame = document.body.appendChild(document.createElement("div"));
   frame.style.width = "400px";
   const folder = `C:\\Users\\Player\\AppData\\Local\\rpgtl\\data\\games\\0f1e2d3c4b5a69788796`;
-  render(<PlayButtons gameId="0f1e2d3c4b5a69788796" />, frame);
+  render(<PlayButtons gameId="0f1e2d3c4b5a69788796" inBrowser />, frame);
   server.activity({
     program: { ...notReady, phase: { _tag: "Ready" } },
     launch: {
@@ -140,4 +140,12 @@ test("a long log path wraps instead of widening the page", async () => {
     .element(page.getByText("NW.js exited with exit code 0.", { exact: false }))
     .toBeVisible();
   expect(frame.scrollWidth).toBeLessThanOrEqual(frame.clientWidth);
+});
+
+test("Play is off where the game's program can't run", async () => {
+  const server = fakeServer();
+  render(<PlayButtons gameId="0f1e2d3c4b5a69788796" inBrowser={false} />);
+  server.activity({ program: { ...notReady, name: "mkxp-z", phase: { _tag: "Unsupported" } } });
+
+  await expect.element(page.getByRole("button", { name: "Play", exact: true })).toBeDisabled();
 });

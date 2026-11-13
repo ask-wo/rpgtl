@@ -1,5 +1,7 @@
-import { type Game, gameFiles, type GameLaunch } from "@rpgtl/contracts";
+import { type Game, gameFiles, type GameLaunch, type ProgramStatus } from "@rpgtl/contracts";
 import { hookScript, type HookConfig } from "@rpgtl/game/scripts";
+import { applyXpTranslations } from "@rpgtl/domain";
+import * as Result from "effect/Result";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -23,9 +25,13 @@ import * as StateFolder from "../state/StateFolder.ts";
 import { userFolder } from "../state/userFolders.ts";
 import { OnWindows } from "../OnWindows.ts";
 import * as Nwjs from "./Nwjs.ts";
+import * as Mkxpz from "../mkxpz/Mkxpz.ts";
+import { mkxpConfig } from "../mkxpz/Mkxpz.ts";
+import * as Catalogs from "../games/Catalogs.ts";
+import * as GameFolder from "../games/GameFolder.ts";
 import type { ProgramMissingError } from "../downloads/pinnedProgram.ts";
 
-/** The game's app folder or hook couldn't be made, or NW.js didn't start. */
+/** The files the game's program needs couldn't be made, or the program didn't start. */
 export class LaunchError extends Schema.TaggedError<LaunchError>()("LaunchError", {
   id: Schema.String,
   operation: Schema.Literals(["prepare", "start", "stop"]),
@@ -34,11 +40,11 @@ export class LaunchError extends Schema.TaggedError<LaunchError>()("LaunchError"
   override get message() {
     switch (this.operation) {
       case "prepare":
-        return `Couldn't make the NW.js app folder of game ${this.id}.`;
+        return `Couldn't make the files game ${this.id} starts with.`;
       case "start":
-        return `Couldn't start NW.js for game ${this.id}.`;
+        return `Couldn't start game ${this.id}.`;
       case "stop":
-        return `Couldn't stop NW.js for game ${this.id}.`;
+        return `Couldn't stop game ${this.id}.`;
     }
   }
 }
@@ -48,7 +54,7 @@ export class GameRunningError extends Schema.TaggedError<GameRunningError>()("Ga
   id: Schema.String,
 }) {
   override get message() {
-    return `Game ${this.id} is already running in NW.js.`;
+    return `Game ${this.id} is already running.`;
   }
 }
 
@@ -72,13 +78,32 @@ export const commandLine = (words: ReadonlyArray<string>, windows: boolean) =>
     ? `& ${words.map((word) => `'${word.replaceAll("'", "''")}'`).join(" ")}`
     : words.map((word) => `'${word.replaceAll("'", "'\\''")}'`).join(" ");
 
-/** Games started in NW.js, which reads each game's catalog from disk itself. */
+/**
+ * How to start mkxp-z, which reads `mkxp.json` in the folder `SRCDIR` names. A shell sends its
+ * output to `log`.
+ */
+const mkxpzCommand = (program: string, dir: string, log: string) => ({
+  words: ["env", `SRCDIR=${dir}`, program],
+  command: ChildProcess.make("sh", ["-c", 'exec "$0" >"$1" 2>&1', program, log], {
+    env: { SRCDIR: dir },
+    extendEnv: true,
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  }),
+});
+
+/**
+ * Games started with Play: MV and MZ games in NW.js, which reads each game's catalog from disk
+ * itself, and XP games in mkxp-z, which reads the translated data files written before it starts.
+ */
 export class Launches extends Context.Service<
   Launches,
   {
     /**
-     * Makes the game's app folder in `<state>/games/<id>/nwjs` and starts NW.js in it, holding the game
-     * meanwhile, unless the game's last start still runs. NW.js keeps running after RPGTL exits.
+     * Writes what the game's program needs in `<state>/games/<id>/` (NW.js's app folder, or
+     * mkxp-z's translated data files) and starts the program, holding the game meanwhile, unless
+     * the game's last start still runs. The program keeps running after RPGTL exits.
      */
     readonly launch: (
       id: string,
@@ -93,7 +118,12 @@ export class Launches extends Context.Service<
       | Frontend.FrontendFileError
       | StateFolder.StateFileError
     >;
-    /** Ends NW.js and what it started, if the game's last start still runs. */
+    /**
+     * Starts downloading the program the game is started in, unless it is there or on its way,
+     * and gives its status.
+     */
+    readonly download: (id: string) => Effect.Effect<ProgramStatus, Games.GameNotInspectedError>;
+    /** Ends the game's program and what it started, if the game's last start still runs. */
     readonly stop: (id: string) => Effect.Effect<void, Games.GameNotInspectedError | LaunchError>;
     /** The game's last start now and after each change, until the stream is closed. */
     readonly changes: (
@@ -114,6 +144,9 @@ const make = Effect.gen(function* () {
   const settings = yield* Settings.Settings;
   const frontend = yield* Frontend.Frontend;
   const nwjs = yield* Nwjs.Nwjs;
+  const mkxpz = yield* Mkxpz.Mkxpz;
+  const catalogs = yield* Catalogs.Catalogs;
+  const gameFolder = yield* GameFolder.GameFolder;
   // Each start waits for NW.js's exit in a fiber of the layer's scope, which RPGTL exiting ends
   // without stopping NW.js.
   const scope = yield* Effect.scope;
@@ -227,16 +260,30 @@ const make = Effect.gen(function* () {
   });
 
   /**
-   * Starts NW.js, which writes its own warnings and errors to `log`, as RPGTL's pipes would close
-   * when it exits while the game goes on.
+   * The folder mkxp-z starts in: its `mkxp.json`, and the data files that hold translated text
+   * while the game's translation switch is on, which it reads before the game's own.
    */
-  const start = Effect.fnUntraced(function* (
-    id: string,
-    program: string,
-    appDir: string,
-    log: string,
-  ) {
-    const result = yield* Deferred.make<GameLaunch, LaunchError>();
+  const mkxpzFolder = Effect.fnUntraced(function* (game: Game, program: string) {
+    const dir = path.join(state.root, gameFiles(game.id).mkxpz);
+    const patches = path.join(dir, "patches");
+    yield* fs.remove(dir, { recursive: true, force: true });
+    yield* fs.makeDirectory(path.join(patches, "Data"), { recursive: true });
+    const catalog = yield* catalogs.get(game.id);
+    if (catalog.translate)
+      for (const [name, bytes] of yield* gameFolder.xpData(game)) {
+        const translated = applyXpTranslations(name, bytes, catalog.entries);
+        if (Result.isFailure(translated))
+          yield* Effect.logWarning(`${name} plays untranslated.`, translated.failure);
+        else if (translated.success)
+          yield* fs.writeFile(path.join(patches, "Data", name), translated.success);
+      }
+    const config = mkxpConfig(path.dirname(program), game.root, patches);
+    yield* fs.writeFileString(path.join(dir, "mkxp.json"), JSON.stringify(config, null, 2));
+    return dir;
+  });
+
+  /** How to start NW.js, which writes its own warnings and errors to `log`. */
+  const nwjsCommand = (id: string, program: string, appDir: string, log: string) => {
     const args = [
       "--enable-logging",
       `--log-file=${log}`,
@@ -244,13 +291,32 @@ const make = Effect.gen(function* () {
       `--user-data-dir=${path.join(profiles, id)}`,
       appDir,
     ];
-    const command = ChildProcess.make(program, args, {
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-      // On Windows a child process starts hidden by default, and NW.js's window then never draws.
-      windowsHide: false,
-    });
+    return {
+      words: [program, ...args],
+      command: ChildProcess.make(program, args, {
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "ignore",
+        // On Windows a child process starts hidden by default, and NW.js's window then never
+        // draws.
+        windowsHide: false,
+      }),
+    };
+  };
+
+  /**
+   * Starts the game's program, which writes its output to a file of its own, as RPGTL's pipes
+   * would close when it exits while the game goes on.
+   */
+  const start = Effect.fnUntraced(function* (
+    id: string,
+    log: string,
+    {
+      words,
+      command,
+    }: { readonly words: ReadonlyArray<string>; readonly command: ChildProcess.Command },
+  ) {
+    const result = yield* Deferred.make<GameLaunch, LaunchError>();
     const running = Effect.gen(function* () {
       const handle = yield* spawner.spawn(command);
       // An unreferenced process outlives the scope that started it.
@@ -259,7 +325,7 @@ const make = Effect.gen(function* () {
         phase: { _tag: "Running" },
         pid: handle.pid,
         log,
-        command: commandLine([program, ...args], yield* OnWindows),
+        command: commandLine(words, yield* OnWindows),
       };
       // NW.js ends with exit code 0 on a signal once its page has loaded.
       const stopAsked = yield* Ref.make(false);
@@ -302,27 +368,34 @@ const make = Effect.gen(function* () {
   const launch = Effect.fn("Launches.launch")(function* (id: string) {
     const game = yield* games.get(id);
     yield* Games.requireFeature(game, "play");
-    const program = yield* nwjs.program;
+    const xp = game.engine === "XP";
+    const program = yield* (xp ? mkxpz : nwjs).program;
     return yield* games.exclusive(
       id,
       Effect.gen(function* () {
         if ((yield* SubscriptionRef.get(launches)).get(id)?.launch.phase._tag === "Running")
           return yield* new GameRunningError({ id });
-        const log = path.join(state.root, gameFiles(id).logs, "nwjs.log");
-        const hookText = yield* hook(game, log);
+        const log = path.join(state.root, gameFiles(id).logs, xp ? "mkxpz.log" : "nwjs.log");
+        const hookText = xp ? "" : yield* hook(game, log);
         const prepared = Effect.gen(function* () {
           yield* fs.makeDirectory(path.dirname(log), { recursive: true });
           yield* fs.writeFileString(log, "");
-          return yield* appFolder(game, hookText);
+          return xp
+            ? mkxpzCommand(program, yield* mkxpzFolder(game, program), log)
+            : nwjsCommand(id, program, yield* appFolder(game, hookText), log);
         }).pipe(
           Effect.catchTags({
             PlatformError: (cause) =>
               Effect.fail(new LaunchError({ id, operation: "prepare", cause })),
             BadArgument: (cause) =>
               Effect.fail(new LaunchError({ id, operation: "prepare", cause })),
+            GameFileReadError: (cause) =>
+              Effect.fail(new LaunchError({ id, operation: "prepare", cause })),
+            GameFileInvalid: (cause) =>
+              Effect.fail(new LaunchError({ id, operation: "prepare", cause })),
           }),
         );
-        return yield* start(id, program, yield* prepared, log);
+        return yield* start(id, log, yield* prepared);
       }),
     );
   });
@@ -347,7 +420,12 @@ const make = Effect.gen(function* () {
     );
   });
 
-  return Launches.of({ launch, stop, changes });
+  const download = Effect.fn("Launches.download")(function* (id: string) {
+    const game = yield* games.get(id);
+    return yield* (game.engine === "XP" ? mkxpz : nwjs).download;
+  });
+
+  return Launches.of({ launch, download, stop, changes });
 });
 
 export const layer = Layer.effect(Launches, make);

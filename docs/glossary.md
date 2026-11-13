@@ -59,7 +59,7 @@ The words the code and these docs are built from. Use them in code, tests, docs 
 | Term | Meaning |
 | --- | --- |
 | Browser play | A game played in the browser from RPGTL's server, which applies the translations to the files it serves (`Play`). |
-| RPGTL launch | Starting a game in RPGTL's own NW.js with the **NW.js hook**, which reads the catalog from disk and applies it (`Launches`). Starting the game through its own `Game.exe` is unaffected. |
+| RPGTL launch | Starting a game with Play (`Launches`): an MV or MZ game in RPGTL's own NW.js with the **NW.js hook**, which reads the catalog from disk and applies it, and an XP game in mkxp-z, which reads the translated data files RPGTL writes first. Starting the game through its own `Game.exe` is unaffected. |
 | Translation switch | A game's **Translate this game** switch. Off, the game shows its original text; it doesn't start or stop a run. |
 | Game scripts | The scripts RPGTL adds to a played game (`packages/game`): the **runtime** (fitting English into windows, the F8 panel) and the **map view** (F7). |
-| Activity | Everything running for a game (its runs, image reading, NW.js) as the one stream its page follows (`Activity`). |
+| Activity | Everything running for a game (its runs, image reading, the program it plays in) as the one stream its page follows (`Activity`). |

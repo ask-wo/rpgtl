@@ -27,6 +27,7 @@ import * as RunKinds from "./runs/RunKinds.ts";
 import * as FreeMemory from "./localModels/FreeMemory.ts";
 import * as LlamaServer from "./localModels/LlamaServer.ts";
 import * as Launches from "./nwjs/Launches.ts";
+import * as Mkxpz from "./mkxpz/Mkxpz.ts";
 import * as Nwjs from "./nwjs/Nwjs.ts";
 import * as Play from "./play/Play.ts";
 import * as Playtime from "./play/Playtime.ts";
@@ -52,7 +53,14 @@ const services = <E, R>(frontend: Layer.Layer<Frontend.Frontend, E, R>) =>
       Layer.mergeAll(Runs.layer, ImageReading.layer, Launches.layer, Play.layer, Playtime.layer),
     ),
     Layer.provideMerge(
-      Layer.mergeAll(Catalogs.layer, RunLogs.layer, VisionModel.layer, Nwjs.layer, frontend),
+      Layer.mergeAll(
+        Catalogs.layer,
+        RunLogs.layer,
+        VisionModel.layer,
+        Nwjs.layer,
+        Mkxpz.layer,
+        frontend,
+      ),
     ),
     Layer.provideMerge(Layer.mergeAll(LlamaServer.layer, ImageReader.layer)),
     Layer.provideMerge(

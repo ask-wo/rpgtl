@@ -8,6 +8,7 @@ import * as Catalogs from "../games/Catalogs.ts";
 import * as Games from "../games/Games.ts";
 import * as ImageReading from "../imageText/ImageReading.ts";
 import * as Launches from "../nwjs/Launches.ts";
+import * as Mkxpz from "../mkxpz/Mkxpz.ts";
 import * as Nwjs from "../nwjs/Nwjs.ts";
 import * as Runs from "../translation/Runs.ts";
 
@@ -24,26 +25,31 @@ export class Activity extends Context.Service<
 
 const make = Effect.gen(function* () {
   const nwjs = yield* Nwjs.Nwjs;
+  const mkxpz = yield* Mkxpz.Mkxpz;
+  const games = yield* Games.Games;
   const launches = yield* Launches.Launches;
   const runs = yield* Runs.Runs;
   const imageReading = yield* ImageReading.ImageReading;
   const catalogs = yield* Catalogs.Catalogs;
 
   const changes = Effect.fn("Activity.changes")(function* (id: string) {
+    const program = (yield* games.get(id)).engine === "XP" ? mkxpz : nwjs;
     const [launch, translation, images, importing] = yield* Effect.all([
       launches.changes(id),
       runs.changes(id),
       imageReading.changes(id),
       catalogs.importChanges(id),
     ]);
-    return Stream.zipLatestAll(nwjs.changes, launch, translation, images, importing).pipe(
-      Stream.map(([nwjsNow, launchNow, translationNow, imagesNow, importingNow]): GameActivity => ({
-        program: nwjsNow,
-        launch: Option.getOrNull(launchNow),
-        translation: Option.getOrNull(translationNow),
-        images: Option.getOrNull(imagesNow),
-        importing: Option.getOrNull(importingNow),
-      })),
+    return Stream.zipLatestAll(program.changes, launch, translation, images, importing).pipe(
+      Stream.map(
+        ([programNow, launchNow, translationNow, imagesNow, importingNow]): GameActivity => ({
+          program: programNow,
+          launch: Option.getOrNull(launchNow),
+          translation: Option.getOrNull(translationNow),
+          images: Option.getOrNull(imagesNow),
+          importing: Option.getOrNull(importingNow),
+        }),
+      ),
     );
   });
 

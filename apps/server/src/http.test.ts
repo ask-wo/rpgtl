@@ -33,7 +33,7 @@ import { folderWith, mvGame } from "./testUtils/gameFolder.ts";
 import {
   game,
   noImageReader,
-  noNwjs,
+  noPrograms,
   other,
   playServices,
   runServices,
@@ -107,7 +107,7 @@ const serving = (files: Record<string, string>) =>
         servicesWith(files),
         ollama,
         Layer.succeed(SessionToken.SessionToken, token),
-        noNwjs,
+        noPrograms,
         noImageReader,
       ),
     ),

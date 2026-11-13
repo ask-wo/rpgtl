@@ -22,13 +22,13 @@ export class GameNotInspectedError extends Schema.TaggedError<GameNotInspectedEr
   }
 }
 
-/** Something RPGTL can't do yet for games of the game's engine, such as playing an XP game. */
+/** Something RPGTL can't do yet for games of the game's engine, such as the audit's coverage checks for XP games. */
 export class EngineUnsupportedError extends Schema.TaggedError<EngineUnsupportedError>()(
   "EngineUnsupportedError",
   {
     id: Schema.String,
     engine: Engine,
-    feature: Schema.Literals(["play", "imageText", "coverage"]),
+    feature: Schema.Literals(["play", "gameScripts", "imageText", "coverage"]),
   },
 ) {
   override get message() {

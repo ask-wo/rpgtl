@@ -136,6 +136,13 @@ export class GameFolder extends Context.Service<
       GameFileMissingError | GameFileReadError | GameFileInvalid
     >;
     /**
+     * The `.rxdata` files of an XP game by name, as mkxp-z reads them: from its archive, else from
+     * its `Data/` folder.
+     */
+    readonly xpData: (
+      game: FolderGame,
+    ) => Effect.Effect<ReadonlyMap<string, Uint8Array>, GameFileReadError | GameFileInvalid>;
+    /**
      * Every data file, whether RPGTL extracts its text or not, the plugin list and the code of
      * the plugins, for searches of all of the game.
      */
@@ -570,6 +577,9 @@ const make = Effect.gen(function* () {
     images,
     readFile,
     entries,
+    xpData: Effect.fn("GameFolder.xpData")(function* (game: FolderGame) {
+      return yield* xpDataFiles(game.root);
+    }),
     contents,
   });
 });

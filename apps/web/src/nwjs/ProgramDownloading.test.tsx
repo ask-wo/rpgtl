@@ -7,7 +7,10 @@ import { ProgramDownloading } from "./ProgramDownloading.tsx";
 const barTop = async (width: number, received: number) => {
   const frame = document.body.appendChild(document.createElement("div"));
   frame.style.width = `${width}px`;
-  render(<ProgramDownloading version="v0.117.0" received={received} size={120e6} />, frame);
+  render(
+    <ProgramDownloading name="NW.js" version="v0.117.0" received={received} size={120e6} />,
+    frame,
+  );
   await expect
     .element(page.getByText(`${received / 1e6} of 120 MB`, { exact: false }))
     .toBeVisible();

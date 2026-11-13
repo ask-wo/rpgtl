@@ -8,5 +8,6 @@ export const nwjsStatus = Rpgtl.runtime.atom(
 );
 
 export const download = Rpgtl.mutation("nwjs", "download");
+export const downloadProgram = Rpgtl.mutation("nwjs", "downloadProgram");
 export const launch = Rpgtl.mutation("nwjs", "launch");
 export const stop = Rpgtl.mutation("nwjs", "stop");

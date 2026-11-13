@@ -41,6 +41,13 @@ export const layer = HttpApiBuilder.group(
           }),
         );
       }),
+      downloadProgram: Effect.fn("nwjs.downloadProgram")(function* ({ payload }) {
+        return yield* launches.download(payload.id).pipe(
+          Effect.catchTags({
+            GameNotInspectedError: () => Effect.fail(new GameNotInspected()),
+          }),
+        );
+      }),
       stop: Effect.fn("nwjs.stop")(function* ({ payload }) {
         return yield* launches.stop(payload.id).pipe(
           Effect.catchTags({

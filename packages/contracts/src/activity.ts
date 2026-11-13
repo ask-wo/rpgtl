@@ -9,8 +9,9 @@ import { ImportProgress } from "./translationFile.ts";
  * connections to RPGTL. Each part is null until the game has one since RPGTL started.
  */
 export const GameActivity = Schema.Struct({
+  /** The program Play starts the game in: NW.js, or mkxp-z for an XP game. */
   program: ProgramStatus,
-  /** The game's last start in NW.js. */
+  /** The game's last start with Play. */
   launch: Schema.NullOr(GameLaunch),
   /** The game's current or last translation run. */
   translation: Schema.NullOr(RunStatus),

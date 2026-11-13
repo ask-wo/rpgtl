@@ -24,5 +24,7 @@ export const gameFiles = (id: string) => {
     /** The folder NW.js opens, with its `package.json` pointing at the game's index.html. */
     nwjsApp: `${folder}/nwjs`,
     nwjsHook: `${folder}/nwjs-hook.js`,
+    /** The folder mkxp-z starts in: its `mkxp.json` and the translated data files it reads first. */
+    mkxpz: `${folder}/mkxpz`,
   };
 };
