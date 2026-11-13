@@ -171,6 +171,9 @@ catalogs:
 overrides:
   vite@*: npm:@voidzero-dev/vite-plus-core@1.4.0
 
+patchedDependencies:
+  '@hyrious/marshal@0.3.4': 9c24045b6471c46e1c082db609ff0b40db184c17b47bff698fb22e0cdb60227b
+
 importers:
 
   .:
@@ -327,7 +330,7 @@ importers:
     dependencies:
       '@hyrious/marshal':
         specifier: 0.3.4
-        version: 0.3.4
+        version: 0.3.4(patch_hash=9c24045b6471c46e1c082db609ff0b40db184c17b47bff698fb22e0cdb60227b)
       '@noble/hashes':
         specifier: 2.4.0
         version: 2.4.0
@@ -3694,7 +3697,7 @@ snapshots:
     dependencies:
       hono: 4.13.14
 
-  '@hyrious/marshal@0.3.4': {}
+  '@hyrious/marshal@0.3.4(patch_hash=9c24045b6471c46e1c082db609ff0b40db184c17b47bff698fb22e0cdb60227b)': {}
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:

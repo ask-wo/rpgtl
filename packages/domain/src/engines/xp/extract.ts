@@ -91,7 +91,7 @@ function listText(
 
 // A string literal a Ruby script assigns to a variable or compares one with, such as
 // `$msg_name = "…"` or `$game_variables[5] == '…'`.
-const assignedLiteral =
+export const assignedLiteral =
   /((?:\$?[A-Za-z_]\w*(?:\[\d+\])?)\s*(?:==|!=|=)\s*)("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')/g;
 
 const escapes: Record<string, string> = {
@@ -107,7 +107,7 @@ const escapes: Record<string, string> = {
  * The value of a Ruby string literal; none for one whose value isn't plain, such as one with
  * `#{}` in it.
  */
-function literalValue(literal: string) {
+export function literalValue(literal: string) {
   const body = literal.slice(1, -1);
   if (literal.startsWith("'")) return body.replace(/\\([\\'])/g, "$1");
   if (/#[{$@]/.test(body)) return undefined;
