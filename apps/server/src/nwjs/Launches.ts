@@ -1,4 +1,4 @@
-import { type Game, gameFiles, type NwjsLaunch } from "@rpgtl/contracts";
+import { type Game, gameFiles, type GameLaunch } from "@rpgtl/contracts";
 import { hookScript, type HookConfig } from "@rpgtl/game/scripts";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -25,7 +25,7 @@ import { OnWindows } from "../OnWindows.ts";
 import * as Nwjs from "./Nwjs.ts";
 
 /** The game's app folder or hook couldn't be made, or NW.js didn't start. */
-export class NwjsLaunchError extends Schema.TaggedError<NwjsLaunchError>()("NwjsLaunchError", {
+export class LaunchError extends Schema.TaggedError<LaunchError>()("LaunchError", {
   id: Schema.String,
   operation: Schema.Literals(["prepare", "start", "stop"]),
   cause: Schema.Defect(),
@@ -43,7 +43,7 @@ export class NwjsLaunchError extends Schema.TaggedError<NwjsLaunchError>()("Nwjs
 }
 
 /** The game's last start still runs; starting it again would rebuild the folder it runs from. */
-export class NwjsRunningError extends Schema.TaggedError<NwjsRunningError>()("NwjsRunningError", {
+export class GameRunningError extends Schema.TaggedError<GameRunningError>()("GameRunningError", {
   id: Schema.String,
 }) {
   override get message() {
@@ -82,24 +82,22 @@ export class Launches extends Context.Service<
     readonly launch: (
       id: string,
     ) => Effect.Effect<
-      NwjsLaunch,
+      GameLaunch,
       | Games.GameNotInspectedError
       | Games.GameBusyError
       | Games.EngineUnsupportedError
-      | Nwjs.NwjsMissingError
-      | NwjsRunningError
-      | NwjsLaunchError
+      | Nwjs.ProgramMissingError
+      | GameRunningError
+      | LaunchError
       | Frontend.FrontendFileError
       | StateFolder.StateFileError
     >;
     /** Ends NW.js and what it started, if the game's last start still runs. */
-    readonly stop: (
-      id: string,
-    ) => Effect.Effect<void, Games.GameNotInspectedError | NwjsLaunchError>;
+    readonly stop: (id: string) => Effect.Effect<void, Games.GameNotInspectedError | LaunchError>;
     /** The game's last start now and after each change, until the stream is closed. */
     readonly changes: (
       id: string,
-    ) => Effect.Effect<Stream.Stream<Option.Option<NwjsLaunch>>, Games.GameNotInspectedError>;
+    ) => Effect.Effect<Stream.Stream<Option.Option<GameLaunch>>, Games.GameNotInspectedError>;
   }
 >()("@rpgtl/server/nwjs/Launches") {}
 
@@ -122,7 +120,7 @@ const make = Effect.gen(function* () {
     new Map<
       string,
       {
-        readonly launch: NwjsLaunch;
+        readonly launch: GameLaunch;
         readonly stop: Effect.Effect<void, PlatformError.PlatformError>;
       }
     >(),
@@ -237,7 +235,7 @@ const make = Effect.gen(function* () {
     appDir: string,
     log: string,
   ) {
-    const result = yield* Deferred.make<NwjsLaunch, NwjsLaunchError>();
+    const result = yield* Deferred.make<GameLaunch, LaunchError>();
     const args = [
       "--enable-logging",
       `--log-file=${log}`,
@@ -256,7 +254,7 @@ const make = Effect.gen(function* () {
       const handle = yield* spawner.spawn(command);
       // An unreferenced process outlives the scope that started it.
       yield* Effect.asVoid(handle.unref);
-      const launch: NwjsLaunch = {
+      const launch: GameLaunch = {
         phase: { _tag: "Running" },
         pid: handle.pid,
         log,
@@ -289,8 +287,7 @@ const make = Effect.gen(function* () {
     }).pipe(
       Effect.scoped,
       Effect.catchTags({
-        PlatformError: (cause) =>
-          Effect.fail(new NwjsLaunchError({ id, operation: "start", cause })),
+        PlatformError: (cause) => Effect.fail(new LaunchError({ id, operation: "start", cause })),
       }),
       // Completes the start with any failure before it, a defect too; after it this does nothing.
       Effect.onExit((exit) =>
@@ -309,7 +306,7 @@ const make = Effect.gen(function* () {
       id,
       Effect.gen(function* () {
         if ((yield* SubscriptionRef.get(launches)).get(id)?.launch.phase._tag === "Running")
-          return yield* new NwjsRunningError({ id });
+          return yield* new GameRunningError({ id });
         const log = path.join(state.root, gameFiles(id).logs, "nwjs.log");
         const hookText = yield* hook(game, log);
         const prepared = Effect.gen(function* () {
@@ -319,9 +316,9 @@ const make = Effect.gen(function* () {
         }).pipe(
           Effect.catchTags({
             PlatformError: (cause) =>
-              Effect.fail(new NwjsLaunchError({ id, operation: "prepare", cause })),
+              Effect.fail(new LaunchError({ id, operation: "prepare", cause })),
             BadArgument: (cause) =>
-              Effect.fail(new NwjsLaunchError({ id, operation: "prepare", cause })),
+              Effect.fail(new LaunchError({ id, operation: "prepare", cause })),
           }),
         );
         return yield* start(id, program, yield* prepared, log);
@@ -344,8 +341,7 @@ const make = Effect.gen(function* () {
     if (last?.launch.phase._tag !== "Running") return;
     yield* last.stop.pipe(
       Effect.catchTags({
-        PlatformError: (cause) =>
-          Effect.fail(new NwjsLaunchError({ id, operation: "stop", cause })),
+        PlatformError: (cause) => Effect.fail(new LaunchError({ id, operation: "stop", cause })),
       }),
     );
   });

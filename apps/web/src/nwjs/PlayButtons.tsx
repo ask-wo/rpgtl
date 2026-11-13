@@ -1,5 +1,5 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import type { NwjsLaunch, NwjsStatus } from "@rpgtl/contracts";
+import type { GameLaunch, ProgramStatus } from "@rpgtl/contracts";
 import * as Exit from "effect/Exit";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { ExternalLinkIcon, PlayIcon, SquareIcon } from "lucide-react";
@@ -20,7 +20,7 @@ import { failureMessage } from "../app/failure.ts";
 import { activity } from "../games/activity.ts";
 import { megabytes } from "../translation/counts.ts";
 import { download, launch, stop } from "./atoms.ts";
-import { NwjsDownloading } from "./NwjsDownloading.tsx";
+import { ProgramDownloading } from "./ProgramDownloading.tsx";
 
 /**
  * Play starts the game in NW.js, downloading NW.js first once the player agrees, and turns into
@@ -30,7 +30,7 @@ import { NwjsDownloading } from "./NwjsDownloading.tsx";
 export function PlayButtons({ gameId }: { readonly gameId: string }) {
   const result = useAtomValue(activity(gameId));
   const now = AsyncResult.getOrElse(result, () => undefined);
-  const status = now?.nwjs;
+  const status = now?.program;
   const lastStart = now?.launch ?? null;
   // Only a refused request ends the stream; reloading the page connects again.
   const refused = AsyncResult.isFailure(result) ? failureMessage(result.cause) : undefined;
@@ -128,10 +128,14 @@ export function PlayButtons({ gameId }: { readonly gameId: string }) {
   );
 }
 
-function DownloadProgress({ status: { phase, size, version } }: { readonly status: NwjsStatus }) {
+function DownloadProgress({
+  status: { phase, size, version },
+}: {
+  readonly status: ProgramStatus;
+}) {
   if (phase._tag === "Downloading")
     return (
-      <NwjsDownloading
+      <ProgramDownloading
         version={version}
         received={phase.received}
         size={size}
@@ -147,7 +151,7 @@ function DownloadProgress({ status: { phase, size, version } }: { readonly statu
   return null;
 }
 
-function LastStart({ start }: { readonly start: NwjsLaunch }) {
+function LastStart({ start }: { readonly start: GameLaunch }) {
   const { phase } = start;
   const failed = phase._tag === "Exited" && phase.exitCode !== 0;
   const summary =

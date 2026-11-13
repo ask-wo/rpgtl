@@ -1,4 +1,4 @@
-import type { NwjsStatus } from "@rpgtl/contracts";
+import type { ProgramStatus } from "@rpgtl/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -46,8 +46,8 @@ export const NwjsRelease = Context.Reference<Release>("@rpgtl/server/nwjs/NwjsRe
   defaultValue: () => (process.platform === "win32" ? windowsRelease : linuxRelease),
 });
 
-export class NwjsMissingError extends Schema.TaggedError<NwjsMissingError>()(
-  "NwjsMissingError",
+export class ProgramMissingError extends Schema.TaggedError<ProgramMissingError>()(
+  "ProgramMissingError",
   {},
 ) {
   override get message() {
@@ -63,14 +63,14 @@ export class Nwjs extends Context.Service<
   Nwjs,
   {
     /** The status now and after each change, until the stream is closed. */
-    readonly changes: Stream.Stream<NwjsStatus>;
+    readonly changes: Stream.Stream<ProgramStatus>;
     /**
      * Starts downloading NW.js unless it is there or on its way, and gives the status. The
      * download goes on in the background until it ends or RPGTL exits.
      */
-    readonly download: Effect.Effect<NwjsStatus>;
+    readonly download: Effect.Effect<ProgramStatus>;
     /** The NW.js program, once it is downloaded. */
-    readonly program: Effect.Effect<string, NwjsMissingError>;
+    readonly program: Effect.Effect<string, ProgramMissingError>;
   }
 >()("@rpgtl/server/nwjs/Nwjs") {}
 
@@ -104,7 +104,7 @@ const make = Effect.gen(function* () {
     .pipe(Effect.catchTags({ PlatformError: () => Effect.succeed(false) }));
 
   const statusOf = ({ attempt, now }: Attempt) =>
-    Effect.map(ready, (isReady): NwjsStatus => ({
+    Effect.map(ready, (isReady): ProgramStatus => ({
       version: release.version,
       size: release.size,
       folder: base,
@@ -156,7 +156,7 @@ const make = Effect.gen(function* () {
   const program = ready.pipe(
     Effect.filterOrFail(
       (found) => found,
-      () => new NwjsMissingError(),
+      () => new ProgramMissingError(),
     ),
     Effect.as(binary),
     Effect.withSpan("Nwjs.program"),

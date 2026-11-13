@@ -1,10 +1,10 @@
-import type { GameActivity, NwjsLaunch, NwjsStatus } from "@rpgtl/contracts";
+import type { GameActivity, GameLaunch, ProgramStatus } from "@rpgtl/contracts";
 import { page } from "vite-plus/test/browser";
 import { expect, test, vi } from "vite-plus/test";
 import { events, render, serveApi } from "../testUtils/fakeApi.tsx";
 import { PlayButtons } from "./PlayButtons.tsx";
 
-const notReady: NwjsStatus = {
+const notReady: ProgramStatus = {
   version: "v0.117.0",
   size: 100e6,
   folder: "/home/player/.cache/rpgtl/nwjs",
@@ -13,13 +13,13 @@ const notReady: NwjsStatus = {
 };
 
 /** The status of the first download, which the download request starts. */
-const downloading: NwjsStatus = { ...notReady, attempt: 1 };
+const downloading: ProgramStatus = { ...notReady, attempt: 1 };
 
 /** RPGTL's server as far as Play talks to it; `requests` lists what the page asked for. */
 const fakeServer = () => {
   const stream = events();
   let now: GameActivity = {
-    nwjs: notReady,
+    program: notReady,
     launch: null,
     translation: null,
     images: null,
@@ -36,7 +36,7 @@ const fakeServer = () => {
     if (pathname === "/api/nwjs/download")
       return Response.json({ ...downloading, phase: { _tag: "Downloading", received: 0 } });
     if (pathname === "/api/launch") {
-      const started: NwjsLaunch = {
+      const started: GameLaunch = {
         phase: { _tag: "Running" },
         pid: 42,
         log: "/state/logs/nwjs.log",
@@ -61,12 +61,12 @@ test("Play asks before downloading NW.js, starts the game once it is downloaded,
     .element(page.getByText("100 MB to /home/player/.cache/rpgtl/nwjs.", { exact: false }))
     .toBeVisible();
   await page.getByRole("button", { name: "Download and play" }).click();
-  server.activity({ nwjs: { ...downloading, phase: { _tag: "Downloading", received: 40e6 } } });
+  server.activity({ program: { ...downloading, phase: { _tag: "Downloading", received: 40e6 } } });
   await expect.element(page.getByText("Downloading NW.js v0.117.0")).toBeVisible();
   await expect.element(page.getByText("40 of 100 MB")).toBeVisible();
   expect(server.requests).not.toContain("POST /api/launch");
 
-  server.activity({ nwjs: { ...downloading, phase: { _tag: "Ready" } } });
+  server.activity({ program: { ...downloading, phase: { _tag: "Ready" } } });
   await vi.waitFor(() => expect(server.requests).toContain("POST /api/launch"), 5000);
   server.activity({
     launch: { phase: { _tag: "Running" }, pid: 42, log: "/state/logs/nwjs.log", command: "nw ." },
@@ -110,11 +110,11 @@ test("a download that fails before the page sees it says why, and a later downlo
   await page.getByRole("button", { name: "Download and play" }).click();
   await vi.waitFor(() => expect(server.requests).toContain("POST /api/nwjs/download"));
   server.activity({
-    nwjs: { ...downloading, phase: { _tag: "Missing", error: "Offline" } },
+    program: { ...downloading, phase: { _tag: "Missing", error: "Offline" } },
   });
   await expect.element(page.getByText("NW.js didn't download: Offline")).toBeVisible();
 
-  server.activity({ nwjs: { ...notReady, attempt: 2, phase: { _tag: "Ready" } } });
+  server.activity({ program: { ...notReady, attempt: 2, phase: { _tag: "Ready" } } });
   await expect.element(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
   await new Promise((resolve) => setTimeout(resolve, 300));
   expect(server.requests).not.toContain("POST /api/launch");
@@ -127,7 +127,7 @@ test("a long log path wraps instead of widening the page", async () => {
   const folder = `C:\\Users\\Player\\AppData\\Local\\rpgtl\\data\\games\\0f1e2d3c4b5a69788796`;
   render(<PlayButtons gameId="0f1e2d3c4b5a69788796" />, frame);
   server.activity({
-    nwjs: { ...notReady, phase: { _tag: "Ready" } },
+    program: { ...notReady, phase: { _tag: "Ready" } },
     launch: {
       phase: { _tag: "Exited", exitCode: 0 },
       pid: 42,

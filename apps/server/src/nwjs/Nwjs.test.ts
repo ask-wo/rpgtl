@@ -1,4 +1,4 @@
-import type { NwjsStatus } from "@rpgtl/contracts";
+import type { ProgramStatus } from "@rpgtl/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { createHash } from "node:crypto";
@@ -81,7 +81,7 @@ const nwjsServing = Effect.fn("nwjsServing")(function* (
 });
 
 /** The first status that passes `until`, as the page hears of it. */
-const statusWhen = (nwjs: Nwjs.Nwjs["Service"], until: (status: NwjsStatus) => boolean) =>
+const statusWhen = (nwjs: Nwjs.Nwjs["Service"], until: (status: ProgramStatus) => boolean) =>
   nwjs.changes.pipe(Stream.filter(until), Stream.runHead, Effect.map(Option.getOrThrow));
 
 const downloaded = (nwjs: Nwjs.Nwjs["Service"]) =>

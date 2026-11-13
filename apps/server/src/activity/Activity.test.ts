@@ -70,7 +70,7 @@ it.effect("a game's activity follows a translation run started after it was open
       images: null,
       importing: null,
     });
-    assert.deepInclude(seen.at(-1)?.nwjs, { phase: { _tag: "Missing" } });
+    assert.deepInclude(seen.at(-1)?.program, { phase: { _tag: "Missing" } });
     assert.include(seen.at(-1)?.translation, { total: 1 });
   }).pipe(Effect.provide(services)),
 );

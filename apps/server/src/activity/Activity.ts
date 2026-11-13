@@ -38,7 +38,7 @@ const make = Effect.gen(function* () {
     ]);
     return Stream.zipLatestAll(nwjs.changes, launch, translation, images, importing).pipe(
       Stream.map(([nwjsNow, launchNow, translationNow, imagesNow, importingNow]): GameActivity => ({
-        nwjs: nwjsNow,
+        program: nwjsNow,
         launch: Option.getOrNull(launchNow),
         translation: Option.getOrNull(translationNow),
         images: Option.getOrNull(imagesNow),

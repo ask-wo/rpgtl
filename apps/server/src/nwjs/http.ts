@@ -3,10 +3,10 @@ import {
   EngineUnsupported,
   GameBusy,
   GameNotInspected,
-  NwjsLaunchFailed,
-  NwjsMissing,
-  NwjsRunning,
-  NwjsStopFailed,
+  LaunchFailed,
+  ProgramMissing,
+  GameRunning,
+  StopFailed,
 } from "@rpgtl/contracts";
 import * as Effect from "effect/Effect";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
@@ -14,9 +14,7 @@ import * as Launches from "./Launches.ts";
 import * as Nwjs from "./Nwjs.ts";
 
 const launchFailed = (error: { readonly message: string; readonly cause: unknown }) =>
-  Effect.logError(error.message, error.cause).pipe(
-    Effect.andThen(Effect.fail(new NwjsLaunchFailed())),
-  );
+  Effect.logError(error.message, error.cause).pipe(Effect.andThen(Effect.fail(new LaunchFailed())));
 
 export const layer = HttpApiBuilder.group(
   Api,
@@ -35,9 +33,9 @@ export const layer = HttpApiBuilder.group(
             GameNotInspectedError: () => Effect.fail(new GameNotInspected()),
             GameBusyError: () => Effect.fail(new GameBusy()),
             EngineUnsupportedError: () => Effect.fail(new EngineUnsupported()),
-            NwjsMissingError: () => Effect.fail(new NwjsMissing()),
-            NwjsRunningError: () => Effect.fail(new NwjsRunning()),
-            NwjsLaunchError: launchFailed,
+            ProgramMissingError: () => Effect.fail(new ProgramMissing()),
+            GameRunningError: () => Effect.fail(new GameRunning()),
+            LaunchError: launchFailed,
             FrontendFileError: launchFailed,
             StateFileError: launchFailed,
           }),
@@ -47,9 +45,9 @@ export const layer = HttpApiBuilder.group(
         return yield* launches.stop(payload.id).pipe(
           Effect.catchTags({
             GameNotInspectedError: () => Effect.fail(new GameNotInspected()),
-            NwjsLaunchError: (error) =>
+            LaunchError: (error) =>
               Effect.logError(error.message, error.cause).pipe(
-                Effect.andThen(Effect.fail(new NwjsStopFailed())),
+                Effect.andThen(Effect.fail(new StopFailed())),
               ),
           }),
         );

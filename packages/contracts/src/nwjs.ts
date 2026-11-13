@@ -1,7 +1,7 @@
 import * as Schema from "effect/Schema";
 
 /** Whether the pinned NW.js is downloaded, and how far a download got. */
-export const NwjsStatus = Schema.Struct({
+export const ProgramStatus = Schema.Struct({
   version: Schema.String,
   /** Bytes of the download. */
   size: Schema.Int,
@@ -20,10 +20,10 @@ export const NwjsStatus = Schema.Struct({
    */
   attempt: Schema.Int,
 });
-export type NwjsStatus = typeof NwjsStatus.Type;
+export type ProgramStatus = typeof ProgramStatus.Type;
 
 /** A game started in NW.js since RPGTL started, and how it ended. */
-export const NwjsLaunch = Schema.Struct({
+export const GameLaunch = Schema.Struct({
   phase: Schema.Union([
     Schema.TaggedStruct("Running", {}),
     Schema.TaggedStruct("Exited", { exitCode: Schema.Int }),
@@ -36,4 +36,4 @@ export const NwjsLaunch = Schema.Struct({
   /** The command line that starts the game the same way from a terminal. */
   command: Schema.String,
 });
-export type NwjsLaunch = typeof NwjsLaunch.Type;
+export type GameLaunch = typeof GameLaunch.Type;

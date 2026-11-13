@@ -2,7 +2,7 @@ import { cn } from "cn";
 import { Progress } from "~/components/ui/progress";
 import { megabytes } from "../translation/counts.ts";
 
-export function NwjsDownloading({
+export function ProgramDownloading({
   version,
   received,
   size,

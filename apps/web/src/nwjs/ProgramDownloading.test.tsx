@@ -1,13 +1,13 @@
 import { page } from "vite-plus/test/browser";
 import { expect, test } from "vite-plus/test";
 import { render } from "../testUtils/fakeApi.tsx";
-import { NwjsDownloading } from "./NwjsDownloading.tsx";
+import { ProgramDownloading } from "./ProgramDownloading.tsx";
 
 /** Where the bar starts below the top of a frame `width` pixels wide. */
 const barTop = async (width: number, received: number) => {
   const frame = document.body.appendChild(document.createElement("div"));
   frame.style.width = `${width}px`;
-  render(<NwjsDownloading version="v0.117.0" received={received} size={120e6} />, frame);
+  render(<ProgramDownloading version="v0.117.0" received={received} size={120e6} />, frame);
   await expect
     .element(page.getByText(`${received / 1e6} of 120 MB`, { exact: false }))
     .toBeVisible();

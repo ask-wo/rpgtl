@@ -210,7 +210,7 @@ it.live("a game running in NW.js isn't started again until it has ended", () =>
       const launches = yield* Launches.Launches;
       const game = yield* inspected(mvGame);
       yield* launches.launch(game.id);
-      assert.strictEqual((yield* Effect.flip(launches.launch(game.id)))._tag, "NwjsRunningError");
+      assert.strictEqual((yield* Effect.flip(launches.launch(game.id)))._tag, "GameRunningError");
 
       yield* fs.writeFileString(path.join(dir, "quit"), "");
       yield* ended(game.id);
@@ -250,7 +250,7 @@ it.live("starting needs NW.js downloaded and a listed game", () =>
     const unknown = yield* Effect.flip(launches.changes("ffffffffffffffffffff"));
     assert.strictEqual(unknown._tag, "GameNotInspectedError");
     const missing = yield* Effect.flip(launches.launch(game.id));
-    assert.strictEqual(missing._tag, "NwjsMissingError");
+    assert.strictEqual(missing._tag, "ProgramMissingError");
   }).pipe(Effect.provide(servicesWithNwjs(noNwjs.pipe(Layer.provide(FetchHttpClient.layer))))),
 );
 

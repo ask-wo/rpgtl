@@ -5,7 +5,7 @@ import {
   Catalog,
   FolderListing,
   GameActivity,
-  NwjsStatus,
+  ProgramStatus,
   Playtime,
   gameFiles,
 } from "@rpgtl/contracts";
@@ -511,7 +511,7 @@ it.effect("tells whether NW.js is downloaded, and what a game's page follows", (
   Effect.gen(function* () {
     const nwjs = yield* get("/api/nwjs");
     assert.strictEqual(nwjs.headers["content-type"], "text/event-stream");
-    assert.deepInclude(yield* firstEvent(nwjs, NwjsStatus), {
+    assert.deepInclude(yield* firstEvent(nwjs, ProgramStatus), {
       version: "v0.117.0",
       phase: { _tag: "Missing" },
     });
