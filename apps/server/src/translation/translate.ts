@@ -317,7 +317,12 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
         );
         const answers = readAnswers(keys, reply.text);
         for (const [position, { item, index, translation, flag, limit }] of long.entries()) {
-          const second = checkAnswer(item.entry, answers?.[position], first.contexts[index]);
+          const second = checkAnswer(
+            item.entry,
+            answers?.[position],
+            first.contexts[index],
+            draft.keepsTags(item.entry),
+          );
           if (second._tag === "Success" && shownLength(second.success.translation) <= limit)
             draft.accept(item, second.success.translation, {
               flag: ["shortened to fit its image", second.success.flag].filter(Boolean).join("; "),
@@ -384,7 +389,9 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
           const reason =
             verdict.rejected ?? (verdict.repeating === index ? "answer too long" : undefined);
           const checked =
-            reason === undefined ? checkAnswer(item.entry, answer, contexts[index]) : undefined;
+            reason === undefined
+              ? checkAnswer(item.entry, answer, contexts[index], draft.keepsTags(item.entry))
+              : undefined;
           if (checked === undefined || checked._tag === "Failure") {
             const why = checked?.failure ?? reason ?? "no answer";
             rejected.push({ item, reason: why });

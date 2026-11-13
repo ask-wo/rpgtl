@@ -186,7 +186,7 @@ const make = Effect.gen(function* () {
     const done = yield* Ref.make<ReadonlyArray<ComparedSetup>>([]);
     const save = Effect.fn("Comparisons.save")(function* (setup: ComparedSetup) {
       const comparison: Comparison = {
-        game: { id, title: catalog.game.title },
+        game: { id, title: catalog.game.title, engine: catalog.game.engine },
         samples,
         sample: { entries: sample.entries, glossary: sample.glossary },
         setups: yield* Ref.updateAndGet(done, (all) => [...all, setup]),

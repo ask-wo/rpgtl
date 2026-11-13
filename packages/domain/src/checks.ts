@@ -1,6 +1,7 @@
 import type {
   Catalog,
   CheckName,
+  Engine,
   Entry,
   Finding,
   Findings,
@@ -8,6 +9,7 @@ import type {
   SourceLanguage,
 } from "@rpgtl/contracts";
 import { controlCodePattern, plainText, speakerTagPattern } from "./controlCodes.ts";
+import { keepsNameTags, withoutNameTags } from "./engines/xp/nameTags.ts";
 import { isNameEntry, isSpeakerNameEntry } from "./nameEntries.ts";
 import { hasTerm } from "./termMatch.ts";
 import { entryTranslation, termTranslation, termKind } from "./guesses.ts";
@@ -169,7 +171,11 @@ const mentions = (text: string, english: string) =>
     new RegExp(`(?<![\\p{L}\\p{N}])${RegExp.escape(part)}`, "iu").test(text),
   );
 
-export function translationChecks(glossary: ReadonlyArray<GlossaryTerm>, language: SourceLanguage) {
+export function translationChecks(
+  glossary: ReadonlyArray<GlossaryTerm>,
+  language: SourceLanguage,
+  engine: Engine,
+) {
   const terms = glossary
     .filter((term) => term.source.trim() && termTranslation(term).trim())
     .toSorted((a, b) => b.source.length - a.source.length);
@@ -189,9 +195,11 @@ export function translationChecks(glossary: ReadonlyArray<GlossaryTerm>, languag
   const nearTerms = termLookup(terms);
   const nearCapitalisable = termLookup(capitalisable);
   const isName = new Set(names);
-  return (entry: Pick<Entry, "source"> & Placed, translation: string): Finding[] => {
-    const { source } = entry;
-    if (!translation) return [];
+  return (entry: Pick<Entry, "source"> & Placed, written: string): Finding[] => {
+    if (!written) return [];
+    const tags = keepsNameTags(engine, entry);
+    const source = tags ? withoutNameTags(entry.source) : entry.source;
+    const translation = tags ? withoutNameTags(written) : written;
     const findings: Finding[] = [];
     const add = (check: CheckName, detail?: string) =>
       findings.push(detail === undefined ? { check } : { check, detail });
@@ -227,9 +235,9 @@ export function translationChecks(glossary: ReadonlyArray<GlossaryTerm>, languag
 
 /** The findings of every translated entry that has any, by entry id. */
 export function catalogFindings(
-  catalog: Pick<Catalog, "entries" | "glossary" | "language">,
+  catalog: Pick<Catalog, "entries" | "glossary" | "language" | "game">,
 ): Findings {
-  const check = translationChecks(catalog.glossary, gameLanguage(catalog));
+  const check = translationChecks(catalog.glossary, gameLanguage(catalog), catalog.game.engine);
   const found: Record<string, Finding[]> = {};
   for (const entry of catalog.entries) {
     const findings = check(entry, entryTranslation(entry));

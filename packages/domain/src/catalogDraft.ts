@@ -13,6 +13,7 @@ import { answerSuggestion } from "./answers.ts";
 import { sourceScript } from "./checks.ts";
 import { speakerTagName, speakerTagPattern } from "./controlCodes.ts";
 import { entryTranslation, termTranslation, termKind, withGuess } from "./guesses.ts";
+import { keepsNameTags, withoutNameTags } from "./engines/xp/nameTags.ts";
 import { gameLanguage } from "./language.ts";
 import { isImageText, isMessage, type Placed } from "./location.ts";
 import { isActorName, isSpeakerNameEntry } from "./nameEntries.ts";
@@ -147,7 +148,22 @@ export class CatalogDraft {
 
   /** Adds a term for a translated name entry, unless the glossary has one. */
   seedTerm(entry: RunEntry) {
-    this.addTerm(entry.source, entryTranslation(entry), isOriginName(entry));
+    this.#seed(entry, entryTranslation(entry));
+  }
+
+  /**
+   * Adds the entry's translation to the glossary, without its name tags. Gives the new term when
+   * the entry's translation should be the term's.
+   */
+  #seed(entry: RunEntry, translation: string): DraftTerm | undefined {
+    if (!this.keepsTags(entry)) return this.addTerm(entry.source, translation, isOriginName(entry));
+    this.addTerm(withoutNameTags(entry.source), withoutNameTags(translation), isOriginName(entry));
+    return undefined;
+  }
+
+  /** Whether the entry's name tags stay as they are, kept aside from requests. */
+  keepsTags(entry: Placed) {
+    return keepsNameTags(this.#catalog.game.engine, entry);
   }
 
   /** Adds the names the model found, such as Claude's reading of the game, with its kinds. */
@@ -166,7 +182,7 @@ export class CatalogDraft {
    * glossary term or the speaker's name is the speaker, kept aside from the text.
    */
   prepare(entry: RunEntry): Prepared {
-    const request = requestText(entry);
+    const request = requestText(entry, undefined, this.keepsTags(entry));
     if (!isMessage(entry)) return { entry, ...request };
     const tag = speakerTagName(request.leading);
     return {
@@ -249,7 +265,7 @@ export class CatalogDraft {
     const known = this.#reuse.known(entry);
     let result = known ?? this.#withSpeakerNames(item, translation);
     if (seedGlossary) {
-      const term = this.addTerm(entry.source, result, isOriginName(entry));
+      const term = this.#seed(entry, result);
       if (term) result = termTranslation(term);
     }
     entry.translation = withGuess(entry.translation, {

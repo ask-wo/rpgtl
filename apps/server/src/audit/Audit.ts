@@ -108,8 +108,13 @@ const make = Effect.gen(function* () {
     return {
       ...result,
       comparison: {
-        before: runTotals(yield* logs.read(before.value), catalog.glossary, language),
-        after: runTotals(log.value, catalog.glossary, language),
+        before: runTotals(
+          yield* logs.read(before.value),
+          catalog.glossary,
+          language,
+          catalog.game.engine,
+        ),
+        after: runTotals(log.value, catalog.glossary, language, catalog.game.engine),
       },
     } satisfies AuditReport;
   });

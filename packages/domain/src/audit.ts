@@ -3,6 +3,7 @@ import {
   type Catalog,
   CheckName,
   type Correction,
+  type Engine,
   type Entry,
   type RejectionGroup,
   type RejectReason,
@@ -117,8 +118,9 @@ export function runTotals(
   log: RunLog,
   glossary: Catalog["glossary"],
   language: SourceLanguage,
+  engine: Engine,
 ): RunTotals {
-  const check = translationChecks(glossary, language);
+  const check = translationChecks(glossary, language, engine);
   const answers = runAnswers(log);
   const findings: Partial<Record<CheckName, number>> = {};
   for (const entry of answers.values())
@@ -165,7 +167,10 @@ function differing(entries: ReadonlyArray<Entry>) {
 }
 
 /** What to look at in a game's translations, and in the run of `log` when there is one. */
-export function audit(catalog: Pick<Catalog, "entries" | "glossary">, log?: RunLog): AuditReport {
+export function audit(
+  catalog: Pick<Catalog, "entries" | "glossary" | "game">,
+  log?: RunLog,
+): AuditReport {
   const translated = catalog.entries.filter((entry) => entryTranslation(entry));
   const prose = translated.filter((entry) => !isNameEntry(entry) && !isSpeakerNameEntry(entry));
   const capitalised = catalog.glossary
@@ -187,7 +192,7 @@ export function audit(catalog: Pick<Catalog, "entries" | "glossary">, log?: RunL
     .filter((term) => term.lines > 0)
     .toSorted((a, b) => b.lines - a.lines);
 
-  const check = translationChecks(catalog.glossary, gameLanguage(catalog));
+  const check = translationChecks(catalog.glossary, gameLanguage(catalog), catalog.game.engine);
   const findings = CheckName.literals.map((name) => ({
     check: name,
     count: 0,

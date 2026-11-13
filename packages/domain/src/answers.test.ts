@@ -318,3 +318,17 @@ it("Pauses keep their order and their own punctuation when the English adds a co
     ),
   );
 });
+
+it("an XP name's tags go back where they were, and an answer without the inner one is rejected", () => {
+  const state: Asked = {
+    location: { _tag: "RecordField", table: "states", record: 4, field: "name" },
+    source: "[仮]霧よけ（[RATE]%）",
+  };
+  const request = requestText(state, undefined, true);
+  assert.strictEqual(request.text, "霧よけ（{1}%）");
+  assert.deepStrictEqual(
+    checkAnswer(state, "Mist Guard ({1}%)", {}, true),
+    accepted("[仮]Mist Guard ([RATE]%)"),
+  );
+  assert.isTrue(Result.isFailure(checkAnswer(state, "Mist Guard (%)", {}, true)));
+});

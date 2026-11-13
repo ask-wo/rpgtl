@@ -99,8 +99,9 @@ export function checkAnswer(
   entry: Pick<Entry, "source"> & Placed,
   answer: string | undefined,
   { glossary = [], speaker, limit }: AnswerContext = {},
+  keepTags = false,
 ): Result.Result<AcceptedAnswer, RejectReason> {
-  const request = requestText(entry, (name) => name === speaker?.source);
+  const request = requestText(entry, (name) => name === speaker?.source, keepTags);
   const value =
     answer === undefined
       ? ""

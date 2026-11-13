@@ -39,7 +39,7 @@ export function catalogChange(
       ? withChecked(
           previous.findings,
           changed,
-          translationChecks(next.glossary, gameLanguage(next)),
+          translationChecks(next.glossary, gameLanguage(next), next.game.engine),
         )
       : catalogFindings(next);
   const { entries: _, ...rest } = next;
