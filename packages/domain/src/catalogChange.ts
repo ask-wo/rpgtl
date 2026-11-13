@@ -74,6 +74,10 @@ export function withCatalogChange(
   return {
     catalog: {
       ...change.catalog,
+      // Kept when it is the same, so a page of a large glossary doesn't draw it again on each save.
+      glossary: same(previous.catalog.glossary, change.catalog.glossary)
+        ? previous.catalog.glossary
+        : change.catalog.glossary,
       entries: previous.catalog.entries.map((entry) => changed.get(entry.id) ?? entry),
     },
     findings: change.findings,

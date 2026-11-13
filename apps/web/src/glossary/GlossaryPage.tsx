@@ -128,14 +128,6 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
   };
 
   const order = glossaryOrder(glossary, saved.entries);
-  const query = filter.trim().toLowerCase();
-  const shown = order.filter((index) => {
-    const term = glossary[index];
-    return (
-      term !== undefined &&
-      (!query || `${term.source} ${termTranslation(term)}`.toLowerCase().includes(query))
-    );
-  });
   const current = selected ?? order[0];
   const term = current === undefined ? undefined : glossary[current];
   const characters = glossary.filter(
@@ -211,67 +203,15 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
               Add term
             </Button>
           </div>
-          {glossary.length === 0 ? (
-            <p className="p-3 text-muted-foreground">
-              No glossary terms yet. Build glossary fills it from the game's names.
-            </p>
-          ) : shown.length === 0 ? (
-            <p className="p-3 text-muted-foreground">No matching terms.</p>
-          ) : (
-            sections.map(({ kind, label }) => {
-              const terms = shown.filter((index) => {
-                const each = glossary[index];
-                return each !== undefined && termKind(each) === kind;
-              });
-              if (terms.length === 0) return null;
-              return (
-                <section key={kind} aria-label={label}>
-                  <h3 className="sticky top-12 bg-sidebar px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                    {label} · {number(terms.length)}
-                  </h3>
-                  {terms.map((index) => {
-                    const each = glossary[index];
-                    if (!each) return null;
-                    return (
-                      <div key={index} className="group/term relative">
-                        <button
-                          type="button"
-                          aria-current={index === current || undefined}
-                          onClick={() => setSelected(index)}
-                          className="block w-full border-b px-3 py-1.5 text-left hover:bg-accent aria-[current]:bg-accent"
-                        >
-                          <span className="flex items-center gap-2">
-                            <span>{each.source || "New term"}</span>
-                            {kind === "character" && (
-                              <Badge
-                                variant="outline"
-                                className="ml-auto transition-none group-focus-within/term:opacity-0 group-hover/term:opacity-0"
-                              >
-                                {termPronoun(each) ?? "unknown"}
-                              </Badge>
-                            )}
-                          </span>
-                          <span className="block text-muted-foreground">
-                            {termTranslation(each)}
-                          </span>
-                        </button>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          disabled={locked}
-                          aria-label={`Remove ${each.source || "the new term"} from the glossary`}
-                          className="absolute top-1.5 right-2 opacity-0 group-focus-within/term:opacity-100 group-hover/term:opacity-100"
-                          onClick={() => setRemoving(each)}
-                        >
-                          <XIcon />
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </section>
-              );
-            })
-          )}
+          <TermList
+            glossary={glossary}
+            order={order}
+            filter={filter}
+            current={current}
+            locked={locked}
+            onSelect={setSelected}
+            onRemove={setRemoving}
+          />
         </div>
         <div className="min-w-0 overflow-auto p-6">
           {term !== undefined && current !== undefined && (
@@ -342,5 +282,100 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
         </ConfirmDialog>
       )}
     </div>
+  );
+}
+
+/**
+ * The terms by kind, in `order`, that `filter` matches. Apart from the page, so a save that leaves
+ * the glossary as it was doesn't draw a large game's thousands of terms again.
+ */
+function TermList({
+  glossary,
+  order,
+  filter,
+  current,
+  locked,
+  onSelect,
+  onRemove,
+}: {
+  readonly glossary: ReadonlyArray<GlossaryTerm>;
+  readonly order: ReadonlyArray<number>;
+  readonly filter: string;
+  readonly current: number | undefined;
+  readonly locked: boolean;
+  readonly onSelect: (index: number) => void;
+  readonly onRemove: (term: GlossaryTerm) => void;
+}) {
+  const query = filter.trim().toLowerCase();
+  const shown = order.filter((index) => {
+    const term = glossary[index];
+    return (
+      term !== undefined &&
+      (!query || `${term.source} ${termTranslation(term)}`.toLowerCase().includes(query))
+    );
+  });
+  return glossary.length === 0 ? (
+    <p className="p-3 text-muted-foreground">
+      No glossary terms yet. Build glossary fills it from the game's names.
+    </p>
+  ) : shown.length === 0 ? (
+    <p className="p-3 text-muted-foreground">No matching terms.</p>
+  ) : (
+    sections.map(({ kind, label }) => {
+      const terms = shown.filter((index) => {
+        const each = glossary[index];
+        return each !== undefined && termKind(each) === kind;
+      });
+      if (terms.length === 0) return null;
+      return (
+        <section key={kind} aria-label={label}>
+          <h3 className="sticky top-12 bg-sidebar px-3 py-1.5 text-xs font-medium text-muted-foreground">
+            {label} · {number(terms.length)}
+          </h3>
+          {terms.map((index) => {
+            const each = glossary[index];
+            if (!each) return null;
+            return (
+              // A large game's glossary has thousands of rows, which every save lays out
+              // again unless the browser may skip the ones out of view.
+              <div
+                key={index}
+                className="group/term relative [contain-intrinsic-size:auto_3.25rem] [content-visibility:auto]"
+              >
+                <button
+                  type="button"
+                  aria-current={index === current || undefined}
+                  onClick={() => onSelect(index)}
+                  className="block w-full border-b px-3 py-1.5 text-left hover:bg-accent aria-[current]:bg-accent"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>{each.source || "New term"}</span>
+                    {kind === "character" && (
+                      <Badge
+                        variant="outline"
+                        className="ml-auto transition-none group-focus-within/term:opacity-0 group-hover/term:opacity-0"
+                      >
+                        {termPronoun(each) ?? "unknown"}
+                      </Badge>
+                    )}
+                  </span>
+                  <span className="block text-muted-foreground">{termTranslation(each)}</span>
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  disabled={locked}
+                  aria-label={`Remove ${each.source || "the new term"} from the glossary`}
+                  className="absolute top-1.5 right-2 opacity-0 group-focus-within/term:opacity-100 group-hover/term:opacity-100"
+                  onClick={() => onRemove(each)}
+                >
+                  <XIcon />
+                </Button>
+              </div>
+            );
+          })}
+        </section>
+      );
+    })
   );
 }
