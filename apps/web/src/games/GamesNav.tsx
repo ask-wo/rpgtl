@@ -122,7 +122,9 @@ export function GamesNav() {
                       >
                         <XIcon />
                       </SidebarMenuAction>
-                      {game.id === gameId && <TranslationNav gameId={game.id} />}
+                      {game.id === gameId && (
+                        <TranslationNav gameId={game.id} engine={game.engine} />
+                      )}
                       {game.folderMissing && <MissingFolder id={game.id} root={game.root} />}
                     </SidebarMenuItem>
                   );

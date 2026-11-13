@@ -1,5 +1,6 @@
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import type { MissingFile } from "@rpgtl/contracts";
+import { engineFeatures } from "@rpgtl/domain";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { TriangleAlertIcon } from "lucide-react";
 import { useEffect } from "react";
@@ -63,29 +64,31 @@ export function Overview() {
           </AlertDescription>
         </Alert>
       )}
-      <Card>
-        <CardHeader>
-          <CardTitle>In-game tools</CardTitle>
-          <CardDescription>Press these keys while the game plays.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3">
-            {tools.map((tool) => (
-              <div key={tool.key} className="contents">
-                <dt>
-                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs">
-                    {tool.key}
-                  </kbd>
-                </dt>
-                <dd>
-                  <span className="font-medium">{tool.name}.</span>{" "}
-                  <span className="text-muted-foreground">{tool.does}</span>
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </CardContent>
-      </Card>
+      {engineFeatures[game.engine].play && (
+        <Card>
+          <CardHeader>
+            <CardTitle>In-game tools</CardTitle>
+            <CardDescription>Press these keys while the game plays.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3">
+              {tools.map((tool) => (
+                <div key={tool.key} className="contents">
+                  <dt>
+                    <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs">
+                      {tool.key}
+                    </kbd>
+                  </dt>
+                  <dd>
+                    <span className="font-medium">{tool.name}.</span>{" "}
+                    <span className="text-muted-foreground">{tool.does}</span>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </CardContent>
+        </Card>
+      )}
       <TranslationCard />
     </div>
   );

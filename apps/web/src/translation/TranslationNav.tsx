@@ -1,4 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
+import type { Engine } from "@rpgtl/contracts";
+import { engineFeatures } from "@rpgtl/domain";
 import { Link } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { BookAIcon, FileTextIcon, ImageIcon, type LucideIcon } from "lucide-react";
@@ -8,7 +10,13 @@ import { catalog } from "./atoms.ts";
 import { catalogCounts, number } from "./counts.ts";
 
 /** The open game's translation pages, under its row in the sidebar while its translation is on. */
-export function TranslationNav({ gameId }: { readonly gameId: string }) {
+export function TranslationNav({
+  gameId,
+  engine,
+}: {
+  readonly gameId: string;
+  readonly engine: Engine;
+}) {
   const saved = AsyncResult.getOrElse(useAtomValue(catalog(gameId)), () => undefined);
   if (saved === undefined || !saved.translate) return null;
   const { text, images } = catalogCounts(saved);
@@ -21,15 +29,17 @@ export function TranslationNav({ gameId }: { readonly gameId: string }) {
       <Page gameId={gameId} to="text" icon={FileTextIcon} label="Text">
         <Progress done={text.translated} all={text.all} what="text entries" />
       </Page>
-      <Page gameId={gameId} to="images" icon={ImageIcon} label="Images">
-        {images.all > 0 && (
-          <Progress
-            done={images.translated}
-            all={images.translated + images.untranslated}
-            what="entries in images, apart from kept artwork"
-          />
-        )}
-      </Page>
+      {engineFeatures[engine].imageText && (
+        <Page gameId={gameId} to="images" icon={ImageIcon} label="Images">
+          {images.all > 0 && (
+            <Progress
+              done={images.translated}
+              all={images.translated + images.untranslated}
+              what="entries in images, apart from kept artwork"
+            />
+          )}
+        </Page>
+      )}
     </SidebarMenuSub>
   );
 }

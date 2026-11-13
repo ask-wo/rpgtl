@@ -229,6 +229,12 @@ export class OllamaModelMissing extends Schema.TaggedError<OllamaModelMissing>()
   }
 }
 
+export class EngineUnsupported extends Schema.TaggedError<EngineUnsupported>()(
+  "EngineUnsupported",
+  { message: fixedMessage("RPGTL can't do this for games of this engine yet.") },
+  { httpApiStatus: 400 },
+) {}
+
 export class NwjsMissing extends Schema.TaggedError<NwjsMissing>()(
   "NwjsMissing",
   { message: fixedMessage("Download NW.js first.") },
@@ -588,7 +594,14 @@ export class NwjsApi extends HttpApiGroup.make("nwjs")
     HttpApiEndpoint.post("launch", "/launch", {
       payload: GameId,
       success: NwjsLaunch,
-      error: [GameNotInspected, GameBusy, NwjsMissing, NwjsRunning, NwjsLaunchFailed],
+      error: [
+        GameNotInspected,
+        GameBusy,
+        EngineUnsupported,
+        NwjsMissing,
+        NwjsRunning,
+        NwjsLaunchFailed,
+      ],
     }),
     /** Ends the game's NW.js if RPGTL started it and it still runs. */
     HttpApiEndpoint.post("stop", "/launch/stop", {

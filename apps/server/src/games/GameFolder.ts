@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import type { Entry, Game, Plugins } from "@rpgtl/contracts";
 import {
+  archiveEntries,
   bootEngines,
+  decodeXpFile,
+  decryptEntry,
   coreScripts,
   decodeGameFile,
   decodePlugins,
@@ -18,6 +21,7 @@ import {
   referencedFolders,
   splitVersion,
   textImages,
+  xpGameEntries,
 } from "@rpgtl/domain";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -37,12 +41,12 @@ export class GamePathEmptyError extends Schema.TaggedError<GamePathEmptyError>()
   }
 }
 
-/** A path with no unpacked RPG Maker MV or MZ game in it or in its `www` folder. */
+/** A path with no RPG Maker MV, MZ or XP game in it, nor an MV or MZ game in its `www` folder. */
 export class NoGameFoundError extends Schema.TaggedError<NoGameFoundError>()("NoGameFoundError", {
   path: Schema.String,
 }) {
   override get message() {
-    return `No RPG Maker MV or MZ game at ${this.path}.`;
+    return `No RPG Maker MV, MZ or XP game at ${this.path}.`;
   }
 }
 
@@ -84,11 +88,14 @@ export class GameFolder extends Context.Service<
       | GameFileReadError
       | GameFileInvalid
     >;
-    /** Whether the game's web folder still holds its `data/System.json`, without reading it. */
+    /**
+     * Whether the game's folder still holds its `data/System.json`, or an XP game's archive or
+     * `Data/System.rxdata`, without reading it.
+     */
     readonly present: (game: FolderGame) => Effect.Effect<boolean, GameFileReadError>;
     /**
      * The extension of the game's image files and the key its encrypted images need, from its
-     * `data/System.json`.
+     * `data/System.json`. RPGTL reads no images of XP games yet.
      */
     readonly imageEncoding: (
       game: FolderGame,
@@ -96,7 +103,10 @@ export class GameFolder extends Context.Service<
       { readonly extension: string; readonly key: Option.Option<string> },
       GameFileMissingError | GameFileReadError | GameFileInvalid
     >;
-    /** The game's images that may hold text, and the key its encrypted images need. */
+    /**
+     * The game's images that may hold text, and the key its encrypted images need; none for an XP
+     * game yet.
+     */
     readonly textImages: (
       game: FolderGame,
     ) => Effect.Effect<
@@ -157,6 +167,17 @@ const SystemHeader = Schema.Struct({
   hasEncryptedAudio: Schema.optionalKey(Schema.Boolean),
   encryptionKey: Schema.optionalKey(Schema.String),
 });
+
+const xpArchive = "Game.rgssad";
+
+/**
+ * The title in an XP game's `Game.ini`. The editor writes it in the Windows code page it ran
+ * under, which the file doesn't name, so a title that isn't UTF-8 is left out.
+ */
+function xpTitle(ini: Uint8Array) {
+  const title = /^Title=(.*)$/m.exec(new TextDecoder().decode(ini))?.[1]?.trim() ?? "";
+  return title.includes("\uFFFD") ? "" : title;
+}
 
 const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
@@ -297,6 +318,81 @@ const make = Effect.gen(function* () {
     } satisfies FolderGame;
   });
 
+  /**
+   * The `.rxdata` files of the XP game at `root` by name: its loose `Data/` files, replaced by those
+   * its archive holds, since mkxp-z reads the archive first.
+   */
+  const xpDataFiles = Effect.fnUntraced(function* (root: string) {
+    const files = new Map<string, Uint8Array>();
+    const dataDir = yield* matchCase(root, "Data");
+    if (Option.isSome(dataDir)) {
+      const dir = path.join(root, dataDir.value);
+      for (const name of (yield* namesIn(dir)).filter((loose) => loose.endsWith(".rxdata"))) {
+        const file = path.join(dir, name);
+        files.set(name, yield* fs.readFile(file).pipe(Effect.mapError(unreadable(file))));
+      }
+    }
+    const archive = yield* matchCase(root, xpArchive);
+    if (Option.isNone(archive)) return files;
+    const file = path.join(root, archive.value);
+    return yield* Effect.scoped(
+      Effect.gen(function* () {
+        const handle = yield* fs.open(file).pipe(Effect.mapError(unreadable(file)));
+        const read = (offset: number, length: number) =>
+          handle
+            .readAlloc(length, { position: BigInt(offset) })
+            .pipe(
+              Effect.map(Option.getOrElse(() => new Uint8Array())),
+              Effect.mapError(unreadable(file)),
+            );
+        const size = Number((yield* handle.stat.pipe(Effect.mapError(unreadable(file)))).size);
+        for (const entry of yield* archiveEntries(file, size, read)) {
+          const [folder, stored] = entry.path.split("/");
+          if (folder?.toLowerCase() === "data" && stored?.endsWith(".rxdata"))
+            files.set(stored, decryptEntry(entry, yield* read(entry.offset, entry.size)));
+        }
+        return files;
+      }),
+    );
+  });
+
+  /** Whether the folder holds an RPG Maker XP game: its archive or its system data. */
+  const isXpGame = Effect.fnUntraced(function* (root: string) {
+    if (Option.isSome(yield* matchCase(root, xpArchive))) return true;
+    return Option.isSome(yield* matchCase(root, "Data/System.rxdata"));
+  });
+
+  const xpGameAt = Effect.fn("GameFolder.xpGameAt")(function* (root: string) {
+    const data = yield* xpDataFiles(root);
+    const files = [...data.keys()].toSorted();
+    const hash = createHash("sha256");
+    for (const file of files) hash.update(`${file}\0`).update(data.get(file) ?? new Uint8Array());
+    const ini = yield* matchCase(root, "Game.ini");
+    const iniText = Option.isSome(ini)
+      ? yield* fs
+          .readFile(path.join(root, ini.value))
+          .pipe(Effect.mapError(unreadable(path.join(root, ini.value))))
+      : new Uint8Array();
+    const named = splitVersion(xpTitle(iniText) || path.basename(root));
+    const version =
+      splitVersion(path.basename(root)).version ??
+      splitVersion(path.basename(path.dirname(root))).version ??
+      named.version;
+    return {
+      root,
+      webRoot: root,
+      engine: "XP",
+      title: named.name,
+      files,
+      encryptedAssets: Option.isSome(yield* matchCase(root, xpArchive)),
+      mediaWarnings: [],
+      missingImages: [],
+      missingAudio: [],
+      identity: {},
+      build: { sha256: hash.digest("hex"), ...(version !== undefined && { version }) },
+    } satisfies FolderGame;
+  });
+
   const inspect = Effect.fn("GameFolder.inspect")(function* (input: string) {
     if (!input.trim()) return yield* new GamePathEmptyError();
     const given = path.resolve(input.trim());
@@ -308,6 +404,7 @@ const make = Effect.gen(function* () {
       const engine = yield* engineAt(webRoot);
       if (Option.isSome(engine)) return yield* gameAt(root, webRoot, engine.value);
     }
+    if (yield* isXpGame(root)) return yield* xpGameAt(root);
     return yield* new NoGameFoundError({ path: given });
   });
 
@@ -332,6 +429,21 @@ const make = Effect.gen(function* () {
   });
 
   const entries = Effect.fn("GameFolder.entries")(function* (game: FolderGame) {
+    if (game.engine === "XP") {
+      const data = yield* xpDataFiles(game.root);
+      return xpGameEntries(
+        yield* Effect.forEach(game.files, (name) =>
+          Effect.flatMap(
+            Effect.fromNullishOr(data.get(name)).pipe(
+              Effect.mapError(
+                () => new GameFileMissingError({ file: path.join(game.root, "Data", name) }),
+              ),
+            ),
+            (bytes) => Effect.fromResult(decodeXpFile(name, bytes)),
+          ),
+        ),
+      );
+    }
     const plugins = yield* pluginList(game);
     const assets = yield* Effect.forEach(["img", "audio", "movies"], (folder) =>
       Effect.map(filesUnder(path.join(game.webRoot, folder)), (files) =>
@@ -377,6 +489,7 @@ const make = Effect.gen(function* () {
   });
 
   const findTextImages = Effect.fn("GameFolder.textImages")(function* (game: FolderGame) {
+    if (game.engine === "XP") return { images: [], key: Option.none<string>() };
     const system = yield* systemHeader(game.webRoot);
     const files = yield* filesUnder(path.join(game.webRoot, "img"));
     const maps = yield* Effect.forEach(
@@ -394,6 +507,7 @@ const make = Effect.gen(function* () {
   });
 
   const imageEncoding = Effect.fn("GameFolder.imageEncoding")(function* (game: FolderGame) {
+    if (game.engine === "XP") return { extension: ".png", key: Option.none<string>() };
     const system = yield* systemHeader(game.webRoot);
     return {
       extension: imageExtension(game.engine, system.hasEncryptedImages ?? false),
@@ -439,6 +553,7 @@ const make = Effect.gen(function* () {
   });
 
   const present = Effect.fn("GameFolder.present")(function* (game: FolderGame) {
+    if (game.engine === "XP") return yield* isXpGame(game.root);
     return yield* isFile(path.join(game.webRoot, "data", "System.json"));
   });
   const readFile = Effect.fn("GameFolder.readFile")(function* (game: FolderGame, relative: string) {

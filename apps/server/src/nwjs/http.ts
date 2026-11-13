@@ -1,5 +1,6 @@
 import {
   Api,
+  EngineUnsupported,
   GameBusy,
   GameNotInspected,
   NwjsLaunchFailed,
@@ -33,6 +34,7 @@ export const layer = HttpApiBuilder.group(
           Effect.catchTags({
             GameNotInspectedError: () => Effect.fail(new GameNotInspected()),
             GameBusyError: () => Effect.fail(new GameBusy()),
+            EngineUnsupportedError: () => Effect.fail(new EngineUnsupported()),
             NwjsMissingError: () => Effect.fail(new NwjsMissing()),
             NwjsRunningError: () => Effect.fail(new NwjsRunning()),
             NwjsLaunchError: launchFailed,

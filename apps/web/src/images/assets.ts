@@ -59,7 +59,7 @@ export const gameFont = (game: Game) =>
 async function imageAddress(game: Game, file: string) {
   const { hasEncryptedImages, encryptionKey } = await system(game);
   const url = `/game/${game.id}/${file.split("/").map(encodeURIComponent).join("/")}`;
-  if (!hasEncryptedImages || !encryptionKey) return `${url}.png`;
+  if (!hasEncryptedImages || !encryptionKey || game.engine === "XP") return `${url}.png`;
   const response = await fetch(url + imageExtension(game.engine, true));
   if (!response.ok) throw new Error(`Could not load ${file}.`);
   const bytes = new Uint8Array((await response.arrayBuffer()).slice(16));

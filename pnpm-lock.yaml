@@ -325,6 +325,9 @@ importers:
 
   packages/domain:
     dependencies:
+      '@hyrious/marshal':
+        specifier: 0.3.4
+        version: 0.3.4
       '@noble/hashes':
         specifier: 2.4.0
         version: 2.4.0
@@ -667,6 +670,10 @@ packages:
     engines: {node: '>=20'}
     peerDependencies:
       hono: ^4 || ^5.0.0-0
+
+  '@hyrious/marshal@0.3.4':
+    resolution: {integrity: sha512-uemzn9T7HKYW3SLJAjLWO/jiSS+JsAApug4EcqWaWgZwKUakkMcE7wDosGHKn/D5N7g4pWBJ1vWjvEtvhkSFwA==}
+    engines: {node: ^14.18.0 || >=16.0.0}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -3686,6 +3693,8 @@ snapshots:
   '@hono/node-server@2.1.5(hono@4.13.14)':
     dependencies:
       hono: 4.13.14
+
+  '@hyrious/marshal@0.3.4': {}
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
