@@ -192,6 +192,24 @@ it("the model sorts only terms the rules sorted, and its kinds and pronouns are 
   });
 });
 
+it("a name made only of control codes is no glossary term, so the model is never asked about it", () => {
+  const draft = new CatalogDraft(
+    {
+      ...catalogOf([line("a", 0, "\\N[7]来了"), line("b", 1, "她说\\N[7]来了")]),
+      glossary: [term("\\N[7]", { guess: { value: "character" } })],
+    },
+    new Map(),
+    run,
+  );
+  assert.isUndefined(draft.addTerm("\\N[8]", "\\N[8]", false));
+  assert.deepStrictEqual(draft.termsToSort(), []);
+  assert.deepStrictEqual(draft.pronounsFromClues(), []);
+  assert.deepStrictEqual(
+    draft.catalog.glossary.map((each) => [each.source, each.pronoun]),
+    [["\\N[7]", undefined]],
+  );
+});
+
 it("a first line that is only a glossary name is the speaker, kept on its own line in English", () => {
   const draft = new CatalogDraft(
     {
