@@ -242,6 +242,13 @@ export const withCodes = (request: RequestText, answer: string) =>
   request.leading +
   markedPauses(request, answer).replace(
     placeholder,
-    (found, n: string) => request.codes[Number(n) - 1] ?? found,
+    (found, n: string, at: number, text: string) => {
+      const code = request.codes[Number(n) - 1];
+      if (code === undefined) return found;
+      // A game reads the letters after a code of letters only, such as `\n`, as part of its name.
+      return /^\\[A-Za-z]+$/.test(code) && /^[A-Za-z]/.test(text.slice(at + found.length))
+        ? `${code} `
+        : code;
+    },
   ) +
   request.trailing;

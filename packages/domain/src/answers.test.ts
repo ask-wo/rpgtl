@@ -380,3 +380,10 @@ it("A code that a line break splits is sent as one placeholder and comes back as
     accepted("Back to \\C[2]the old castle\\C\n[0]"),
   );
 });
+
+it("A code of letters only stays apart from an English word after it, which the game would read as part of it", () => {
+  assert.deepStrictEqual(
+    checkAnswer(messageEntry("门开了。\\n里面很暗。"), "The door opened.{1}it's dark inside."),
+    accepted("The door opened.\\n it's dark inside."),
+  );
+});
