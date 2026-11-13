@@ -41,17 +41,19 @@ export const sourceScript =
 
 const quotedCharacter = /[「『](.)[」』]/gu;
 const quotedInEnglish = /["“'‘「『](.)["”'’」』]/gu;
+const shootingStar = /[★☆]ミ/g;
 
 /**
  * Whether the translation still has source writing in it. A single quoted character of the source
- * may stay quoted, since a line about the writing itself (「ァ」と「ア」) can't translate it.
+ * may stay quoted, since a line about the writing itself (「ァ」と「ア」) can't translate it, and so
+ * may the ミ of ★ミ, which draws a shooting star's tail.
  */
 export function sourceLeft(source: string, translation: string) {
   const quoted = new Set(Array.from(source.matchAll(quotedCharacter), (match) => match[1]));
   return sourceScript.test(
-    translation.replace(quotedInEnglish, (all, character: string) =>
-      quoted.has(character) ? "" : all,
-    ),
+    translation
+      .replace(shootingStar, "")
+      .replace(quotedInEnglish, (all, character: string) => (quoted.has(character) ? "" : all)),
   );
 }
 const sourceCharacters = new RegExp(sourceScript.source, "gu");

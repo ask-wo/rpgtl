@@ -1,4 +1,4 @@
-import { translationChecks } from "./index.ts";
+import { sourceLeft, translationChecks } from "./index.ts";
 import { assert, it } from "@effect/vitest";
 import type { GlossaryTerm } from "@rpgtl/contracts";
 
@@ -118,4 +118,9 @@ it("An XP name's tags may keep the source's text, which an MV name's brackets ma
   assert.deepStrictEqual(translationChecks(glossary, "japanese", "MV")(name, "Spark{テスト用}"), [
     { check: "source text left" },
   ]);
+});
+
+it("The ミ of a shooting star ★ミ may stay", () => {
+  assert.isFalse(sourceLeft("流れ星キック★ミ", "Shooting Star Kick★ミ"));
+  assert.isTrue(sourceLeft("流れ星キックミ", "Shooting Star Kickミ"));
 });
