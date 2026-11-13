@@ -1,6 +1,7 @@
-// RPG Maker escape codes such as \C[2], \n<Name>, \! and %1 placeholders.
+// RPG Maker escape codes such as \C[2], \n<Name>, \! and %1 placeholders, and the `#{}` code
+// that an XP game's Ruby scripts put into their text.
 export const controlCodePattern =
-  /\\(?:[A-Za-z]+(?:\[[^\]]*\]|<[^>]*>)|[A-Za-z]+|[{}$.|!><^\\])|%\d+/g;
+  /\\(?:[A-Za-z]+(?:\[[^\]]*\]|<[^>]*>)|[A-Za-z]+|[{}$.|!><^\\])|%\d+|#\{[^{}]*\}/g;
 export const speakerTagPattern = /\\n[a-z]*<([^>]*)>/gi;
 
 export const speakerTagName = (text: string) => [...text.matchAll(speakerTagPattern)][0]?.[1];

@@ -3,6 +3,7 @@ import * as Predicate from "effect/Predicate";
 import { sourceText } from "../mvmz/extract.ts";
 import { GameFile } from "../mvmz/gameFile.ts";
 import { newXpEntry } from "./location.ts";
+import { scriptsText } from "./scripts.ts";
 
 interface Found {
   readonly location: Location;
@@ -232,6 +233,7 @@ const eventLists = (file: GameFile): ReadonlyArray<PlacedList> =>
     System: () => [],
     Database: () => [],
     Tilesets: () => [],
+    Scripts: () => [],
     Other: () => [],
   });
 
@@ -241,6 +243,7 @@ const fileText = (file: GameFile, speakers: ReadonlySet<string>): ReadonlyArray<
     System: ({ data }) => systemText(data),
     Database: ({ table, data }) =>
       data.flatMap((record, index) => (record ? recordText(record, table, index) : [])),
+    Scripts: ({ data }) => scriptsText(data),
     Map: () => [],
     CommonEvents: () => [],
     Troops: () => [],

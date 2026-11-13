@@ -6,7 +6,9 @@ import { entryTranslation } from "../../guesses.ts";
 import { GameDataChanged } from "../mvmz/apply.ts";
 import { GameFileInvalid } from "../mvmz/gameFile.ts";
 import { assignedLiteral, literalValue } from "./extract.ts";
+import { scriptsFile } from "./gameFile.ts";
 import { xpFileOf } from "./location.ts";
+import { applyScriptTexts, type LiteralText, rubyLiteral } from "./scripts.ts";
 
 const utf8 = new TextDecoder();
 // RGSS1 dumps strings as bytes, which load as such; Ruby 1.9 and later mark them as UTF-8, and
@@ -119,17 +121,6 @@ function messageCommands(list: ReadonlyArray<unknown>, index: number, end: numbe
   );
 }
 
-/** A Ruby string literal of `text` in the quotes `like` uses. */
-function rubyLiteral(text: string, like: string) {
-  if (like.startsWith("'")) return `'${text.replace(/[\\']/g, "\\$&")}'`;
-  const escaped = text
-    .replace(/[\\"]/g, "\\$&")
-    .replace(/#(?=[{$@])/g, "\\#")
-    .replace(/\n/g, "\\n")
-    .replace(/\t/g, "\\t");
-  return `"${escaped}"`;
-}
-
 /** The script with its `literal`th literal set to `text`; none when it isn't `source` anymore. */
 function withLiteral(script: string, literal: number, source: string, text: string) {
   const match = [...script.matchAll(assignedLiteral)][literal];
@@ -232,6 +223,16 @@ export function applyXpTranslations(
     return text && xpFileOf(entry.location) === file ? [{ entry, text }] : [];
   });
   if (!translated.length) return Result.succeed(undefined);
+  if (file === scriptsFile) {
+    const texts = new Map<number, Map<number, LiteralText>>();
+    for (const { entry, text } of translated) {
+      if (entry.location._tag !== "RubyScriptText") continue;
+      const { script, literal } = entry.location;
+      const literals = texts.get(script) ?? new Map<number, LiteralText>();
+      texts.set(script, literals.set(literal, { source: entry.source, text }));
+    }
+    return applyScriptTexts(file, bytes, texts);
+  }
   return Result.try({
     try: () => load(bytes, { hash: "wrap", numeric: "wrap", regexp: "wrap" }),
     catch: (error) => new GameFileInvalid({ file, problem: String(error) }),

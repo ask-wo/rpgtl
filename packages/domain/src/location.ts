@@ -40,6 +40,8 @@ export type Place = Data.TaggedEnum<{
   System: {};
   Plugins: {};
   Image: { readonly image: string };
+  /** One of an XP game's Ruby scripts. */
+  Script: { readonly script: number; readonly name: string };
 }>;
 export const Place = Data.taggedEnum<Place>();
 
@@ -68,6 +70,7 @@ export const placeOf: (location: Location) => Place = Location.match({
   Name: () => Place.System(),
   PluginSetting: () => Place.Plugins(),
   ImageLines: ({ image }) => Place.Image({ image }),
+  RubyScriptText: ({ script, name }) => Place.Script({ script, name }),
 });
 
 /** A place as a short text, such as `map3` or `actors`; an image's is its path. */
@@ -79,4 +82,5 @@ export const placeKey: (place: Place) => string = Place.$match({
   System: () => "system",
   Plugins: () => "plugins",
   Image: ({ image }) => image,
+  Script: ({ script }) => `script${script}`,
 });

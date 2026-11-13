@@ -2,7 +2,7 @@ import type { Entry } from "@rpgtl/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Result from "effect/Result";
 import { applyXpTranslations, decodeXpFile, xpGameEntries } from "../../index.ts";
-import { command, xpFile, xpMap } from "../../testUtils/xpGame.ts";
+import { command, xpFile, xpMap, xpScripts } from "../../testUtils/xpGame.ts";
 
 const translated = (entries: ReadonlyArray<Entry>, english: Record<string, string>) =>
   entries.map((entry) => ({ ...entry, translation: { user: english[entry.source] ?? "" } }));
@@ -49,4 +49,22 @@ it("puts translations into an XP data file, wrapping messages into as many as th
       [0],
     ],
   );
+});
+
+it("puts translations into an XP game's scripts, keeping their `#{}` code", () => {
+  const scripts = xpFile(
+    xpScripts({
+      Window_Gold: `draw_text(0, 0, 120, 32, "金币：#{@gold}")\nreturn '盾' if x\ntext = "龙"`,
+    }),
+  );
+  const english = { "金币：#{@gold}": 'Gold "now": #{@gold}', 盾: "Shield's", 龙: "Dragon" };
+  const entries = translated(entriesOf("Scripts.rxdata", scripts), english);
+  const result = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", scripts, entries));
+  const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", result ?? new Uint8Array()));
+  assert.deepStrictEqual(file._tag === "Scripts" ? file.data : undefined, [
+    {
+      name: "Window_Gold",
+      code: `draw_text(0, 0, 120, 32, "Gold \\"now\\": #{@gold}")\nreturn 'Shield\\'s' if x\ntext = "Dragon"`,
+    },
+  ]);
 });

@@ -1,7 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { archiveEntries, decodeXpFile, decryptEntry, xpGameEntries } from "../../index.ts";
-import { command, rubyObject, xpArchive, xpMap } from "../../testUtils/xpGame.ts";
+import { command, rubyObject, xpArchive, xpMap, xpScripts } from "../../testUtils/xpGame.ts";
 
 const inMemory = (bytes: Uint8Array) => (offset: number, length: number) =>
   Effect.succeed(bytes.subarray(offset, offset + length));
@@ -125,6 +125,48 @@ it.effect(
           ["旁白", undefined],
         ],
       );
+    }),
+);
+
+const goldScript = (literal: number) =>
+  ({ _tag: "RubyScriptText", script: 0, name: "Window_Gold", literal }) as const;
+
+it.effect(
+  "reads the strings of an XP game's scripts, but not output for its author, names of files and fonts, or character tables",
+  () =>
+    Effect.gen(function* () {
+      const table = Array.from({ length: 12 }, (_, at) => `"${"あいうえおかきくけこさし"[at]}"`);
+      const entries = yield* entriesOf({
+        "Scripts.rxdata": xpScripts({
+          Window_Gold: [
+            `# 金币窗口`,
+            `TABLE = [${table.join(",")}]`,
+            `def refresh`,
+            `  self.contents.font.name = ["黑体", "宋体"] if Font.exist?("黑体")`,
+            `  bitmap = RPG::Cache.picture("金币图")`,
+            `  p "调试：#{@gold}" if $DEBUG`,
+            `  self.contents.draw_text(0, 0, 120, 32, "金币：#{@gold}", 2)`,
+            `  return "盾" if kind == 'shield'`,
+            `  when "龙\\]" then text = "龙"`,
+            `  @character_name = "主角"`,
+            `  $game_screen.pictures[1].show("立绘", 0, 0, 0, 100, 100, 255, 0)`,
+            `end`,
+          ].join("\n"),
+          // Ruby 1.9 and later mark a script's name as UTF-8.
+          Empty: "",
+        }).map((row) => (row[0] === 2 ? [row[0], "Empty", row[2]] : row)),
+      });
+      assert.deepStrictEqual(
+        entries.map(({ location, source }) => [location, source]),
+        [
+          [goldScript(17), "金币：#{@gold}"],
+          [goldScript(18), "盾"],
+          [goldScript(20), "龙]"],
+          [goldScript(21), "龙"],
+        ],
+      );
+      // sha256 of the JSON of ["XP", location, source], computed outside the code.
+      assert.strictEqual(entries[0]?.id, "448dbfc06d0a8d85f3bdbc89");
     }),
 );
 

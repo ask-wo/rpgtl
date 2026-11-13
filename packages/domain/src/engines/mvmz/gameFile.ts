@@ -22,6 +22,8 @@ export type GameFile = Data.TaggedEnum<{
   Database: { readonly table: Exclude<Table, "tilesets">; readonly data: GameRecords };
   /** Tilesets.json, whose records have notes but no text the player sees. */
   Tilesets: { readonly data: GameRecords };
+  /** An XP game's `Scripts.rxdata`: its Ruby scripts, each with its name and code. */
+  Scripts: { readonly data: ReadonlyArray<{ readonly name: string; readonly code: string }> };
   /** A file with no text RPGTL translates, such as Animations.json or a plugin's own data. */
   Other: { readonly data: unknown };
 }>;

@@ -6,7 +6,7 @@ The Text page lists the game's text (everything but the text in images) with eac
 
 - `text-type` typing into an entry saves it once typing pauses; the header says "Saving…", then "All changes saved", and the sidebar's Text count (text entries without English) and the run bar's counts follow.
 - `text-control-codes` English that drops one of the original's control codes is refused: the entry and the header say why, and the catalog keeps the old English.
-- `text-tree` **All files**, the areas (Maps, Database, System, Plugins) and their files, each with how many entries the filter and search show; a map file shows its map's name.
+- `text-tree` **All files**, the areas that hold text (Maps, Database, System, Plugins, and an XP game's Scripts) and their files, each with how many entries the filter and search show; a map file shows its map's name.
 - `text-search` the search box looks through the originals and the English of the selection.
 - `text-filter` **All**, **Untranslated**, **Failed**, **Last run** and **Flagged**, each with its count; Previous and Next page through 50 entries at a time.
 - `text-suggestion` an entry whose last answer was rejected shows it with **Use**; one the last run changed shows its English before the run with **Use the old one**.

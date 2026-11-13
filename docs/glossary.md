@@ -25,7 +25,7 @@ The words the code and these docs are built from. Use them in code, tests, docs 
 | Guess, user value | Two layers of an entry's English and of a glossary term's English, kind and pronoun (`Guessed`). The guess is what a run gave, with the run's start time, or RPGTL's rules, without one; the user value is the player's own and wins over the guess. Runs and rules write only guesses and the player only user values, so the user value never hides what the run said, and **Use it** goes back to the guess. A user value equal to the guess isn't kept. |
 | Name entry | An entry that is a name, such as an actor's or a map's. The glossary pass translates these. |
 | Location | Where an entry's text is (`Location`), such as a message in a map event's page, a field of a database record or lines of an image, with the map, table or image it is in. The catalog keeps each entry's location; only the code for MV and MZ turns one into a data file and the keys inside it. |
-| Place | The part of the game a location is in: a map, a database table, the common events, the troops, the system settings, the plugins or an image (`Place`). Batches and the Text page's tree group text by place. |
+| Place | The part of the game a location is in: a map, a database table, the common events, the troops, the system settings, the plugins, an image or one of an XP game's Ruby scripts (`Place`). Batches and the Text page's tree group text by place. |
 | Message | One Show Text or scrolling text command with all its lines, as one message window shows it. |
 | Control code | Text the engine or a plugin interprets instead of showing, such as `\C[2]`, `%1` or a `\n<Name>` speaker tag. A translation keeps it unchanged. |
 | Extract, apply | Extracting reads a game's files into entries; applying writes translations into the game's data as it loads, never into its files. |
@@ -61,5 +61,6 @@ The words the code and these docs are built from. Use them in code, tests, docs 
 | Browser play | A game played in the browser from RPGTL's server, which applies the translations to the files it serves (`Play`). |
 | RPGTL launch | Starting a game with Play (`Launches`): an MV or MZ game in RPGTL's own NW.js with the **NW.js hook**, which reads the catalog from disk and applies it, and an XP game in mkxp-z, which reads the translated data files RPGTL writes first. Starting the game through its own `Game.exe` is unaffected. |
 | Translation switch | A game's **Translate this game** switch. Off, the game shows its original text; it doesn't start or stop a run. |
+| Script text | The strings in an XP game's Ruby scripts (`Scripts.rxdata`) that hold Chinese, Japanese or Korean, which the game draws itself, such as its title menu. Not RPGTL's **game scripts**. |
 | Game scripts | The scripts RPGTL adds to a played game (`packages/game`): the **runtime** (fitting English into windows, the F8 panel) and the **map view** (F7). |
 | Activity | Everything running for a game (its runs, image reading, the program it plays in) as the one stream its page follows (`Activity`). |

@@ -224,11 +224,12 @@ function Text({
     const known = places.get(placeKey(placeOf(entry.location)));
     if (known) known.count++;
   }
-  const tree: ReadonlyArray<TreeArea> = areas.map((area) => {
+  const tree: ReadonlyArray<TreeArea> = areas.flatMap((area) => {
     const inArea = [...places]
       .filter(([, { place }]) => areaOf(place) === area)
       .map(([key, { place, count }]) => ({ key, label: placeLabel(place, maps), count }));
-    return { area, places: inArea, count: inArea.reduce((sum, place) => sum + place.count, 0) };
+    if (!inArea.length) return [];
+    return [{ area, places: inArea, count: inArea.reduce((sum, place) => sum + place.count, 0) }];
   });
   const english = new Map(
     saved.glossary.map((term) => [term.source, termTranslation(term).trim()]),

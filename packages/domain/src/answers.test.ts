@@ -356,3 +356,12 @@ it("an XP description keeps its tags and its | where the game breaks the line", 
     ),
   );
 });
+
+it("A Ruby `#{}` in a script's string is sent as a placeholder and comes back as it was", () => {
+  const entry = messageEntry("所持金：#{$game_party.gold}枚");
+  assert.strictEqual(requestText(entry).text, "所持金：{1}枚");
+  assert.deepStrictEqual(
+    checkAnswer(entry, "Gold: {1} coins"),
+    accepted("Gold: #{$game_party.gold} coins"),
+  );
+});

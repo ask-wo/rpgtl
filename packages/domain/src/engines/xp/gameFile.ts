@@ -3,6 +3,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { GameFile, GameFileInvalid } from "../mvmz/gameFile.ts";
 import { readData } from "./data.ts";
+import { decodeXpScripts } from "./scripts.ts";
 import { xpMapOf, xpTableOf } from "./location.ts";
 
 const decode = <S extends Schema.Decoder<unknown>>(schema: S, file: string, data: unknown) =>
@@ -10,11 +11,15 @@ const decode = <S extends Schema.Decoder<unknown>>(schema: S, file: string, data
     Result.mapError((error) => new GameFileInvalid({ file, problem: error.message })),
   );
 
+/** The file of an XP game's `Data/` folder that holds its Ruby scripts. */
+export const scriptsFile = "Scripts.rxdata";
+
 /** Reads a file of an XP game's `Data/` folder, such as `Map001.rxdata`, from its bytes. */
 export function decodeXpFile(
   file: string,
   bytes: Uint8Array,
 ): Result.Result<GameFile, GameFileInvalid> {
+  if (file === scriptsFile) return decodeXpScripts(file, bytes);
   return Result.flatMap(readData(file, bytes), (data): Result.Result<GameFile, GameFileInvalid> => {
     const map = xpMapOf(file);
     if (map !== undefined)

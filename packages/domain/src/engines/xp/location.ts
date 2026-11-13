@@ -45,6 +45,8 @@ export const xpFileOf = (location: Location) => {
       return tableFiles[location.table];
     case "SystemText":
       return "System.rxdata";
+    case "RubyScriptText":
+      return "Scripts.rxdata";
     default:
       return undefined;
   }
