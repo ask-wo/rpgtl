@@ -50,7 +50,7 @@ const agentBatches = {
 } as const;
 
 /** Claude and Codex need no GPU, and each request mostly waits for its CLI to start. */
-const agentParallel = 8;
+const agentParallel = 16;
 
 const byLength = (response: LanguageModel.GenerateTextResponse<{}>) =>
   response.finishReason === "length";
