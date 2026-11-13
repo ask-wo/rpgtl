@@ -40,6 +40,7 @@ import * as Runs from "./translation/Runs.ts";
 import * as Http from "./http.ts";
 import * as SessionToken from "./auth/SessionToken.ts";
 import * as StateFolder from "./state/StateFolder.ts";
+import * as XpPatch from "./xpPatch/XpPatch.ts";
 
 const port = Config.schema(
   Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 65535 })),
@@ -48,7 +49,7 @@ const port = Config.schema(
 
 /** Every service, each built once, with the page and game scripts from `frontend`. */
 const services = <E, R>(frontend: Layer.Layer<Frontend.Frontend, E, R>) =>
-  Activity.layer.pipe(
+  Layer.mergeAll(Activity.layer, XpPatch.layer).pipe(
     Layer.provideMerge(
       Layer.mergeAll(Runs.layer, ImageReading.layer, Launches.layer, Play.layer, Playtime.layer),
     ),

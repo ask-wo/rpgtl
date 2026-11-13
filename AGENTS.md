@@ -4,7 +4,7 @@ RPGTL lets players play Chinese RPG Maker MV and MZ games in English. It transla
 
 ## What RPGTL never gives up
 
-- **The game's files stay as they are.** Everything RPGTL makes (catalogs, translations, erased images, logs) stays in its state folder, and RPGTL applies it while the game runs.
+- **The game's files stay as they are.** Everything RPGTL makes (catalogs, translations, erased images, logs) stays in its state folder, and RPGTL applies it while the game runs. The one exception is unpacking an XP game's archive, which RPGTL does only when the player asks.
 - **Translation quality comes first.** Text that reads well and keeps names, pronouns and terms consistent is worth more than a new feature.
 - **The player decides where their game's text goes.** With a local model it stays on their computer. With Claude or Codex it goes to Anthropic or OpenAI, through a plan the player already has. RPGTL has no server or account of its own.
 - **A game plays the same in the browser and in NW.js, on MV and on MZ.** See Hit every surface.

@@ -278,11 +278,17 @@ const make = Effect.gen(function* () {
     Schema.fromJsonString(Schema.Record(Schema.String, Schema.String)),
   );
   /** What a patched data file is made from: the game's file, its English and RPGTL's code. */
-  const fingerprint = (name: string, bytes: Uint8Array, entries?: ReadonlyArray<Entry>) => {
+  const fingerprint = (
+    name: string,
+    bytes: Uint8Array,
+    entries: ReadonlyArray<Entry> | undefined,
+    unpacked: boolean,
+  ) => {
     const hash = createHash("sha256").update(writer).update(name).update(bytes);
     for (const entry of entries ?? [])
       hash.update(JSON.stringify([entry.id, entryTranslation(entry)]));
     if (entries) hash.update("translated");
+    if (unpacked) hash.update("unpacked");
     return hash.digest("hex");
   };
 
@@ -310,10 +316,13 @@ const make = Effect.gen(function* () {
     const catalog = yield* catalogs.get(game.id);
     const translated = catalog.translate ? translatedByXpFile(catalog) : new Map();
     const files = yield* gameFolder.xpData(game);
+    // After Unpack, the game's loose data files may be a patch's English, which mkxp-z would read
+    // for every file not written here.
+    const unpacked = Option.exists(yield* gameFolder.xpArchive(game), (found) => found.unpacked);
     const prints: Record<string, string> = {};
     for (const [name, bytes] of files) {
       const entries = translated.get(name);
-      const print = fingerprint(name, bytes, entries);
+      const print = fingerprint(name, bytes, entries, unpacked);
       const file = path.join(data, name);
       if (written[name] === print && (!entries || (yield* fs.exists(file)))) {
         prints[name] = print;
@@ -325,9 +334,11 @@ const make = Effect.gen(function* () {
         : Result.succeed(undefined);
       if (Result.isFailure(patched)) {
         yield* Effect.logWarning(`${name} plays untranslated.`, patched.failure);
+        if (unpacked) yield* fs.writeFile(file, bytes);
         continue;
       }
-      if (patched.success) yield* fs.writeFile(file, patched.success);
+      const content = patched.success ?? (unpacked ? bytes : undefined);
+      if (content) yield* fs.writeFile(file, content);
       prints[name] = print;
     }
     for (const name of Object.keys(written))

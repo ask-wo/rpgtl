@@ -23,6 +23,7 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as HttpRouter from "effect/http/HttpRouter";
 import * as Activity from "./activity/Activity.ts";
+import * as XpPatch from "./xpPatch/XpPatch.ts";
 import * as FolderBrowser from "./games/FolderBrowser.ts";
 import * as Games from "./games/Games.ts";
 import * as RunKinds from "./runs/RunKinds.ts";
@@ -100,7 +101,7 @@ const ollama = ollamaAnswering((url, body) =>
 /** Serves the routes from a new state folder holding `files`. */
 const serving = (files: Record<string, string>) =>
   HttpRouter.serve(Http.routes, { disableLogger: true }).pipe(
-    Layer.provideMerge(Activity.layer),
+    Layer.provideMerge(Layer.mergeAll(Activity.layer, XpPatch.layer)),
     Layer.provideMerge(Layer.mergeAll(runServices, playServices, FolderBrowser.layer)),
     Layer.provideMerge(
       Layer.mergeAll(
