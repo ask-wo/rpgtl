@@ -39,9 +39,11 @@ const keptAside = (codes: string, edge: string) => ({
   trailing: new RegExp(`(?:${edge})*$`, "i"),
   inside: new RegExp(codes, "g"),
 });
-const plainPatterns = keptAside(codeOrBackslash.source, edgePart);
+// A source's own `{2}` would read as a placeholder in the answer, so it is sent as one.
+const sourcePlaceholder = String.raw`\{\d+\}`;
+const plainPatterns = keptAside(`${codeOrBackslash.source}|${sourcePlaceholder}`, edgePart);
 const tagPatterns = keptAside(
-  `${tagPattern.source}|${codeOrBackslash.source}`,
+  `${tagPattern.source}|${codeOrBackslash.source}|${sourcePlaceholder}`,
   `${tagPattern.source}|${edgePart}`,
 );
 const placeholder = /\{(\d+)\}/g;

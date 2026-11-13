@@ -365,3 +365,9 @@ it("A Ruby `#{}` in a script's string is sent as a placeholder and comes back as
     accepted("Gold: #{$game_party.gold} coins"),
   );
 });
+
+it("A `{2}` in the source is sent as a placeholder, so the answer may keep it", () => {
+  const entry = messageEntry("三重灾难{2}");
+  assert.strictEqual(requestText(entry).text, "三重灾难{1}");
+  assert.deepStrictEqual(checkAnswer(entry, "Triple Disaster{1}"), accepted("Triple Disaster{2}"));
+});
