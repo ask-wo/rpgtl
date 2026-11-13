@@ -332,3 +332,20 @@ it("an XP name's tags go back where they were, and an answer without the inner o
   );
   assert.isTrue(Result.isFailure(checkAnswer(state, "Mist Guard (%)", {}, true)));
 });
+
+it("an XP description keeps its tags and its | where the game breaks the line", () => {
+  const armor: Asked = {
+    location: { _tag: "RecordField", table: "armors", record: 3, field: "description" },
+    source: "[G4]雨の日の兜。|風邪を防ぐ。",
+  };
+  assert.strictEqual(requestText(armor, undefined, true).text, "雨の日の兜。{1}風邪を防ぐ。");
+  assert.deepStrictEqual(
+    checkAnswer(armor, "A helmet for rainy days.{1}Guards against colds.", {}, true),
+    accepted("[G4]A helmet for rainy days.|Guards against colds."),
+  );
+  assert.isTrue(
+    Result.isFailure(
+      checkAnswer(armor, "A helmet for rainy days.\nGuards against colds.", {}, true),
+    ),
+  );
+});

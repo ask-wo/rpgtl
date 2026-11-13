@@ -1,16 +1,19 @@
 import type { Engine } from "@rpgtl/contracts";
 import type { Placed } from "../../location.ts";
 
-/** A part of an XP database name in square brackets or braces. */
-export const tagPattern = /\[[^\]]*\]|\{[^}]*\}/g;
+/** A tag in an XP database name or description: a part in square brackets or braces, or a `|`. */
+export const tagPattern = /\[[^\]]*\]|\{[^}]*\}|\|/g;
 
 /**
- * Whether the entry is an XP database name, whose parts in brackets and braces stay as they are.
- * XP games commonly draw names without those parts, and their scripts read the tags in them
+ * Whether the entry is an XP database name or description, whose tags stay as they are. XP games
+ * commonly draw these without their tags in brackets and braces, and their scripts read them
  * (`[GRD]` becomes a number, `[S 10]` sets a speed), so a changed tag changes how the game plays.
+ * Some help scripts break a description's line at its `|`.
  */
 export const keepsTags = (engine: Engine, { location }: Placed) =>
-  engine === "XP" && location?._tag === "RecordField" && location.field === "name";
+  engine === "XP" &&
+  location?._tag === "RecordField" &&
+  (location.field === "name" || location.field === "description");
 
-/** The name without its tags, as the game draws it. */
-export const withoutTags = (name: string) => name.replace(tagPattern, "").trim();
+/** The text without its tags. */
+export const withoutTags = (text: string) => text.replace(tagPattern, "").trim();

@@ -99,7 +99,7 @@ function withSpeakerLine(
   };
 }
 
-/** With `keepTags`, the name tags of an XP database name are kept aside like control codes. */
+/** With `keepTags`, the tags of an XP database name or description are kept aside like control codes. */
 export function requestText(
   entry: Pick<Entry, "source"> & Placed,
   isSpeaker?: (name: string) => boolean,

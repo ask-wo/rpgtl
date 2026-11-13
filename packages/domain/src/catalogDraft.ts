@@ -152,7 +152,7 @@ export class CatalogDraft {
   }
 
   /**
-   * Adds the entry's translation to the glossary, without its name tags. Gives the new term when
+   * Adds the entry's translation to the glossary, without its tags. Gives the new term when
    * the entry's translation should be the term's.
    */
   #seed(entry: RunEntry, translation: string): DraftTerm | undefined {
@@ -161,7 +161,7 @@ export class CatalogDraft {
     return undefined;
   }
 
-  /** Whether the entry's name tags stay as they are, kept aside from requests. */
+  /** Whether the entry's tags stay as they are, kept aside from requests. */
   keepsTags(entry: Placed) {
     return keepsTags(this.#catalog.game.engine, entry);
   }
