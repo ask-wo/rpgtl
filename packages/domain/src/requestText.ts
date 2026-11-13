@@ -8,14 +8,22 @@ import { tagPattern } from "./engines/xp/databaseTags.ts";
 // Korean puts spaces between words, so a line break between Hangul joins with a space.
 const unspacedCharacter = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}　-〿！-｠⏸]/u;
 
+const sourceLetter = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+// A row of codes without words, such as the button icons a tutorial lists, is laid out by its
+// line breaks.
+const codeRow = (line: string) => /\{\d+\}/.test(line) && !sourceLetter.test(line);
+
 /**
  * Joins the lines of a text, which only fit Chinese text into its window, so the English can be
- * wrapped again. Blank lines between paragraphs stay, and so does every line break with `keepLines`.
+ * wrapped again. Blank lines between paragraphs stay, and so do the line breaks around a row of
+ * placeholders without words, and every line break with `keepLines`.
  */
 export function joinLines(text: string, keepLines = false) {
   return text.replace(/[^\S\n]*\n\s*/g, (lineBreak, offset: number, value: string) => {
     if (/\n\s*\n/.test(lineBreak)) return "\n\n";
-    if (keepLines) return "\n";
+    const before = value.slice(value.lastIndexOf("\n", offset - 1) + 1, offset);
+    const after = value.slice(offset + lineBreak.length).split("\n", 1)[0] ?? "";
+    if (keepLines || codeRow(before) || codeRow(after)) return "\n";
     return unspacedCharacter.test(value[offset - 1] ?? "") &&
       unspacedCharacter.test(value[offset + lineBreak.length] ?? "")
       ? ""

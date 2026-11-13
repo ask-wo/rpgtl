@@ -274,6 +274,13 @@ it("A line break joins Chinese lines without a space and Korean lines with one",
   assert.strictEqual(requestText(messageEntry("내일은\n같이 가자.")).text, "내일은 같이 가자.");
 });
 
+it("A row of icons keeps its line breaks", () => {
+  assert.strictEqual(
+    requestText(messageEntry("\\I[3](A)　\\I[4](B)\n\\I[5](C)\nこのボタンを\n使うよ。")).text,
+    "(A)　{1}(B)\n{2}(C)\nこのボタンを使うよ。",
+  );
+});
+
 it("A pause at a joined line break goes after the nearest punctuation in the English", () => {
   assert.deepStrictEqual(
     checkAnswer(
