@@ -20,7 +20,7 @@ Every tool that finds problems in a game's translations goes through `pnpm run a
 | The model repeats a word until its answer is cut off | rejected: `answer too long` |
 | The prompt didn't fit the context | rejected: `context full`, plus a run warning |
 | An answer that belongs to another line, or lost most of its own | check `length unlike the source` |
-| The model refused | rejected: `refused` when it answered a whole batch in prose instead of JSON; in accepted answers: check `refusal` (only phrases about the request, since dialogue apologizes too) |
+| The model refused | rejected: `refused` when it answered a whole batch in prose instead of JSON, or its safeguards flagged the request (the request's `error` in the log); in accepted answers: check `refusal` (only phrases about the request, since dialogue apologizes too) |
 | The speaker's name repeated after the speaker tag | fixed while checking; in existing text: check `speaker name repeated` |
 | A speaker's name alone on a message's first line read as part of the sentence (ミナ⏎と、とにかく逃げて → "Mina and… anyway, run") | prevented: a first line that is only a glossary term or the Show Text's speaker is kept on its own line, put into English from the glossary and sent as the speaker; a glossary character's name there also makes the message that character's own line when RPGTL looks for their pronoun; a name the glossary lacks is still joined to the text |
 | A number added on a last line | fixed while checking; in existing text: check `number added on a last line` |

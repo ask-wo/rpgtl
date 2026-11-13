@@ -118,6 +118,18 @@ const timedOut = () =>
     }),
   });
 
+/** Requests a translator's safeguards may flag before the run stops. */
+const flaggedLimit = 3;
+
+const tooManyFlagged = () =>
+  AiError.make({
+    module: "translate",
+    method: "generateObject",
+    reason: new AiError.ContentPolicyError({
+      description: `The translator's safeguards flagged ${flaggedLimit} requests, so the run stopped. The Text page lists the lines of a flagged batch as failed.`,
+    }),
+  });
+
 const loggedEntry = ({ entry }: Prepared) => ({
   id: entry.id,
   ...(entry.location && { location: entry.location }),
@@ -130,6 +142,8 @@ interface Reply {
   readonly text: string;
   readonly response: LanguageModel.GenerateTextResponse<{}> | undefined;
   readonly ms: number;
+  /** Why the translator refused to answer, such as safeguards that flagged the request. */
+  readonly refused?: string;
 }
 
 /** What a reply's log line says about the request itself. */
@@ -143,6 +157,7 @@ const replyFields = (model: string, messages: ReadonlyArray<TextMessage>, reply:
   return {
     request: { model, messages: [...messages] },
     content: reply.text,
+    ...(reply.refused !== undefined && { error: reply.refused }),
     ms: reply.ms,
     ...(promptTokens !== undefined && { promptTokens }),
     ...(outputTokens !== undefined && { outputTokens }),
@@ -167,6 +182,14 @@ const askObject = Effect.fn("translate.askObject")(function* (
     Effect.catchReason("AiError", "StructuredOutputError", (reason) =>
       Effect.map(elapsed, (ms): Reply => ({ text: reason.responseText, response: undefined, ms })),
     ),
+    Effect.catchReason("AiError", "ContentPolicyError", (reason) =>
+      Effect.map(elapsed, (ms): Reply => ({
+        text: "",
+        response: undefined,
+        ms,
+        refused: reason.message,
+      })),
+    ),
   );
 });
 
@@ -174,7 +197,8 @@ const askObject = Effect.fn("translate.askObject")(function* (
  * Translates the draft's untranslated entries: names into the glossary first, then the glossary
  * sorted by kind and the characters' pronouns, then, in a `translate` run, the rest of the text.
  * Batches that fail their checks are asked again in halves down to single entries; the draft
- * lists the ones that still fail. A request that fails ends the run.
+ * lists the ones that still fail. A batch the translator's safeguards flag fails whole, and
+ * `flaggedLimit` flagged requests of any kind end the run, as does any other request that fails.
  */
 export const translateCatalog = Effect.fn("translateCatalog")(function* (
   draft: CatalogDraft,
@@ -182,6 +206,13 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
   runKind: RunKind,
 ) {
   const report = yield* RunReport;
+  const flaggedRequests = yield* Ref.make(0);
+  /** Counts a request the translator's safeguards flagged, ending the run at `flaggedLimit`. */
+  const flagged = Ref.updateAndGet(flaggedRequests, (count) => count + 1).pipe(
+    Effect.flatMap((count) =>
+      count >= flaggedLimit ? Effect.fail(tooManyFlagged()) : Effect.void,
+    ),
+  );
 
   const systemPrompt = (entries: BatchRequest["entries"], names: boolean) =>
     translationSystemPrompt({
@@ -338,6 +369,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
           ...replyFields(pass.model, messages, reply),
           rejected: [],
         });
+        if (reply.refused !== undefined) yield* flagged;
       });
 
       const translateBatch = Effect.fn("translate.batch")(function* (
@@ -387,7 +419,8 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
           if (entryTranslation(item.entry)) continue;
           const answer = answers?.[index];
           const reason =
-            verdict.rejected ?? (verdict.repeating === index ? "answer too long" : undefined);
+            (reply.refused === undefined ? verdict.rejected : "refused") ??
+            (verdict.repeating === index ? "answer too long" : undefined);
           const checked =
             reason === undefined
               ? checkAnswer(item.entry, answer, contexts[index], draft.keepsTags(item.entry))
@@ -433,13 +466,16 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
         if (long.length)
           yield* shorten(long, { messages, reply: reply.text, contexts, entries: request.entries });
         const [only] = batch;
-        if (only && batch.length === 1 && rejected.length) draft.fail(only.entry);
+        // Many flags may put the account at risk, so a flagged batch is never asked again.
+        if (reply.refused !== undefined) for (const item of batch) draft.fail(item.entry);
+        else if (only && batch.length === 1 && rejected.length) draft.fail(only.entry);
         const repeating =
           translator.deterministic && verdict.repeating !== undefined
             ? batch[verdict.repeating]
             : undefined;
         if (repeating) draft.fail(repeating.entry);
         yield* report.progress;
+        if (reply.refused !== undefined) return yield* flagged;
         if (batch.length === 1) return;
         const again = rejected.map(({ item }) => item).filter((item) => item !== repeating);
         if (!again.length) return;
@@ -489,6 +525,8 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
         : { error: answer.failure.reason.message }),
       ms,
     });
+    if (answer._tag === "Failure" && answer.failure.reason._tag === "ContentPolicyError")
+      yield* flagged;
     // The glossary keeps what the rules gave a term the model couldn't answer about.
     return answer._tag === "Success" ? answer.success : undefined;
   });

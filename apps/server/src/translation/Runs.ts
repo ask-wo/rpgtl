@@ -89,6 +89,7 @@ const failureMessage = (failure: unknown): string => {
       case "InvalidRequestError":
       case "InternalProviderError":
       case "InvalidOutputError":
+      case "ContentPolicyError":
         // RPGTL's own translators write these descriptions for the page.
         return reason.description ?? reason.message;
       default:
