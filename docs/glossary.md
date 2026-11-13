@@ -62,5 +62,6 @@ The words the code and these docs are built from. Use them in code, tests, docs 
 | RPGTL launch | Starting a game with Play (`Launches`): an MV or MZ game in RPGTL's own NW.js with the **NW.js hook**, which reads the catalog from disk and applies it, and an XP game in mkxp-z, which reads the translated data files RPGTL writes first. Starting the game through its own `Game.exe` is unaffected. |
 | Translation switch | A game's **Translate this game** switch. Off, the game shows its original text; it doesn't start or stop a run. |
 | Script text | The strings in an XP game's Ruby scripts (`Scripts.rxdata`) that hold Chinese, Japanese or Korean, which the game draws itself, such as its title menu. Not RPGTL's **game scripts**. |
+| Keep original | An entry the game shows as it is and runs don't translate: an image text's original artwork, or a string of **script text**. |
 | Game scripts | The scripts RPGTL adds to a played game (`packages/game`): the **runtime** (fitting English into windows, the F8 panel) and the **map view** (F7). |
 | Activity | Everything running for a game (its runs, image reading, the program it plays in) as the one stream its page follows (`Activity`). |

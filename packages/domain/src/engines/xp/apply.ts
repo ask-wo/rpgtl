@@ -1,8 +1,9 @@
 import { dump, load, RubyHash, RubyInteger, RubyObject } from "@hyrious/marshal";
-import { type Entry, EventListRef, type Location } from "@rpgtl/contracts";
+import { type Catalog, type Entry, EventListRef, type Location } from "@rpgtl/contracts";
 import * as Result from "effect/Result";
 import { measuredText } from "../../controlCodes.ts";
 import { entryTranslation } from "../../guesses.ts";
+import { isScriptText } from "../../location.ts";
 import { GameDataChanged } from "../mvmz/apply.ts";
 import { GameFileInvalid } from "../mvmz/gameFile.ts";
 import { assignedLiteral, literalValue } from "./extract.ts";
@@ -195,12 +196,16 @@ function setText(data: unknown, location: Location, source: string, text: string
   }
 }
 
-/** The translated entries by the XP data file that holds their text, such as `Map001.rxdata`. */
-export function translatedByXpFile(entries: ReadonlyArray<Entry>) {
+/**
+ * The translated entries of an XP game by the data file that holds their text, such as
+ * `Map001.rxdata`; none of its scripts while it plays them unchanged.
+ */
+export function translatedByXpFile({ entries, originalScripts }: Catalog) {
   const files = new Map<string, Array<Entry>>();
   for (const entry of entries) {
+    if (originalScripts && isScriptText(entry)) continue;
     const file = xpFileOf(entry.location);
-    if (file === undefined || !entryTranslation(entry)) continue;
+    if (file === undefined || !entryTranslation(entry) || entry.keepOriginal) continue;
     const listed = files.get(file);
     if (listed) listed.push(entry);
     else files.set(file, [entry]);
@@ -220,7 +225,9 @@ export function applyXpTranslations(
 ): Result.Result<Uint8Array | undefined, GameDataChanged | GameFileInvalid> {
   const translated = entries.flatMap((entry) => {
     const text = entryTranslation(entry);
-    return text && xpFileOf(entry.location) === file ? [{ entry, text }] : [];
+    return text && !entry.keepOriginal && xpFileOf(entry.location) === file
+      ? [{ entry, text }]
+      : [];
   });
   if (!translated.length) return Result.succeed(undefined);
   if (file === scriptsFile) {

@@ -51,20 +51,22 @@ it("puts translations into an XP data file, wrapping messages into as many as th
   );
 });
 
-it("puts translations into an XP game's scripts, keeping their `#{}` code", () => {
+it("puts translations into an XP game's scripts, keeping their `#{}` code and the strings kept as they are", () => {
   const scripts = xpFile(
     xpScripts({
       Window_Gold: `draw_text(0, 0, 120, 32, "金币：#{@gold}")\nreturn '盾' if x\ntext = "龙"`,
     }),
   );
   const english = { "金币：#{@gold}": 'Gold "now": #{@gold}', 盾: "Shield's", 龙: "Dragon" };
-  const entries = translated(entriesOf("Scripts.rxdata", scripts), english);
+  const entries = translated(entriesOf("Scripts.rxdata", scripts), english).map((entry) =>
+    entry.source === "龙" ? { ...entry, keepOriginal: true } : entry,
+  );
   const result = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", scripts, entries));
   const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", result ?? new Uint8Array()));
   assert.deepStrictEqual(file._tag === "Scripts" ? file.data : undefined, [
     {
       name: "Window_Gold",
-      code: `draw_text(0, 0, 120, 32, "Gold \\"now\\": #{@gold}")\nreturn 'Shield\\'s' if x\ntext = "Dragon"`,
+      code: `draw_text(0, 0, 120, 32, "Gold \\"now\\": #{@gold}")\nreturn 'Shield\\'s' if x\ntext = "龙"`,
     },
   ]);
 });

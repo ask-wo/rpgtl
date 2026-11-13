@@ -15,7 +15,7 @@ import { speakerTagName, speakerTagPattern } from "./controlCodes.ts";
 import { entryTranslation, termTranslation, termKind, withGuess } from "./guesses.ts";
 import { keepsTags, withoutTags } from "./engines/xp/databaseTags.ts";
 import { gameLanguage } from "./language.ts";
-import { isImageText, isMessage, type Placed } from "./location.ts";
+import { isImageText, isMessage, isScriptText, type Placed } from "./location.ts";
 import { isActorName, isSpeakerNameEntry } from "./nameEntries.ts";
 import { type NamedTerm, nameTerm } from "./nameTerm.ts";
 import { collectClues, linesAbout, pronounFromClues } from "./pronouns.ts";
@@ -24,6 +24,20 @@ import { showTextSpeakers, translationReuse } from "./reuse.ts";
 import { type TermInput, termInputs } from "./termKinds.ts";
 
 const hasWords = (source: string) => withoutCodes(source).trim() !== "";
+
+/**
+ * Whether a run translates the entry: all but those that keep their original, the text of images
+ * the game shows unchanged, and script text while the game plays its scripts unchanged.
+ */
+export const runTranslates =
+  ({
+    unchangedImages = [],
+    originalScripts,
+  }: Pick<Catalog, "unchangedImages" | "originalScripts">) =>
+  (entry: Pick<Entry, "keepOriginal"> & Placed) =>
+    !entry.keepOriginal &&
+    !(isImageText(entry) && unchangedImages.includes(entry.location.image)) &&
+    !(originalScripts && isScriptText(entry));
 
 /** An entry a run fills in; it replaces the nested values whole, so only the top level changes. */
 export type DraftEntry = Types.Mutable<Entry>;
@@ -94,13 +108,9 @@ export class CatalogDraft {
     return this.#glossary;
   }
 
-  /** The entries a run translates: all but images the game shows unchanged. */
+  /** The entries a run translates. */
   get translatable(): ReadonlyArray<DraftEntry> {
-    const originals = this.#catalog.unchangedImages ?? [];
-    return this.#entries.filter(
-      (entry) =>
-        !entry.keepOriginal && !(isImageText(entry) && originals.includes(entry.location.image)),
-    );
+    return this.#entries.filter(runTranslates(this.#catalog));
   }
 
   /** A copy of the draft as a catalog. */

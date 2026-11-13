@@ -109,7 +109,7 @@ const problems: Record<TranslationFileProblem, (detail: string) => string> = {
   duplicateEntry: () => "Duplicate translation entry.",
   duplicateTerm: () => "Each glossary term can be listed only once.",
   controlCodes: (detail) => `Keep RPG Maker control codes intact: ${detail}`,
-  keepOriginal: () => "Keep original is only a setting for image text.",
+  keepOriginal: () => "Keep original is only a setting for image text and script text.",
   images: () => "The image text in this translation file is damaged.",
 };
 

@@ -16,6 +16,12 @@ export const isImageText = <E extends Placed>(
   entry: E,
 ): entry is E & { readonly location: ImageLines } => entry.location?._tag === "ImageLines";
 
+/** Whether the entry is a string in an XP game's Ruby scripts. */
+export const isScriptText = (entry: Placed) => entry.location?._tag === "RubyScriptText";
+
+/** Whether the player may keep the entry's original: an image's pixels or a script's string. */
+export const canKeepOriginal = (entry: Placed) => isImageText(entry) || isScriptText(entry);
+
 /** Text of the game's system settings: its title, terms, and switch and variable names. */
 export const isSystemText = ({ location }: Placed) =>
   location?._tag === "SystemText" || location?._tag === "Name";

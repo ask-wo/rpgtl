@@ -19,7 +19,7 @@ import { keepsControlCodes } from "./controlCodes.ts";
 import { englishByText } from "./inspect.ts";
 import { renamedTranslation, repeatedSource, withoutStrayPronoun } from "./glossaryEdits.ts";
 import { entryTranslation, importedValue, termTranslation, withoutGuess } from "./guesses.ts";
-import { isImageText } from "./location.ts";
+import { canKeepOriginal, isImageText } from "./location.ts";
 
 /** A translation file that can't be imported into the catalog, and why. */
 export class TranslationFileInvalid extends Schema.TaggedError<TranslationFileInvalid>()(
@@ -166,7 +166,8 @@ export function importTranslations(
     const translation = entryTranslation(entry);
     if (translation && !keepsControlCodes(entry.source, translation))
       return invalid("controlCodes", entry.source.slice(0, 80));
-    if (entry.keepOriginal !== undefined && !isImageText(original)) return invalid("keepOriginal");
+    if (entry.keepOriginal !== undefined && !canKeepOriginal(original))
+      return invalid("keepOriginal");
     if (updates.has(entry.id)) return invalid("duplicateEntry");
     updates.set(entry.id, entry);
   }
@@ -210,6 +211,7 @@ export function importTranslations(
     entries,
     glossary,
     translate: current.translate,
+    ...(current.originalScripts && { originalScripts: true }),
     ...(file.language && { language: file.language }),
     ...(file.imageBold && { imageBold: file.imageBold }),
     ...(file.imageFont && { imageFont: file.imageFont }),

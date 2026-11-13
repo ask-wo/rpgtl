@@ -306,7 +306,7 @@ const make = Effect.gen(function* () {
     // A launch that fails partway may leave files the old list doesn't describe.
     yield* fs.remove(writtenFile, { force: true });
     const catalog = yield* catalogs.get(game.id);
-    const translated = catalog.translate ? translatedByXpFile(catalog.entries) : new Map();
+    const translated = catalog.translate ? translatedByXpFile(catalog) : new Map();
     const files = yield* gameFolder.xpData(game);
     const prints: Record<string, string> = {};
     for (const [name, bytes] of files) {

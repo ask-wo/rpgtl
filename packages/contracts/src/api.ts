@@ -379,6 +379,12 @@ export class CatalogsApi extends HttpApiGroup.make("catalogs")
       success: Catalog,
       error: [GameNotInspected, GameBusy, StateFileFailed],
     }),
+    /** Sets whether an XP game plays with its scripts unchanged; their translations stay. */
+    HttpApiEndpoint.post("setOriginalScripts", "/catalog/scripts", {
+      payload: Schema.Struct({ id: Schema.String, on: Schema.Boolean }),
+      success: Catalog,
+      error: [GameNotInspected, GameBusy, StateFileFailed],
+    }),
     /** Sets the language of the game's text; null goes back to the one its text looks like. */
     HttpApiEndpoint.post("setLanguage", "/catalog/language", {
       payload: Schema.Struct({ id: Schema.String, language: Schema.NullOr(SourceLanguage) }),

@@ -118,6 +118,8 @@ export interface ShownContext {
   readonly failed: ReadonlySet<string>;
   readonly lastRun: string | undefined;
   readonly findings: Findings;
+  /** Whether a run translates an entry, which only then counts as untranslated. */
+  readonly translates: (entry: Entry) => boolean;
 }
 
 export const isShown = (entry: Entry, show: Shown, context: ShownContext) => {
@@ -125,7 +127,7 @@ export const isShown = (entry: Entry, show: Shown, context: ShownContext) => {
     case "all":
       return true;
     case "untranslated":
-      return !entryTranslation(entry);
+      return !entryTranslation(entry) && context.translates(entry);
     case "failed":
       return context.failed.has(entry.id) || (!entryTranslation(entry) && !!entry.suggestion);
     case "last-run":
