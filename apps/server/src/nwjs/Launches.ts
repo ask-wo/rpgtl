@@ -1,8 +1,16 @@
-import { type Game, gameFiles, type GameLaunch, type ProgramStatus } from "@rpgtl/contracts";
+import { createHash } from "node:crypto";
+import {
+  type Entry,
+  type Game,
+  gameFiles,
+  type GameLaunch,
+  type ProgramStatus,
+} from "@rpgtl/contracts";
 import { hookScript, type HookConfig } from "@rpgtl/game/scripts";
-import { applyXpTranslations, translatedByXpFile } from "@rpgtl/domain";
+import { applyXpTranslations, entryTranslation, translatedByXpFile } from "@rpgtl/domain";
 import * as Result from "effect/Result";
 import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -24,6 +32,7 @@ import * as Settings from "../settings/Settings.ts";
 import * as StateFolder from "../state/StateFolder.ts";
 import { userFolder } from "../state/userFolders.ts";
 import { OnWindows } from "../OnWindows.ts";
+import { runningCommit } from "../runningCommit.ts";
 import * as Nwjs from "./Nwjs.ts";
 import * as Mkxpz from "../mkxpz/Mkxpz.ts";
 import { mkxpConfig } from "../mkxpz/Mkxpz.ts";
@@ -259,26 +268,67 @@ const make = Effect.gen(function* () {
     return appDir;
   });
 
+  // A checkout with changes has no commit that names the code that wrote the patched files, so
+  // only this process's own launches reuse them.
+  const writer = Option.getOrElse(
+    Option.filter(yield* runningCommit, (commit) => !commit.endsWith("-dirty")),
+    () => SecureRandom.uuidV4Unsafe(),
+  );
+  const decodeWritten = Schema.decodeEffect(
+    Schema.fromJsonString(Schema.Record(Schema.String, Schema.String)),
+  );
+  /** What a patched data file is made from: the game's file, its English and RPGTL's code. */
+  const fingerprint = (name: string, bytes: Uint8Array, entries: ReadonlyArray<Entry>) => {
+    const hash = createHash("sha256").update(writer).update(name).update(bytes);
+    for (const entry of entries) hash.update(JSON.stringify([entry.id, entryTranslation(entry)]));
+    return hash.digest("hex");
+  };
+
   /**
    * The folder mkxp-z starts in: its `mkxp.json`, and the data files that hold translated text
-   * while the game's translation switch is on, which it reads before the game's own.
+   * while the game's translation switch is on, which it reads before the game's own. A data file
+   * whose game file, English and RPGTL are those of the last launch stays as it is.
    */
   const mkxpzFolder = Effect.fnUntraced(function* (game: Game, program: string) {
     const dir = path.join(state.root, gameFiles(game.id).mkxpz);
     const patches = path.join(dir, "patches");
-    yield* fs.remove(dir, { recursive: true, force: true });
-    yield* fs.makeDirectory(path.join(patches, "Data"), { recursive: true });
+    const data = path.join(patches, "Data");
+    const writtenFile = path.join(dir, "patches.json");
+    yield* fs.makeDirectory(data, { recursive: true });
+    // A missing or unreadable list only means every file is written again.
+    const written: Readonly<Record<string, string>> = yield* fs.readFileString(writtenFile).pipe(
+      Effect.flatMap(decodeWritten),
+      Effect.catchTags({
+        PlatformError: () => Effect.succeed({}),
+        SchemaError: () => Effect.succeed({}),
+      }),
+    );
+    // A launch that fails partway may leave files the old list doesn't describe.
+    yield* fs.remove(writtenFile, { force: true });
     const catalog = yield* catalogs.get(game.id);
-    if (catalog.translate) {
-      const translated = translatedByXpFile(catalog.entries);
-      for (const [name, bytes] of yield* gameFolder.xpData(game)) {
-        const patched = applyXpTranslations(name, bytes, translated.get(name) ?? []);
-        if (Result.isFailure(patched))
-          yield* Effect.logWarning(`${name} plays untranslated.`, patched.failure);
-        else if (patched.success)
-          yield* fs.writeFile(path.join(patches, "Data", name), patched.success);
+    const translated = catalog.translate ? translatedByXpFile(catalog.entries) : new Map();
+    const files = yield* gameFolder.xpData(game);
+    const prints: Record<string, string> = {};
+    for (const [name, bytes] of files) {
+      const entries = translated.get(name) ?? [];
+      const print = fingerprint(name, bytes, entries);
+      const file = path.join(data, name);
+      if (written[name] === print && (!entries.length || (yield* fs.exists(file)))) {
+        prints[name] = print;
+        continue;
       }
+      yield* fs.remove(file, { force: true });
+      const patched = applyXpTranslations(name, bytes, entries);
+      if (Result.isFailure(patched)) {
+        yield* Effect.logWarning(`${name} plays untranslated.`, patched.failure);
+        continue;
+      }
+      if (patched.success) yield* fs.writeFile(file, patched.success);
+      prints[name] = print;
     }
+    for (const name of Object.keys(written))
+      if (!files.has(name)) yield* fs.remove(path.join(data, name), { force: true });
+    yield* fs.writeFileString(writtenFile, JSON.stringify(prints));
     const config = mkxpConfig(path.dirname(program), game.root, patches);
     yield* fs.writeFileString(path.join(dir, "mkxp.json"), JSON.stringify(config, null, 2));
     return dir;

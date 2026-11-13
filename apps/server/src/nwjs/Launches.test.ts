@@ -237,6 +237,27 @@ it.live(
       assert.deepStrictEqual(yield* fs.readDirectory(path.join(patches, "Data")), [
         "Map001.rxdata",
       ]);
+
+      const map = path.join(patches, "Data", "Map001.rxdata");
+      yield* fs.writeFileString(map, "kept");
+      const again = Effect.fnUntraced(function* (english: string, translate = true) {
+        const saved = yield* catalogs.get(game.id);
+        yield* catalogs.save({
+          ...saved,
+          translate,
+          entries: saved.entries.map((entry) =>
+            entry.source === "你好" ? { ...entry, translation: { user: english } } : entry,
+          ),
+        });
+        yield* launches.launch(game.id);
+        yield* ended(game.id);
+      });
+      yield* again("Hello");
+      assert.strictEqual(yield* fs.readFileString(map), "kept");
+      yield* again("Hi there");
+      assert.notStrictEqual(yield* fs.readFileString(map), "kept");
+      yield* again("Hi there", false);
+      assert.deepStrictEqual(yield* fs.readDirectory(path.join(patches, "Data")), []);
     }).pipe(Effect.provide(withFakeMkxpz)),
   { timeout: 60_000 },
 );
