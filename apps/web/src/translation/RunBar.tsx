@@ -305,9 +305,23 @@ function TranslationRunning({ run }: { readonly run: RunStatus }) {
 }
 
 function TranslationGoing({ run }: { readonly run: RunStatus }) {
-  const finished = run.done + run.failed.length;
+  const pass =
+    run.pass === "names"
+      ? {
+          ...run.names,
+          label: run.kind === "build-glossary" ? "Building the glossary" : "Translating names",
+          counted: (count: number) => counted(count, "name", "names"),
+        }
+      : {
+          total: run.total - run.names.total,
+          done: run.done - run.names.done,
+          failed: run.failed.length - run.names.failed,
+          label: "Translating text",
+          counted: (count: number) => counted(count, "entry", "entries"),
+        };
+  const finished = pass.done + pass.failed;
   const step = run.phase._tag === "Running" ? run.phase.step : endingStep;
-  const left = useTimeLeft(finished, run.total, step !== undefined);
+  const left = useTimeLeft(finished, pass.total, step !== undefined);
   return (
     <div className="flex items-center gap-4">
       <StopButton what="translation" ending={run.phase._tag === "Ending"} />
@@ -315,15 +329,13 @@ function TranslationGoing({ run }: { readonly run: RunStatus }) {
         <p className="flex items-center gap-1.5 text-sm">
           {step !== undefined && <Spinner />}
           <span>
-            <span className="font-medium">
-              {step ?? (run.kind === "build-glossary" ? "Building the glossary" : "Translating")}
-            </span>
-            {` · ${number(run.done)} of ${run.kind === "build-glossary" ? counted(run.total, "name", "names") : counted(run.total, "entry", "entries")} translated`}
-            {run.failed.length > 0 && `, ${number(run.failed.length)} failed`}
+            <span className="font-medium">{step ?? pass.label}</span>
+            {` · ${number(pass.done)} of ${pass.counted(pass.total)} translated`}
+            {pass.failed > 0 && `, ${number(pass.failed)} failed`}
             {left && <span className="text-muted-foreground"> · {left}</span>}
           </span>
         </p>
-        <Progress value={percent(finished, run.total)} aria-label="Run progress" />
+        <Progress value={percent(finished, pass.total)} aria-label="Run progress" />
       </div>
     </div>
   );

@@ -9,6 +9,8 @@ export class RunReport extends Context.Service<
   {
     /** What the run does between translating entries, or none once it translates again. */
     readonly step: (step: string | undefined) => Effect.Effect<void>;
+    /** The run moves on from the glossary pass to the text pass. */
+    readonly textPass: Effect.Effect<void>;
     /** Something the user should know, such as a model running on the CPU; each is told once. */
     readonly warn: (message: string) => Effect.Effect<void>;
     readonly request: (line: Omit<RequestLine, "type" | "at">) => Effect.Effect<void>;

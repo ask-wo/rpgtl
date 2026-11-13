@@ -53,6 +53,8 @@ test("the bar's link after a run opens the Text page on the failed entries, and 
       phase: { _tag: "Finished" },
       total: 1,
       done: 0,
+      pass: "text",
+      names: { total: 0, done: 0, failed: 0 },
       translated: 1,
       failed: ["2"],
       left: 0,

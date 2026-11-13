@@ -560,8 +560,10 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
 
   yield* translator.names.provide(namesPass);
 
-  if (runKind === "translate")
+  if (runKind === "translate") {
+    yield* report.textPass;
     yield* translator.text.provide(
       translateGroups(translator.text, textGroups(draft.translatable), false),
     );
+  }
 });
