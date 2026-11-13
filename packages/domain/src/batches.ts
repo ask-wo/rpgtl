@@ -29,11 +29,27 @@ const grouped = (entries: ReadonlyArray<RunEntry>, key: (entry: RunEntry) => str
   return [...groups.values()];
 };
 
-/** Name entries by place, which the glossary pass translates into the glossary first. */
-export const nameGroups = (entries: ReadonlyArray<RunEntry>) =>
+const left = (group: ReadonlyArray<RunEntry>) =>
+  group.filter((entry) => !entryTranslation(entry)).length;
+
+/**
+ * Name entries by place, which the glossary pass translates into the glossary first, cut into
+ * groups of at most `batchSize` untranslated names. A group's batches go one after another, and
+ * names need no earlier answers, so a long table such as a game's thousands of skills still runs
+ * its batches side by side.
+ */
+export const nameGroups = (entries: ReadonlyArray<RunEntry>, batchSize: number) =>
   grouped(entries.filter(isNameEntry), ({ location }) =>
     location ? placeKey(placeOf(location)) : "",
-  );
+  ).flatMap((group) => {
+    const cut: Array<Array<RunEntry>> = [[]];
+    for (const entry of group) {
+      const current = cut.at(-1) ?? [];
+      if (!entryTranslation(entry) && left(current) === batchSize) cut.push([entry]);
+      else current.push(entry);
+    }
+    return cut;
+  });
 
 /** The other entries by scene, which see the scene's earlier lines as context. */
 export const textGroups = (entries: ReadonlyArray<RunEntry>) =>
@@ -62,9 +78,6 @@ export function speakerEntries(draft: CatalogDraft, prepared: ReadonlyArray<Prep
     translation: {},
   }));
 }
-
-const left = (group: ReadonlyArray<RunEntry>) =>
-  group.filter((entry) => !entryTranslation(entry)).length;
 
 /** Packs groups with fewer entries left than a batch together, up to a batch each; a longer group goes alone. */
 export function packGroups(groups: ReadonlyArray<ReadonlyArray<RunEntry>>, batchSize: number) {

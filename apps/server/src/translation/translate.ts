@@ -546,7 +546,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
   const namesPass = Effect.gen(function* () {
     const pass = translator.names;
     yield* report.step(undefined);
-    yield* translateGroups(pass, nameGroups(draft.translatable), true);
+    yield* translateGroups(pass, nameGroups(draft.translatable, translator.batchSize), true);
     const speakers = speakerEntries(
       draft,
       draft.entries.map((entry) => draft.prepare(entry)),
