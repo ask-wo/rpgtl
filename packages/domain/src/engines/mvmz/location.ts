@@ -57,6 +57,7 @@ export const fileOf: (location: Location) => string = Location.match({
   Name: () => "System.json",
   PluginSetting: () => "plugins.js",
   ImageLines: ({ image }) => image,
+  RubyScriptText: () => "Scripts.rxdata",
 });
 
 const listKeys = EventListRef.match({
@@ -98,6 +99,7 @@ export const pathOf: (location: Location) => ReadonlyArray<string> = Location.ma
   Name: ({ group, id }) => [group, String(id)],
   PluginSetting: ({ plugin, keys }) => [plugin, ...keys],
   ImageLines: ({ lines }) => ["lines", ...lines.map(String)],
+  RubyScriptText: ({ name, literal }) => [name, String(literal)],
 });
 
 /**

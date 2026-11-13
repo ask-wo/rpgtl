@@ -2,7 +2,7 @@ import type { Catalog, Entry, Game, MissingFile } from "@rpgtl/contracts";
 import * as Predicate from "effect/Predicate";
 import { guessRuns } from "./catalog.ts";
 import { entryTranslation } from "./guesses.ts";
-import { isImageText } from "./location.ts";
+import { canKeepOriginal, isImageText } from "./location.ts";
 
 /** Audio and video that NW.js can't play, for files given as paths below the web root. */
 export const mediaWarnings = (files: ReadonlyArray<string>) => {
@@ -216,7 +216,7 @@ export function inspectedCatalog(
       ...entry,
       ...(old?.readerText !== undefined && { source: old.source, readerText: old.readerText }),
       translation: old?.translation ?? {},
-      ...(old?.keepOriginal && { keepOriginal: true }),
+      ...(old?.keepOriginal && canKeepOriginal(entry) && { keepOriginal: true }),
       ...(old?.previous && { previous: old.previous }),
     };
   });

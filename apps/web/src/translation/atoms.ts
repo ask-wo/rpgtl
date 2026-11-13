@@ -66,6 +66,7 @@ export const invalidateCatalog = Rpgtl.runtime.fn((id: string) =>
 
 export const setTranslate = Rpgtl.mutation("catalogs", "setTranslate");
 export const setLanguage = Rpgtl.mutation("catalogs", "setLanguage");
+export const setOriginalScripts = Rpgtl.mutation("catalogs", "setOriginalScripts");
 export const importFile = Rpgtl.mutation("catalogs", "import");
 export const previewImport = Rpgtl.mutation("catalogs", "previewImport");
 export const clearAll = Rpgtl.mutation("catalogs", "restore");

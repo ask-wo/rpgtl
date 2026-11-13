@@ -32,16 +32,18 @@ export function joinLines(text: string, keepLines = false) {
 }
 
 // Codes that stand for a word move with the English word order, so they are never kept aside.
-const wordCode = String.raw`(?:%\d+|\\[NVP]\[[^\]]*\]|\\G(?![A-Za-z[<]))`;
+const wordCode = String.raw`(?:%\d+|#\{[^{}]*\}|\\[NVP]\[[^\]]*\]|\\G(?![A-Za-z[<]))`;
 const edgePart = `\\s|(?!${wordCode})(?:${controlCodePattern.source})`;
 const keptAside = (codes: string, edge: string) => ({
   leading: new RegExp(`^(?:${edge})*`, "i"),
   trailing: new RegExp(`(?:${edge})*$`, "i"),
   inside: new RegExp(codes, "g"),
 });
-const plainPatterns = keptAside(codeOrBackslash.source, edgePart);
+// A source's own `{2}` would read as a placeholder in the answer, so it is sent as one.
+const sourcePlaceholder = String.raw`\{\d+\}`;
+const plainPatterns = keptAside(`${codeOrBackslash.source}|${sourcePlaceholder}`, edgePart);
 const tagPatterns = keptAside(
-  `${tagPattern.source}|${codeOrBackslash.source}`,
+  `${tagPattern.source}|${codeOrBackslash.source}|${sourcePlaceholder}`,
   `${tagPattern.source}|${edgePart}`,
 );
 const placeholder = /\{(\d+)\}/g;
@@ -240,6 +242,13 @@ export const withCodes = (request: RequestText, answer: string) =>
   request.leading +
   markedPauses(request, answer).replace(
     placeholder,
-    (found, n: string) => request.codes[Number(n) - 1] ?? found,
+    (found, n: string, at: number, text: string) => {
+      const code = request.codes[Number(n) - 1];
+      if (code === undefined) return found;
+      // A game reads the letters after a code of letters only, such as `\n`, as part of its name.
+      return /^\\[A-Za-z]+$/.test(code) && /^[A-Za-z]/.test(text.slice(at + found.length))
+        ? `${code} `
+        : code;
+    },
   ) +
   request.trailing;

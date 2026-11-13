@@ -175,6 +175,7 @@ export const textFocus = (
       EventName: () => Option.none(),
       PluginSetting: () => Option.none(),
       ImageLines: () => Option.none(),
+      RubyScriptText: () => Option.none(),
     }),
     (focus: Focus<GameFile>) => focus.compose(holding(source)),
   );

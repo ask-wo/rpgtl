@@ -342,6 +342,7 @@ function fileText(file: GameFile, plugins: PluginText): ReadonlyArray<Found> {
       data.flatMap((record, index) => (record ? recordText(record, table, index, true) : [])),
     Tilesets: ({ data }) =>
       data.flatMap((record, index) => (record ? recordText(record, "tilesets", index, false) : [])),
+    Scripts: () => [],
     Other: () => [],
   });
 }

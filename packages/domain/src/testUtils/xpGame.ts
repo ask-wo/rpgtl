@@ -1,4 +1,5 @@
 import { dump, RubyHash, RubyObject } from "@hyrious/marshal";
+import { zlibSync } from "fflate";
 import { writeArchive } from "../engines/xp/archive.ts";
 
 /** A Ruby object of `className` with an instance variable per field, as RGSS dumps it. */
@@ -36,3 +37,11 @@ export const xpArchive = (files: Record<string, unknown>) =>
   writeArchive(
     new Map(Object.entries(files).map(([name, data]) => [`Data/${name}`, xpFile(data)])),
   );
+
+/** `Scripts.rxdata`'s content for the scripts given by name, before it is dumped. */
+export const xpScripts = (scripts: Record<string, string>) =>
+  Object.entries(scripts).map(([name, code], at) => [
+    at + 1,
+    new TextEncoder().encode(name),
+    zlibSync(new TextEncoder().encode(code)),
+  ]);

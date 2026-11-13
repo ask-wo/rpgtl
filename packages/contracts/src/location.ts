@@ -41,8 +41,16 @@ export const Location = Schema.TaggedUnion({
   Message: { list: EventListRef, index: Index },
   /** Text in a command's parameter, at `keys` inside it, which may go through JSON text. */
   CommandText: { list: EventListRef, index: Index, parameter: Index, keys: Keys },
-  /** The `literal`th string a script stores in or compares with a variable. */
+  /**
+   * The `literal`th string a script stores in or compares with a variable; in an XP game, its
+   * `literal`th string literal, counted over the Script command and the 655 lines after it.
+   */
   ScriptText: { list: EventListRef, index: Index, parameter: Index, literal: Index },
+  /**
+   * The `literal`th string literal of the `script`th Ruby script of an XP game, which the game
+   * names `name`.
+   */
+  RubyScriptText: { script: Index, name: Schema.String, literal: Index },
   /** A text field of a database record, such as an actor's name or an item's description. */
   RecordField: { table: Table, record: Index, field: Schema.String },
   /** The value of the `tag`th tag of a note. */

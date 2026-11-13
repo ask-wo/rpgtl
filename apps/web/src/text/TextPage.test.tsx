@@ -70,7 +70,7 @@ const fakeServer = () => {
     catalog: saved,
     findings: { "4": [{ check: "length unlike the source" }] } as Findings,
     activity: (now: GameActivity) => stream.send(now),
-    saves: [] as Array<ReadonlyArray<{ id: string; translation: string }>>,
+    saves: [] as Array<ReadonlyArray<{ id: string; translation?: string; keepOriginal?: boolean }>>,
     feed: catalogFeed(
       (): Catalog => server.catalog,
       (): Findings => ({
@@ -93,6 +93,16 @@ const fakeServer = () => {
         const { entries } = await request.json();
         server.saves.push(entries);
         const [edit] = entries;
+        if (edit.keepOriginal !== undefined) {
+          server.catalog = {
+            ...server.catalog,
+            entries: server.catalog.entries.map((entry) =>
+              entry.id === edit.id ? { ...entry, keepOriginal: edit.keepOriginal } : entry,
+            ),
+          };
+          server.feed.changed();
+          return new Response(null, { status: 204 });
+        }
         if (edit.translation.includes("\\"))
           return Response.json(
             {
@@ -210,6 +220,36 @@ test("an edit saves once typing pauses, and stays listed while it leaves the fil
     .toBeVisible();
   await page.getByRole("searchbox", { name: "Search the text" }).fill("potion");
   await expect.element(box).toBeVisible();
+});
+
+const goldScript = (literal: number) =>
+  ({ _tag: "RubyScriptText", script: 3, name: "Window_Gold", literal }) as const;
+
+test("keeping a script's string as it is saves apart from the English typed for it, and leaves Untranslated", async () => {
+  const server = fakeServer();
+  server.catalog = {
+    ...saved,
+    entries: [
+      ...saved.entries,
+      line("7", goldScript(2), "金币", ""),
+      { ...line("8", goldScript(3), "银币", ""), keepOriginal: true },
+    ],
+  };
+  showText();
+  server.activity(idle);
+  await expect.element(page.getByRole("button", { name: "Untranslated 3" })).toBeVisible();
+  await page.getByRole("textbox", { name: "English for 金币" }).fill("Gold");
+  const keep = page
+    .getByRole("group", { name: "金币" })
+    .getByRole("checkbox", { name: "Keep original" });
+  await keep.click();
+  await vi.waitFor(() =>
+    expect(server.saves).toEqual([
+      [{ id: "7", keepOriginal: true }],
+      [{ id: "7", translation: "Gold" }],
+    ]),
+  );
+  await expect.element(keep).toBeChecked();
 });
 
 test("Failed, Last run and Flagged show what a run or a check left on the entries", async () => {

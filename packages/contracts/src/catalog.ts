@@ -56,7 +56,10 @@ export const Entry = Schema.Struct({
   translation: EntryTranslation,
   /** Speaker identified by a named dialogue picture in the event list. */
   speaker: Schema.optionalKey(Schema.String),
-  /** Keeps this image block's original pixels, including any decorative lettering. */
+  /**
+   * Keeps the original: an image block's pixels, including any decorative lettering, or a script
+   * string's text. A run doesn't translate the entry.
+   */
   keepOriginal: Schema.optionalKey(Schema.Boolean),
   /** The last answer a run rejected for this entry, for the user to fix; dropped once translated. */
   suggestion: Schema.optionalKey(Schema.Struct({ text: Schema.String, reason: Schema.String })),
@@ -138,6 +141,11 @@ export const Catalog = Schema.Struct({
   glossary: Schema.Array(GlossaryTerm),
   /** The translation switch: whether the game plays with its translations. */
   translate: Schema.Boolean,
+  /**
+   * Whether an XP game plays with its scripts unchanged, without the English of their strings,
+   * and runs leave those strings out; absent means it plays with their English.
+   */
+  originalScripts: Schema.optionalKey(Schema.Boolean),
   /** The language the user chose for the game's text; absent means the one its text looks like. */
   language: Schema.optionalKey(SourceLanguage),
   /** Whether the English in images is always or never bold; absent follows each original's weight. */

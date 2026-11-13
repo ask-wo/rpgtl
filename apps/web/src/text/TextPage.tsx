@@ -1,6 +1,13 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { Catalog, Entry } from "@rpgtl/contracts";
-import { entryTranslation, type Place, placeKey, placeOf, termTranslation } from "@rpgtl/domain";
+import {
+  entryTranslation,
+  type Place,
+  placeKey,
+  placeOf,
+  runTranslates,
+  termTranslation,
+} from "@rpgtl/domain";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import * as Exit from "effect/Exit";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
@@ -93,6 +100,9 @@ const inSelection = (entry: Entry, selection: Selection) =>
     ? areaOf(placeOf(entry.location)) === selection.area
     : placeKey(placeOf(entry.location)) === selection.place);
 
+/** One edit of an entry: its English, or whether it keeps its original. */
+type EntryChange = { readonly translation: string } | { readonly keepOriginal: boolean };
+
 const oneLine = (text: string) => {
   const line = text.replace(/\s*\n\s*/g, " ");
   return line.length > 40 ? `${line.slice(0, 40)}…` : line;
@@ -157,15 +167,19 @@ function Text({
     [edits],
   );
 
-  const edit = (entry: Entry, translation: string, delay: number) => {
-    typed.current.add(entry.id);
-    setKept((before) => new Set(before).add(entry.id));
-    setDrafts((before) => new Map(before).set(entry.id, translation));
+  const edit = (entry: Entry, change: EntryChange, delay: number) => {
+    if ("translation" in change) {
+      const { translation } = change;
+      typed.current.add(entry.id);
+      setKept((before) => new Set(before).add(entry.id));
+      setDrafts((before) => new Map(before).set(entry.id, translation));
+    }
+    // Typing replaces the save it hasn't made yet, so keeping the original saves apart from it.
     edits.schedule(
-      `entry:${entry.id}`,
+      `${"translation" in change ? "entry" : "keep"}:${entry.id}`,
       async () => {
         const exit = await save({
-          payload: { id: game.id, entries: [{ id: entry.id, translation }] },
+          payload: { id: game.id, entries: [{ id: entry.id, ...change }] },
         });
         const error = Exit.isFailure(exit) ? failureMessage(exit.cause) : undefined;
         setErrors((before) => {
@@ -200,6 +214,7 @@ function Text({
     failed: new Set(now?.translation?.failed),
     lastRun: saved.lastRun,
     findings: found,
+    translates: runTranslates(saved),
   };
   const wanted = query.trim().toLowerCase();
   const text = textEntries(saved);
@@ -224,11 +239,12 @@ function Text({
     const known = places.get(placeKey(placeOf(entry.location)));
     if (known) known.count++;
   }
-  const tree: ReadonlyArray<TreeArea> = areas.map((area) => {
+  const tree: ReadonlyArray<TreeArea> = areas.flatMap((area) => {
     const inArea = [...places]
       .filter(([, { place }]) => areaOf(place) === area)
       .map(([key, { place, count }]) => ({ key, label: placeLabel(place, maps), count }));
-    return { area, places: inArea, count: inArea.reduce((sum, place) => sum + place.count, 0) };
+    if (!inArea.length) return [];
+    return [{ area, places: inArea, count: inArea.reduce((sum, place) => sum + place.count, 0) }];
   });
   const english = new Map(
     saved.glossary.map((term) => [term.source, termTranslation(term).trim()]),
@@ -317,7 +333,8 @@ function Text({
                   }
                   error={errors.get(entry.id)}
                   locked={locked}
-                  onChange={(next, delay) => edit(entry, next, delay)}
+                  onChange={(translation, delay) => edit(entry, { translation }, delay)}
+                  onKeepOriginal={(keepOriginal) => edit(entry, { keepOriginal }, 0)}
                 />
               ))
           )}

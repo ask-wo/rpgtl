@@ -192,6 +192,17 @@ export class Catalogs extends Context.Service<
       Games.GameNotInspectedError | Games.GameBusyError | StateFolder.StateFileError
     >;
     /**
+     * Sets whether an XP game plays with its scripts unchanged, holding the game while it does;
+     * the game plays with it from its next start.
+     */
+    readonly setOriginalScripts: (
+      id: string,
+      on: boolean,
+    ) => Effect.Effect<
+      Catalog,
+      Games.GameNotInspectedError | Games.GameBusyError | StateFolder.StateFileError
+    >;
+    /**
      * Sets the language of the game's text, holding the game while it does; null goes back to the
      * one its text looks like.
      */
@@ -579,6 +590,22 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const setOriginalScripts = Effect.fn("Catalogs.setOriginalScripts")(function* (
+    id: string,
+    on: boolean,
+  ) {
+    return yield* games.exclusive(
+      id,
+      get(id).pipe(
+        Effect.map(({ originalScripts: _old, ...catalog }): Catalog => ({
+          ...catalog,
+          ...(on && { originalScripts: true }),
+        })),
+        Effect.tap(write),
+      ),
+    );
+  });
+
   const setLanguage = Effect.fn("Catalogs.setLanguage")(function* (
     id: string,
     language: SourceLanguage | null,
@@ -688,6 +715,7 @@ const make = Effect.gen(function* () {
     previewImport,
     importChanges,
     setTranslate,
+    setOriginalScripts,
     setLanguage,
     setGlossary,
     setEntries,

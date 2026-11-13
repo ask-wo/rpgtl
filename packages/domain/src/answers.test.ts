@@ -356,3 +356,34 @@ it("an XP description keeps its tags and its | where the game breaks the line", 
     ),
   );
 });
+
+it("A Ruby `#{}` in a script's string is sent as a placeholder and comes back as it was", () => {
+  const entry = messageEntry("所持金：#{$game_party.gold}枚");
+  assert.strictEqual(requestText(entry).text, "所持金：{1}枚");
+  assert.deepStrictEqual(
+    checkAnswer(entry, "Gold: {1} coins"),
+    accepted("Gold: #{$game_party.gold} coins"),
+  );
+});
+
+it("A `{2}` in the source is sent as a placeholder, so the answer may keep it", () => {
+  const entry = messageEntry("三重灾难{2}");
+  assert.strictEqual(requestText(entry).text, "三重灾难{1}");
+  assert.deepStrictEqual(checkAnswer(entry, "Triple Disaster{1}"), accepted("Triple Disaster{2}"));
+});
+
+it("A code that a line break splits is sent as one placeholder and comes back as it was", () => {
+  const entry = messageEntry("回到\\C[2]旧城\\C\n[0]吧");
+  assert.strictEqual(requestText(entry).text, "回到{1}旧城{2}吧");
+  assert.deepStrictEqual(
+    checkAnswer(entry, "Back to {1}the old castle{2}"),
+    accepted("Back to \\C[2]the old castle\\C\n[0]"),
+  );
+});
+
+it("A code of letters only stays apart from an English word after it, which the game would read as part of it", () => {
+  assert.deepStrictEqual(
+    checkAnswer(messageEntry("门开了。\\n里面很暗。"), "The door opened.{1}it's dark inside."),
+    accepted("The door opened.\\n it's dark inside."),
+  );
+});

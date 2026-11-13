@@ -1,5 +1,5 @@
 import type { Catalog } from "@rpgtl/contracts";
-import { entryTranslation, isImageText, isNameEntry } from "@rpgtl/domain";
+import { entryTranslation, isImageText, isNameEntry, runTranslates } from "@rpgtl/domain";
 
 export const number = (count: number) => count.toLocaleString("en");
 
@@ -11,9 +11,14 @@ export const gigabytes = (bytes: number) => (bytes / 1e9).toFixed(1);
 export const counted = (count: number, one: string, many: string) =>
   `${number(count)} ${count === 1 ? one : many}`;
 
-/** What the catalog holds, counting the text of the game's data and of its images apart. */
-export const catalogCounts = ({ entries, glossary, unchangedImages = [] }: Catalog) => {
-  const text = entries.filter((entry) => !isImageText(entry));
+/**
+ * What the catalog holds, counting the text of the game's data and of its images apart; text a
+ * run leaves out isn't counted.
+ */
+export const catalogCounts = (catalog: Catalog) => {
+  const { entries, glossary } = catalog;
+  const translates = runTranslates(catalog);
+  const text = entries.filter((entry) => !isImageText(entry) && translates(entry));
   const images = entries.filter(isImageText);
   const names = text.filter(isNameEntry);
   const translated = (list: typeof entries) =>
@@ -27,12 +32,7 @@ export const catalogCounts = ({ entries, glossary, unchangedImages = [] }: Catal
       all: images.length,
       translated: translated(images),
       /** Entries without English that the game draws, so a run translates them. */
-      untranslated: images.filter(
-        (entry) =>
-          !entryTranslation(entry) &&
-          !entry.keepOriginal &&
-          !unchangedImages.includes(entry.location.image),
-      ).length,
+      untranslated: images.filter((entry) => !entryTranslation(entry) && translates(entry)).length,
     },
     glossary: glossary.length,
   };

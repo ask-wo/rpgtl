@@ -1,8 +1,8 @@
 import type { Entry, EventList, EventListRef, GameRecord, Location, Table } from "@rpgtl/contracts";
 import * as Predicate from "effect/Predicate";
-import { sourceText } from "../mvmz/extract.ts";
 import { GameFile } from "../mvmz/gameFile.ts";
 import { newXpEntry } from "./location.ts";
+import { literalText, rubyText, scriptsText } from "./scripts.ts";
 
 interface Found {
   readonly location: Location;
@@ -68,14 +68,21 @@ function listText(
             text: choice,
           });
       });
-    } else if ((code === 355 || code === 655) && Predicate.isString(parameters[0])) {
-      scriptLiterals(parameters[0]).forEach((value, literal) => {
-        if (value !== undefined && sourceText.test(value) && value.trim())
+    } else if (code === 355) {
+      // A Script command holds the first line; each 655 after it holds one more.
+      let end = index + 1;
+      while (list[end]?.code === 655) end++;
+      const script = list
+        .slice(index, end)
+        .map(({ parameters: [line] }) => (Predicate.isString(line) ? line : ""))
+        .join("\n");
+      for (const { literal, text } of rubyText(script))
+        if (text.trim())
           found.push({
             location: { _tag: "ScriptText", list: ref, index, parameter: 0, literal },
-            text: value,
+            text,
           });
-      });
+      index = end - 1;
     } else {
       const parameter = textParameter[code];
       const text = parameter === undefined ? undefined : parameters[parameter];
@@ -89,44 +96,6 @@ function listText(
   return found;
 }
 
-// A string literal a Ruby script assigns to a variable or compares one with, such as
-// `$msg_name = "…"` or `$game_variables[5] == '…'`.
-export const assignedLiteral =
-  /((?:\$?[A-Za-z_]\w*(?:\[\d+\])?)\s*(?:==|!=|=)\s*)("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')/g;
-
-const escapes: Record<string, string> = {
-  n: "\n",
-  t: "\t",
-  s: " ",
-  "\\": "\\",
-  '"': '"',
-  "'": "'",
-};
-
-/**
- * The value of a Ruby string literal; none for one whose value isn't plain, such as one with
- * `#{}` in it.
- */
-export function literalValue(literal: string) {
-  const body = literal.slice(1, -1);
-  if (literal.startsWith("'")) return body.replace(/\\([\\'])/g, "$1");
-  if (/#[{$@]/.test(body)) return undefined;
-  let plain = true;
-  const value = body.replace(/\\(.)/g, (_, char: string) => {
-    const unescaped = escapes[char];
-    if (unescaped === undefined) plain = false;
-    return unescaped ?? char;
-  });
-  return plain ? value : undefined;
-}
-
-/**
- * The literals an event script stores in or compares with a variable, in order, with the value of
- * each that is plain text.
- */
-const scriptLiterals = (script: string) =>
-  [...script.matchAll(assignedLiteral)].map((match) => literalValue(match[2] ?? ""));
-
 /**
  * The variable and string of a script that only stores a string, such as `$msg_name = "店主"`;
  * storing `nil` stores "".
@@ -135,7 +104,12 @@ function storedString(script: unknown) {
   if (!Predicate.isString(script)) return undefined;
   const [, variable, literal] =
     /^\s*(\$\w+)\s*=\s*("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|nil)\s*$/.exec(script) ?? [];
-  const value = literal === "nil" ? "" : literal === undefined ? undefined : literalValue(literal);
+  const value =
+    literal === "nil"
+      ? ""
+      : literal === undefined || /#\{/.test(literal)
+        ? undefined
+        : literalText(literal);
   return variable === undefined || value === undefined ? undefined : { variable, value };
 }
 
@@ -232,6 +206,7 @@ const eventLists = (file: GameFile): ReadonlyArray<PlacedList> =>
     System: () => [],
     Database: () => [],
     Tilesets: () => [],
+    Scripts: () => [],
     Other: () => [],
   });
 
@@ -241,6 +216,7 @@ const fileText = (file: GameFile, speakers: ReadonlySet<string>): ReadonlyArray<
     System: ({ data }) => systemText(data),
     Database: ({ table, data }) =>
       data.flatMap((record, index) => (record ? recordText(record, table, index) : [])),
+    Scripts: ({ data }) => scriptsText(data),
     Map: () => [],
     CommonEvents: () => [],
     Troops: () => [],

@@ -25,10 +25,11 @@ import { catalogCounts, counted, number } from "./counts.ts";
 import { usesLocalModels } from "./choices.ts";
 import { ImageReadingFields } from "./ImageReadingFields.tsx";
 import { LanguageField } from "./LanguageField.tsx";
+import { ScriptsField } from "./ScriptsField.tsx";
 import { LocalModelFields } from "./LocalModelFields.tsx";
 import { TranslationActions } from "./TranslationActions.tsx";
 import { TranslatorFields } from "./TranslatorFields.tsx";
-import { entryTranslation } from "@rpgtl/domain";
+import { entryTranslation, isScriptText } from "@rpgtl/domain";
 
 /** The game's translation switch and, while it is on, what the game's translation holds. */
 export function TranslationCard() {
@@ -85,6 +86,9 @@ export function TranslationCard() {
                 <>
                   <Counts saved={loaded} />
                   <LanguageField saved={loaded} locked={gameHeld(now)} />
+                  {loaded.entries.some(isScriptText) && (
+                    <ScriptsField saved={loaded} locked={gameHeld(now)} />
+                  )}
                   <TranslationActions gameId={game.id} locked={gameHeld(now)} />
                   <Separator />
                   <SharedSettings locked={runGoing(now)} />

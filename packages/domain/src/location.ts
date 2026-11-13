@@ -16,6 +16,12 @@ export const isImageText = <E extends Placed>(
   entry: E,
 ): entry is E & { readonly location: ImageLines } => entry.location?._tag === "ImageLines";
 
+/** Whether the entry is a string in an XP game's Ruby scripts. */
+export const isScriptText = (entry: Placed) => entry.location?._tag === "RubyScriptText";
+
+/** Whether the player may keep the entry's original: an image's pixels or a script's string. */
+export const canKeepOriginal = (entry: Placed) => isImageText(entry) || isScriptText(entry);
+
 /** Text of the game's system settings: its title, terms, and switch and variable names. */
 export const isSystemText = ({ location }: Placed) =>
   location?._tag === "SystemText" || location?._tag === "Name";
@@ -40,6 +46,8 @@ export type Place = Data.TaggedEnum<{
   System: {};
   Plugins: {};
   Image: { readonly image: string };
+  /** One of an XP game's Ruby scripts. */
+  Script: { readonly script: number; readonly name: string };
 }>;
 export const Place = Data.taggedEnum<Place>();
 
@@ -68,6 +76,7 @@ export const placeOf: (location: Location) => Place = Location.match({
   Name: () => Place.System(),
   PluginSetting: () => Place.Plugins(),
   ImageLines: ({ image }) => Place.Image({ image }),
+  RubyScriptText: ({ script, name }) => Place.Script({ script, name }),
 });
 
 /** A place as a short text, such as `map3` or `actors`; an image's is its path. */
@@ -79,4 +88,5 @@ export const placeKey: (place: Place) => string = Place.$match({
   System: () => "system",
   Plugins: () => "plugins",
   Image: ({ image }) => image,
+  Script: ({ script }) => `script${script}`,
 });

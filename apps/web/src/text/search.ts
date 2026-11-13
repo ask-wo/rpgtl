@@ -3,7 +3,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { entryTranslation, isImageText, isUserValue, Place } from "@rpgtl/domain";
 
-export const Area = Schema.Literals(["Maps", "Database", "System", "Plugins"]);
+export const Area = Schema.Literals(["Maps", "Database", "System", "Plugins", "Scripts"]);
 export type Area = typeof Area.Type;
 export const areas = Area.literals;
 
@@ -46,6 +46,8 @@ export const areaOf = (place: Place): Area | undefined => {
       return "System";
     case "Plugins":
       return "Plugins";
+    case "Script":
+      return "Scripts";
     case "Image":
       return undefined;
     case "Table":
@@ -98,6 +100,7 @@ export const placeLabel = (place: Place, maps: ReadonlyMap<number, string>) =>
     System: () => "System",
     Plugins: () => "Plugin settings",
     Image: ({ image }) => image,
+    Script: ({ script, name }) => `Script · ${name.trim() || script + 1}`,
   });
 
 /** Why an accepted translation is worth a look: its run's flag and what the checks found. */
@@ -115,6 +118,8 @@ export interface ShownContext {
   readonly failed: ReadonlySet<string>;
   readonly lastRun: string | undefined;
   readonly findings: Findings;
+  /** Whether a run translates an entry, which only then counts as untranslated. */
+  readonly translates: (entry: Entry) => boolean;
 }
 
 export const isShown = (entry: Entry, show: Shown, context: ShownContext) => {
@@ -122,7 +127,7 @@ export const isShown = (entry: Entry, show: Shown, context: ShownContext) => {
     case "all":
       return true;
     case "untranslated":
-      return !entryTranslation(entry);
+      return !entryTranslation(entry) && context.translates(entry);
     case "failed":
       return context.failed.has(entry.id) || (!entryTranslation(entry) && !!entry.suggestion);
     case "last-run":

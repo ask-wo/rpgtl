@@ -142,6 +142,11 @@ const CatalogsHandlers = HttpApiBuilder.group(
           .setTranslate(payload.id, payload.on)
           .pipe(Effect.catchTags(writeFailed));
       }),
+      setOriginalScripts: Effect.fn("catalogs.setOriginalScripts")(function* ({ payload }) {
+        return yield* catalogs
+          .setOriginalScripts(payload.id, payload.on)
+          .pipe(Effect.catchTags(writeFailed));
+      }),
       setLanguage: Effect.fn("catalogs.setLanguage")(function* ({ payload }) {
         return yield* catalogs
           .setLanguage(payload.id, payload.language)

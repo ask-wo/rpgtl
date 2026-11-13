@@ -1,6 +1,8 @@
 import type { Entry } from "@rpgtl/contracts";
-import { entryTranslation } from "@rpgtl/domain";
+import { canKeepOriginal, entryTranslation } from "@rpgtl/domain";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Field, FieldLabel } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/textarea";
 
 /** An entry's original beside its English, with what a run or a check left for the user. */
@@ -14,6 +16,7 @@ export function EntryRow({
   error,
   locked,
   onChange,
+  onKeepOriginal,
 }: {
   readonly entry: Entry;
   /** The English as typed here, saved or not. */
@@ -30,6 +33,7 @@ export function EntryRow({
   readonly locked: boolean;
   /** Saves the English after `delay` ms, so typing saves once it pauses. */
   readonly onChange: (translation: string, delay: number) => void;
+  readonly onKeepOriginal: (keep: boolean) => void;
 }) {
   const edited = value !== entryTranslation(entry);
   const { suggestion, previous } = entry;
@@ -58,6 +62,17 @@ export function EntryRow({
           onChange={(event) => onChange(event.target.value, typingPause)}
         />
         {error && <p className="text-sm text-destructive">{error}</p>}
+        {canKeepOriginal(entry) && (
+          <Field orientation="horizontal">
+            <Checkbox
+              id={`keep-original-${entry.id}`}
+              checked={entry.keepOriginal === true}
+              disabled={locked}
+              onCheckedChange={onKeepOriginal}
+            />
+            <FieldLabel htmlFor={`keep-original-${entry.id}`}>Keep original</FieldLabel>
+          </Field>
+        )}
         {!value && suggestion && (
           <Note label={`Rejected answer (${suggestion.reason}):`} text={suggestion.text}>
             <Button
