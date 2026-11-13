@@ -1,6 +1,6 @@
 import { type Game, gameFiles, type GameLaunch, type ProgramStatus } from "@rpgtl/contracts";
 import { hookScript, type HookConfig } from "@rpgtl/game/scripts";
-import { applyXpTranslations } from "@rpgtl/domain";
+import { applyXpTranslations, translatedByXpFile } from "@rpgtl/domain";
 import * as Result from "effect/Result";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -269,14 +269,16 @@ const make = Effect.gen(function* () {
     yield* fs.remove(dir, { recursive: true, force: true });
     yield* fs.makeDirectory(path.join(patches, "Data"), { recursive: true });
     const catalog = yield* catalogs.get(game.id);
-    if (catalog.translate)
+    if (catalog.translate) {
+      const translated = translatedByXpFile(catalog.entries);
       for (const [name, bytes] of yield* gameFolder.xpData(game)) {
-        const translated = applyXpTranslations(name, bytes, catalog.entries);
-        if (Result.isFailure(translated))
-          yield* Effect.logWarning(`${name} plays untranslated.`, translated.failure);
-        else if (translated.success)
-          yield* fs.writeFile(path.join(patches, "Data", name), translated.success);
+        const patched = applyXpTranslations(name, bytes, translated.get(name) ?? []);
+        if (Result.isFailure(patched))
+          yield* Effect.logWarning(`${name} plays untranslated.`, patched.failure);
+        else if (patched.success)
+          yield* fs.writeFile(path.join(patches, "Data", name), patched.success);
       }
+    }
     const config = mkxpConfig(path.dirname(program), game.root, patches);
     yield* fs.writeFileString(path.join(dir, "mkxp.json"), JSON.stringify(config, null, 2));
     return dir;

@@ -204,6 +204,19 @@ function setText(data: unknown, location: Location, source: string, text: string
   }
 }
 
+/** The translated entries by the XP data file that holds their text, such as `Map001.rxdata`. */
+export function translatedByXpFile(entries: ReadonlyArray<Entry>) {
+  const files = new Map<string, Array<Entry>>();
+  for (const entry of entries) {
+    const file = xpFileOf(entry.location);
+    if (file === undefined || !entryTranslation(entry)) continue;
+    const listed = files.get(file);
+    if (listed) listed.push(entry);
+    else files.set(file, [entry]);
+  }
+  return files;
+}
+
 /**
  * The XP data file `file` (such as `Map001.rxdata`) with the entries' translations in it; none
  * when no entry of the file is translated. Messages are wrapped to fit the default message
