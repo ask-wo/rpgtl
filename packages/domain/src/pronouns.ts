@@ -207,12 +207,11 @@ const spread = <T>(items: ReadonlyArray<T>, count: number) => {
 };
 
 /**
- * Up to 20 lines that mention the character and 10 the character says, spread over the game, and
- * how many entries do either.
+ * For a character's name, up to 20 lines that mention the character and 10 the character says,
+ * spread over the game, and how many entries do either.
  */
 export function linesAbout(
   entries: ReadonlyArray<Entry>,
-  name: string,
   glossary: ReadonlyArray<GlossaryTerm>,
   language: SourceLanguage,
 ) {
@@ -222,36 +221,39 @@ export function linesAbout(
     .filter((term) => termKind(term) === "character")
     .map((term) => term.source.trim());
   const known = new Set(characters);
-  const aliases = [...nameAliases(characters)]
-    .filter(([, owner]) => owner === name)
-    .map(([alias]) => alias);
+  const aliases = [...nameAliases(characters)];
   const speakerOf = showTextSpeakers(entries);
-  const said = (entry: Entry) => speakerIn(entry, speakerOf, known)?.trim() === name;
-  const text = entries.filter((entry) => !isSettingText(entry) && !terms.has(entry.source.trim()));
   // Speaker names are left out, so a line that only names its speaker counts as said.
-  const mentioning = text.filter((entry) => {
-    const line = sentences(withoutSpeakerLine(entry, known), words).join(" ");
-    return aliases.some((alias) => hasTerm(line, alias));
-  });
-  const spoken = text.filter((entry) => said(entry) && !mentioning.includes(entry));
-  const lines: string[] = [];
-  let size = 0;
-  const add = (line: string) => {
-    if (size + line.length > maxCharacters) return;
-    size += line.length;
-    lines.push(line);
+  const text = entries
+    .filter((entry) => !isSettingText(entry) && !terms.has(entry.source.trim()))
+    .map((entry) => ({
+      line: sentences(withoutSpeakerLine(entry, known), words).join(" "),
+      speaker: speakerIn(entry, speakerOf, known)?.trim(),
+    }));
+  return (name: string) => {
+    const own = aliases.filter(([, owner]) => owner === name).map(([alias]) => alias);
+    const mentioning = text.filter(({ line }) => own.some((alias) => hasTerm(line, alias)));
+    const mentioned = new Set(mentioning);
+    const spoken = text.filter((item) => item.speaker === name && !mentioned.has(item));
+    const lines: string[] = [];
+    let size = 0;
+    const add = (line: string) => {
+      if (size + line.length > maxCharacters) return;
+      size += line.length;
+      lines.push(line);
+    };
+    for (const { line } of spread(mentioning, maxMentions)) {
+      const firstMention = Math.min(
+        ...own.map((alias) => termIndex(line, alias)).filter((at) => at >= 0),
+      );
+      const at = Math.max(
+        0,
+        (Number.isFinite(firstMention) ? firstMention : 0) - maxLineLength / 2,
+      );
+      add(line.slice(at, at + maxLineLength));
+    }
+    for (const { line } of spread(spoken, maxSpoken))
+      add(`${name}: ${line.slice(0, maxLineLength)}`);
+    return { lines, count: mentioning.length + spoken.length };
   };
-  for (const entry of spread(mentioning, maxMentions)) {
-    const line = sentences(withoutSpeakerLine(entry, known), words).join(" ");
-    const firstMention = Math.min(
-      ...aliases.map((alias) => termIndex(line, alias)).filter((at) => at >= 0),
-    );
-    const at = Math.max(0, (Number.isFinite(firstMention) ? firstMention : 0) - maxLineLength / 2);
-    add(line.slice(at, at + maxLineLength));
-  }
-  for (const entry of spread(spoken, maxSpoken))
-    add(
-      `${name}: ${sentences(withoutSpeakerLine(entry, known), words).join(" ").slice(0, maxLineLength)}`,
-    );
-  return { lines, count: mentioning.length + spoken.length };
 }

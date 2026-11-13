@@ -351,18 +351,15 @@ export class CatalogDraft {
       names.map((term) => term.source.trim()),
       this.language,
     );
+    let about: ReturnType<typeof linesAbout> | undefined;
     return unset.flatMap((term) => {
       const found = clues.get(term.source.trim());
       if (!found) return [];
       const guess = pronounFromClues(found);
       term.pronoun = { guess };
       if (guess.value !== "unknown") return [];
-      const { lines } = linesAbout(
-        this.#entries,
-        term.source.trim(),
-        this.#glossary,
-        this.language,
-      );
+      about ??= linesAbout(this.#entries, this.#glossary, this.language);
+      const { lines } = about(term.source.trim());
       return lines.length ? [{ term, lines }] : [];
     });
   }
