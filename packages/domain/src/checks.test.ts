@@ -33,20 +33,6 @@ const line = (source: string, translation: string) =>
     translation,
   ).map((finding) => finding.check);
 
-it("A glossary word counts as capitalised mid-sentence only after a lowercase word or a possessive", () => {
-  assert.deepStrictEqual(line("我们去问老师吧", "We should go ask the Teacher."), [
-    "glossary word capitalised mid-sentence",
-  ]);
-  assert.deepStrictEqual(line("老师的书", "Her Teacher's book."), [
-    "glossary word capitalised mid-sentence",
-  ]);
-  assert.deepStrictEqual(line("老师，早上好", "Teacher, good morning."), []);
-  assert.deepStrictEqual(line("【普通装备】亚麻服装。", "[Common Equipment] Linen clothing."), []);
-  assert.deepStrictEqual(line("和老师初遇", "First Encounter with the Teacher"), []);
-  // A term the model hasn't sorted may be a name.
-  assert.deepStrictEqual(line("我和小葵聊了聊", "I chatted with Aoi."), []);
-});
-
 it("A glossary name counts as missing only when no part or form of it is in the English", () => {
   assert.deepStrictEqual(line("林若溪笑了。", "Ruoxi smiled."), []);
   assert.deepStrictEqual(line("林若溪又变身了！", "Lin Ruoxi is transforming again!"), []);

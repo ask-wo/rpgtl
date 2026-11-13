@@ -24,7 +24,7 @@ Every tool that finds problems in a game's translations goes through `pnpm run a
 | The speaker's name repeated after the speaker tag | fixed while checking; in existing text: check `speaker name repeated` |
 | A speaker's name alone on a message's first line read as part of the sentence (ミナ⏎と、とにかく逃げて → "Mina and… anyway, run") | prevented: a first line that is only a glossary term or the Show Text's speaker is kept on its own line, put into English from the glossary and sent as the speaker; a glossary character's name there also makes the message that character's own line when RPGTL looks for their pronoun; a name the glossary lacks is still joined to the text |
 | A number added on a last line | fixed while checking; in existing text: check `number added on a last line` |
-| A glossary word capitalised mid-sentence ("the Teacher") | check `glossary word capitalised mid-sentence` (only words the model or the player sorted); per term in the audit's first list, where a name sorted as a word shows up too |
+| A glossary word capitalised mid-sentence ("the Teacher") | per term in the audit's first list, where a name sorted as a word shows up too |
 | A glossary character or name left out or swapped for another | check `glossary name missing` |
 | He for 她, or she for 他 | check `pronoun unlike the source` (only where the source has one of the two) |
 | The same text translated differently | audit: `Sources with different translations` |
