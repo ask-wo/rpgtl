@@ -90,6 +90,7 @@ it("an XP game's text images are its pictures, titles, game overs and folders of
     "Graphics/Windowskins/Frame.png",
     "Graphics/Pictures/Notes.txt",
     "Graphics/Loose.png",
+    "Graphics/RPGTL/0a1b2c.png",
     "Audio/SE/Bell.png",
   ]);
   assert.deepStrictEqual(images, [

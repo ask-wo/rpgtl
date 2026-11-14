@@ -3,6 +3,7 @@ import { assert, it } from "@effect/vitest";
 import * as Result from "effect/Result";
 import { applyXpTranslations, decodeXpFile, xpGameEntries } from "../../index.ts";
 import { command, xpFile, xpMap, xpScripts } from "../../testUtils/xpGame.ts";
+import { xpImageScript } from "./images.ts";
 import { textFittingScript } from "./textFitting.ts";
 
 const translated = (entries: ReadonlyArray<Entry>, english: Record<string, string>) =>
@@ -60,7 +61,7 @@ it("puts translations into an XP data file, wrapping messages into as many as th
   );
 });
 
-it("puts translations into an XP game's scripts, keeping their `#{}` code and the strings kept as they are, and the script that fits English before Main", () => {
+it("puts translations into an XP game's scripts, keeping their `#{}` code and the strings kept as they are, and RPGTL's scripts before Main", () => {
   const scripts = xpFile(
     xpScripts({
       Window_Gold: `draw_text(0, 0, 120, 32, "金币：#{@gold}")\nreturn '盾' if x\ntext = "龙"`,
@@ -78,6 +79,7 @@ it("puts translations into an XP game's scripts, keeping their `#{}` code and th
       name: "Window_Gold",
       code: `draw_text(0, 0, 120, 32, "Gold \\"now\\": #{@gold}")\nreturn 'Shield\\'s' if x\ntext = "龙"`,
     },
+    { name: "RPGTL image text", code: xpImageScript },
     { name: "RPGTL text fitting", code: textFittingScript },
     { name: "Main", code: "begin_game" },
   ]);

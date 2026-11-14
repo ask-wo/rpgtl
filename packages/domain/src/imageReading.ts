@@ -4,6 +4,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import * as Result from "effect/Result";
 import { sourceScript } from "./checks.ts";
+import { xpImageFolder } from "./engines/xp/images.ts";
 import {
   content,
   imageBlocks,
@@ -137,6 +138,8 @@ const xpSpriteFolders = new Set([
   "windowskins",
 ]);
 const xpImage = /^graphics\/[^/]+\/.+\.(png|jpe?g)$/i;
+// The tiles RPGTL adds, which a player who installed an export has copied into the game.
+const rpgtlFolder = xpImageFolder.slice(xpImageFolder.indexOf("/") + 1).toLowerCase();
 
 /**
  * The images to read for text in an XP game, from its files below `Graphics/` in the archive and
@@ -159,7 +162,9 @@ export function xpTextImages(files: ReadonlyArray<string>): ReadonlyArray<GameIm
     ...sorted(
       images.filter(
         (image) =>
-          !xpTextFolders.includes(xpFolder(image)) && !xpSpriteFolders.has(xpFolder(image)),
+          !xpTextFolders.includes(xpFolder(image)) &&
+          !xpSpriteFolders.has(xpFolder(image)) &&
+          xpFolder(image) !== rpgtlFolder,
       ),
     ),
   ];
