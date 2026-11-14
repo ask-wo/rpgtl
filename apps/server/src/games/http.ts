@@ -192,6 +192,12 @@ const CatalogsHandlers = HttpApiBuilder.group(
           .pipe(Effect.catchTags(writeFailed));
         return { cleared };
       }),
+      clearEntries: Effect.fn("catalogs.clearEntries")(function* ({ payload }) {
+        const cleared = yield* catalogs
+          .clearEntries(payload.id, payload.ids)
+          .pipe(Effect.catchTags(writeFailed));
+        return { cleared };
+      }),
       restore: Effect.fn("catalogs.restore")(function* ({ payload }) {
         return yield* catalogs.restore(payload.id).pipe(Effect.catchTags(writeFailed));
       }),

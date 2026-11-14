@@ -60,6 +60,23 @@ export function withTranslation<T extends Pick<Entry, "translation" | "previous"
   };
 }
 
+/**
+ * The catalog with the English that runs gave these entries cleared, so the next run translates
+ * them again; English the user typed stays.
+ */
+export function withGuessesCleared(catalog: Catalog, ids: ReadonlyArray<string>) {
+  const wanted = new Set(ids);
+  const clears = (entry: Entry) =>
+    wanted.has(entry.id) && !isUserValue(entry.translation) && entryTranslation(entry) !== "";
+  return {
+    cleared: catalog.entries.filter(clears).length,
+    catalog: {
+      ...catalog,
+      entries: catalog.entries.map((entry) => (clears(entry) ? cleared(entry) : entry)),
+    } satisfies Catalog,
+  };
+}
+
 /** The runs of `runs` that one of `items` names, so a run none of them names any more is dropped. */
 export const namedRuns = <R>(
   items: Iterable<{ readonly run?: string }>,

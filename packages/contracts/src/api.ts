@@ -487,6 +487,15 @@ export class CatalogsApi extends HttpApiGroup.make("catalogs")
       success: Schema.Struct({ cleared: Schema.Int }),
       error: [GameNotInspected, GameBusy, StateFileFailed],
     }),
+    /**
+     * Clears the English that runs gave these entries, keeping it as `previous` and the English the
+     * user typed, backing up first; gives how many it cleared.
+     */
+    HttpApiEndpoint.post("clearEntries", "/entries/clear", {
+      payload: Schema.Struct({ id: Schema.String, ids: Schema.Array(Schema.String) }),
+      success: Schema.Struct({ cleared: Schema.Int }),
+      error: [GameNotInspected, GameBusy, StateFileFailed],
+    }),
     /** Clears every translation and what runs left on entries, keeping the English as `previous`. */
     HttpApiEndpoint.post("restore", "/restore", {
       payload: GameId,
