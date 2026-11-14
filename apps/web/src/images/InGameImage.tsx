@@ -26,6 +26,15 @@ export const seriesResults = (results: ImageReadResults, image: string) =>
     }),
   );
 
+const newCanvas = (width: number, height: number) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("The browser has no 2D canvas.");
+  return { canvas, context };
+};
+
 /**
  * The image as the game will show it: the original, with the English drawn over its erased text.
  * It draws once it comes into view, and again when what it shows changes.
@@ -92,7 +101,8 @@ export function InGameImage({
       const context = target.getContext("2d");
       if (!context) return;
       context.drawImage(original, 0, 0);
-      if (hint && erased) drawImageText(context, erased, hint.blocks, face, hint.series);
+      if (hint && erased)
+        drawImageText(context, erased, hint.blocks, face, hint.series ?? [], newCanvas);
       setFailed(undefined);
     })().catch((cause: unknown) => {
       if (!current) return;

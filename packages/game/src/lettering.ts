@@ -1,6 +1,52 @@
 // Lays out and draws the English into a game image whose text was erased. The runtime and the
-// RPGTL page both use it. Sizes come from the game's own font, so the layout can only run in the browser.
+// RPGTL page both use it.
 import type { DrawBlock } from "@rpgtl/contracts";
+
+/** What lettering uses of a Canvas 2D context, so it draws on a canvas outside a browser too. */
+export interface LetteringContext<Image> {
+  readonly canvas: { readonly width: number; readonly height: number };
+  font: string;
+  fillStyle: string | object;
+  strokeStyle: string | object;
+  lineWidth: number;
+  lineJoin: string;
+  textAlign: string;
+  textBaseline: string;
+  globalCompositeOperation: string;
+  save(): void;
+  restore(): void;
+  translate(x: number, y: number): void;
+  rotate(angle: number): void;
+  getTransform(): {
+    readonly a: number;
+    readonly b: number;
+    readonly c: number;
+    readonly d: number;
+    readonly e: number;
+    readonly f: number;
+  };
+  setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void;
+  beginPath(): void;
+  moveTo(x: number, y: number): void;
+  lineTo(x: number, y: number): void;
+  closePath(): void;
+  fill(): void;
+  stroke(): void;
+  drawImage(image: Image, x: number, y: number): void;
+  fillText(text: string, x: number, y: number): void;
+  strokeText(text: string, x: number, y: number): void;
+  measureText(text: string): {
+    readonly width: number;
+    readonly actualBoundingBoxAscent: number;
+    readonly actualBoundingBoxDescent: number;
+  };
+}
+
+/** A canvas that lettering can draw on and then draw into another. */
+export interface LetteringCanvas<Image> {
+  readonly canvas: Image;
+  readonly context: LetteringContext<Image>;
+}
 
 interface Measured {
   width: number;
@@ -256,12 +302,14 @@ export function layoutBlocks(
  * Replaces the text of `blocks` in the image drawn on `context`, which has the size of `erased`, with
  * pixels from `erased`, and draws the English there. Pixels away from the blocks stay as they are.
  */
-export function drawImageText(
-  context: CanvasRenderingContext2D,
-  erased: CanvasImageSource,
+export function drawImageText<Image>(
+  context: LetteringContext<Image>,
+  erased: Image,
   blocks: ReadonlyArray<DrawBlock>,
   face: string,
-  series: ReadonlyArray<ReadonlyArray<DrawBlock>> = [],
+  series: ReadonlyArray<ReadonlyArray<DrawBlock>>,
+  /** A new blank canvas of this size, and its context. */
+  newCanvas: (width: number, height: number) => LetteringCanvas<Image>,
 ) {
   context.save();
   const laid = layoutBlocks(
@@ -280,11 +328,9 @@ export function drawImageText(
   );
   // The shape the service erased, grown a little by stroking, with the erased pixels inside it.
   // A canvas drawn at a higher resolution than the image (sharp text) scales it through its transform.
-  const mask = document.createElement("canvas");
-  mask.width = context.canvas.width;
-  mask.height = context.canvas.height;
-  const shape = mask.getContext("2d")!;
-  shape.setTransform(context.getTransform());
+  const { canvas: mask, context: shape } = newCanvas(context.canvas.width, context.canvas.height);
+  const { a, b, c, d, e, f } = context.getTransform();
+  shape.setTransform(a, b, c, d, e, f);
   shape.fillStyle = shape.strokeStyle = "#000";
   shape.lineJoin = "round";
   for (const { polygons, grow } of blocks)

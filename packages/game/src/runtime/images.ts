@@ -10,6 +10,15 @@ import { renderScale, rescale } from "./sharpRendering.ts";
 const blankImage =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
+const newCanvas = (width: number, height: number) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("The browser has no 2D canvas.");
+  return { canvas, context };
+};
+
 export function hookMissingImages() {
   // Images to load in place of the ones the game asks for, by folder and name.
   for (const method of ["loadBitmap", "reserveBitmap", "requestBitmap"]) {
@@ -153,7 +162,7 @@ export function hookImageText() {
         // With sharp text the English is drawn at the screen's resolution, like other text.
         if (rm.rpgtlSharpText && renderScale() > 1)
           rescale(this as unknown as TextBitmap, renderScale());
-        drawImageText(this.context, image, blocks, face, series);
+        drawImageText(this.context, image, blocks, face, series ?? [], newCanvas);
         if (this._setDirty) this._setDirty();
         else this._baseTexture?.update();
       })
