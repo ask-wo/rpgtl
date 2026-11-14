@@ -29,7 +29,7 @@ import { useGameEdits } from "../games/edits.ts";
 import { useGame } from "../games/GameContext.ts";
 import { catalog } from "../translation/atoms.ts";
 import { counted, number } from "../translation/counts.ts";
-import { clearTermLines, setGlossary } from "./atoms.ts";
+import { clearTermGuesses, clearTermLines, setGlossary } from "./atoms.ts";
 import { TermDetail } from "./TermDetail.tsx";
 
 const sections: ReadonlyArray<{ readonly kind: TermKind; readonly label: string }> = [
@@ -82,6 +82,15 @@ function isShown(term: GlossaryTerm, show: Shown, { lastRun, flagged }: Seen) {
   }
 }
 
+/** Whether the list shows the term with this filter and search. */
+function isListed(term: GlossaryTerm, show: Shown, seen: Seen, filter: string) {
+  const query = filter.trim().toLowerCase();
+  return (
+    isShown(term, show, seen) &&
+    (!query || `${term.source} ${termTranslation(term)}`.toLowerCase().includes(query))
+  );
+}
+
 /** The game's glossary, which every translation follows. */
 export function GlossaryPage() {
   const game = useGame();
@@ -101,6 +110,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
   const edits = useGameEdits(game.id);
   const save = useAtomSet(setGlossary, { mode: "promiseExit" });
   const clear = useAtomSet(clearTermLines, { mode: "promiseExit" });
+  const clearGuesses = useAtomSet(clearTermGuesses, { mode: "promiseExit" });
   const locked = gameHeld(AsyncResult.getOrElse(useAtomValue(activity(game.id)), () => undefined));
 
   // The glossary as edited here, until a run takes over: the run changes the saved one.
@@ -190,6 +200,37 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
     });
     setClearing(false);
     setNotice(error ? { text: error, failed: true } : { text: describe(cleared), failed: false });
+  };
+
+  const clearable = glossary.filter(
+    (each) => each.translation.user === undefined && isListed(each, "flagged", seen, filter),
+  );
+  const clearFlagged = async () => {
+    setNotice(undefined);
+    const unsaved = await edits.flush();
+    if (unsaved) return setNotice({ text: unsaved, failed: true });
+    let cleared = { terms: 0, entries: 0 };
+    setClearing(true);
+    const error = await edits.run(async () => {
+      const sources = clearable.map((each) => each.source);
+      const exit = await clearGuesses({ payload: { id: game.id, sources } });
+      if (Exit.isFailure(exit)) return failureMessage(exit.cause);
+      cleared = exit.value;
+      // The edits were saved before clearing, so the saved glossary, cleared, is the one to show.
+      setDraft(undefined);
+      return undefined;
+    });
+    setClearing(false);
+    setNotice(
+      error
+        ? { text: error, failed: true }
+        : {
+            text: cleared.terms
+              ? `Cleared ${counted(cleared.terms, "term", "terms")} and ${counted(cleared.entries, "translation", "translations")} with them. Translate translates them again.`
+              : "None of these terms has English from a run and a line of its own to translate it from.",
+            failed: false,
+          },
+    );
   };
 
   const order = glossaryOrder(glossary, saved.entries);
@@ -291,6 +332,17 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
                 </Button>
               ))}
             </div>
+            {show === "flagged" && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={locked || clearing || clearable.length === 0}
+                title="Clears the English a run gave the flagged terms listed here and the lines with them, so Translate translates them again. English you typed stays."
+                onClick={() => void clearFlagged()}
+              >
+                Clear flagged
+              </Button>
+            )}
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
             <TermList
@@ -419,14 +471,9 @@ function TermList({
   readonly onSelect: (index: number) => void;
   readonly onRemove: (term: GlossaryTerm) => void;
 }) {
-  const query = filter.trim().toLowerCase();
   const shown = order.filter((index) => {
     const term = glossary[index];
-    return (
-      term !== undefined &&
-      isShown(term, show, seen) &&
-      (!query || `${term.source} ${termTranslation(term)}`.toLowerCase().includes(query))
-    );
+    return term !== undefined && isListed(term, show, seen, filter);
   });
   return glossary.length === 0 ? (
     <p className="p-3 text-muted-foreground">

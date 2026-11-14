@@ -11,6 +11,7 @@ The glossary holds fixed English names and terms that translators get with each 
 - `gl-add` **Add term**: a new term, saved once it has an original.
 - `gl-remove` the `×` over a term's pronoun tag in the list (`[aria-label="Remove <original> from the glossary"]`) and **Remove glossary…** both ask first; the lines keep their translations.
 - `gl-clear` **Clear wrong text** on a term and **Clear all wrong text** for every character, which clear lines that miss the English, and **Clear all text…** on a term, which asks first and clears every line with it: save pending edits, back up, clear, and say how many.
+- `gl-flagged` the **Flagged** filter lists terms whose English leaves out the English of a name inside them; a term's details name it ("Leaves out the English of a name inside it: …"). **Clear flagged** (`POST /api/glossary/clear-guesses`) clears the English runs gave the listed terms and the lines with them, backing up first and keeping English the user typed and terms with no entry of their own, so **Translate** translates them again.
 - `gl-build` **Build glossary** in the bar on this page: a run of the glossary pass only; the bar reads `Building the glossary · <done> of <total> names translated`, the page is locked while it goes, and the bar ends with `Glossary built: …`.
 
 ## How to get to it (user POV)

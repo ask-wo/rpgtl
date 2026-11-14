@@ -7,6 +7,7 @@ import {
   termEdit,
   termTranslation,
   withGlossary,
+  withTermGuessesCleared,
   withTermLinesCleared,
 } from "./index.ts";
 
@@ -163,4 +164,64 @@ it("clearing a term's lines clears every translated entry with it, with or witho
   assert.deepStrictEqual(next.entries.map(entryTranslation), ["", "", "", "Hello"]);
   const unnamed = { ...catalog, glossary: [{ ...arlene, translation: {} }] };
   assert.strictEqual(withTermLinesCleared(unnamed, ["阿琳"], false).cleared, 3);
+});
+
+it("clearing terms' run English clears the run's English of the entries with them, and keeps what the user typed", () => {
+  const guessed = (index: number, source: string, value: string) => ({
+    ...line(index, source, ""),
+    translation: { guess: { value, run } },
+  });
+  const song: GlossaryTerm = {
+    source: "阿琳之歌",
+    translation: { guess: { value: "Irene's Song", run } },
+    kind: { guess: { value: "name", run } },
+  };
+  const dream: GlossaryTerm = {
+    source: "阿琳之梦",
+    translation: { guess: { value: "Irene's Dream", run } },
+    kind: { guess: { value: "name", run } },
+  };
+  const {
+    catalog: next,
+    terms,
+    entries,
+  } = withTermGuessesCleared(
+    {
+      ...catalog,
+      entries: [
+        guessed(0, "阿琳之歌", "Irene's Song"),
+        guessed(1, "唱阿琳之歌", "Sing Irene's Song"),
+        line(2, "阿琳之歌响起", "Irene's Song plays"),
+        guessed(3, "阿琳走了", "Irene left"),
+      ],
+      glossary: [arlene, song, dream],
+    },
+    ["阿琳之歌", "阿琳之梦"],
+  );
+  assert.deepStrictEqual([terms, entries], [1, 2]);
+  assert.deepStrictEqual(next.glossary.map(termTranslation), ["Arlene", "", "Irene's Dream"]);
+  assert.strictEqual(next.glossary[1]?.previous, "Irene's Song");
+  assert.deepStrictEqual(next.entries.map(entryTranslation), [
+    "",
+    "",
+    "Irene's Song plays",
+    "Irene left",
+  ]);
+});
+
+it("an XP database name is a term's own entry without its tags", () => {
+  const term: GlossaryTerm = {
+    source: "阿琳之歌",
+    translation: { guess: { value: "Irene's Song", run } },
+    kind: { guess: { value: "name", run } },
+  };
+  const entry = {
+    ...newEntry({ _tag: "RecordField", table: "skills", record: 1, field: "name" }, "阿琳之歌[A5]"),
+    translation: { guess: { value: "Irene's Song[A5]", run } },
+  };
+  const { terms, entries } = withTermGuessesCleared(
+    { ...catalog, game: { ...catalog.game, engine: "XP" }, entries: [entry], glossary: [term] },
+    ["阿琳之歌"],
+  );
+  assert.deepStrictEqual([terms, entries], [1, 1]);
 });

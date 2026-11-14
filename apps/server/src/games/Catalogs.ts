@@ -41,6 +41,7 @@ import {
   withImageOptions,
   withImageEntries,
   withGuessesCleared,
+  withTermGuessesCleared,
   withTermLinesCleared,
 } from "@rpgtl/domain";
 import * as Context from "effect/Context";
@@ -270,6 +271,17 @@ export class Catalogs extends Context.Service<
       mismatchesOnly: boolean,
     ) => Effect.Effect<
       number,
+      Games.GameNotInspectedError | Games.GameBusyError | StateFolder.StateFileError
+    >;
+    /**
+     * Clears the English that runs gave these terms and the entries that are one or contain one,
+     * keeping the English the user typed, backing up first; gives how many of each it cleared.
+     */
+    readonly clearTermGuesses: (
+      id: string,
+      sources: ReadonlyArray<string>,
+    ) => Effect.Effect<
+      { readonly terms: number; readonly entries: number },
       Games.GameNotInspectedError | Games.GameBusyError | StateFolder.StateFileError
     >;
     /**
@@ -712,6 +724,20 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const clearTermGuesses = Effect.fn("Catalogs.clearTermGuesses")(function* (
+    id: string,
+    sources: ReadonlyArray<string>,
+  ) {
+    return yield* games.exclusive(
+      id,
+      Effect.gen(function* () {
+        const { catalog, terms, entries } = withTermGuessesCleared(yield* get(id), sources);
+        if (terms > 0) yield* save(catalog);
+        return { terms, entries };
+      }),
+    );
+  });
+
   const clearEntries = Effect.fn("Catalogs.clearEntries")(function* (
     id: string,
     ids: ReadonlyArray<string>,
@@ -774,6 +800,7 @@ const make = Effect.gen(function* () {
     setEntries,
     setImageOptions,
     clearTermLines,
+    clearTermGuesses,
     clearEntries,
     restore,
   });
