@@ -214,6 +214,45 @@ export interface LiteralText {
   readonly text: string;
 }
 
+const wordEdge = /^[\p{L}\p{N}]$/u;
+
+/**
+ * The text of the literal at `index` with a space where the code joins it with `+` to a value
+ * or a string, and a letter or digit meets one on both sides. Pieces such as those of
+ * `"…が" + n.to_s + "%アップ"` are translated alone, without the spaces English puts around the
+ * value. A join between two strings gets its space at the end of the first, unless only the
+ * second is translated.
+ */
+function withJoinSpaces(
+  code: string,
+  literals: ReadonlyArray<RubyLiteral>,
+  index: number,
+  text: string,
+  texts: ReadonlyMap<number, LiteralText>,
+) {
+  const literal = literals[index];
+  if (!literal || !text) return text;
+  const shown = (at: number) => {
+    const other = literals[at];
+    return other && (texts.get(at)?.text ?? literalText(code.slice(other.start, other.end)));
+  };
+  let spaced = text;
+  const after = /^[ \t]*\+(?!=)\s*/.exec(code.slice(literal.end, literal.end + 200));
+  if (after && wordEdge.test(text.at(-1) ?? "")) {
+    const next =
+      literals[index + 1]?.start === literal.end + after[0].length ? shown(index + 1) : "a";
+    if (next !== undefined && wordEdge.test(next[0] ?? "")) spaced += " ";
+  }
+  const before = code.slice(Math.max(0, literal.start - 200), literal.start);
+  if (/[\w)\]}"'!?][ \t]*\+\s*$/.test(before) && wordEdge.test(text[0] ?? "")) {
+    const previous = literals[index - 1];
+    const joined = previous && /^\s*\+\s*$/.test(code.slice(previous.end, literal.start));
+    const last = joined && !texts.has(index - 1) ? shown(index - 1) : joined ? undefined : "a";
+    if (last !== undefined && wordEdge.test(last.at(-1) ?? "")) spaced = ` ${spaced}`;
+  }
+  return spaced;
+}
+
 /** The code with each literal at an index of `texts` set to its text; none when one isn't its source anymore. */
 export function withTexts(code: string, texts: ReadonlyMap<number, LiteralText>) {
   const literals = rubyLiterals(code);
@@ -224,7 +263,8 @@ export function withTexts(code: string, texts: ReadonlyMap<number, LiteralText>)
     if (!replacement) continue;
     const quoted = code.slice(literal.start, literal.end);
     if (literalText(quoted) !== replacement.source) return undefined;
-    changed += code.slice(from, literal.start) + rubyLiteral(replacement.text, quoted);
+    const text = withJoinSpaces(code, literals, index, replacement.text, texts);
+    changed += code.slice(from, literal.start) + rubyLiteral(text, quoted);
     from = literal.end;
   }
   return [...texts.keys()].every((index) => index < literals.length)

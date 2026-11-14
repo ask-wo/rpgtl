@@ -85,6 +85,37 @@ it("puts translations into an XP game's scripts, keeping their `#{}` code and th
   ]);
 });
 
+it("puts a space where a translated script string is joined with `+` to a value or a string, between letters or digits", () => {
+  const code = [
+    `text = "炎の力が" + @rate.to_s + "%上がる"`,
+    `text = kind + "器量+" + bonus.to_s`,
+    `text = "微風" + "小径" + "\\n" + "HP" + "癒やし歌"`,
+    `text += "雷鳴鼓"`,
+  ].join("\n");
+  const scripts = xpFile(xpScripts({ Window_Bonus: code, Main: "begin_game" }));
+  const english = {
+    炎の力が: "Raises fire power by",
+    "%上がる": "% more",
+    "器量+": "GRC+",
+    微風: "Zephyr",
+    小径: "Quillwind",
+    癒やし歌: "Rumblor",
+    雷鳴鼓: "Zephyrine",
+  };
+  const entries = translated(entriesOf("Scripts.rxdata", scripts), english);
+  const result = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", scripts, entries));
+  const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", result ?? new Uint8Array()));
+  assert.strictEqual(
+    file._tag === "Scripts" ? file.data[0]?.code : undefined,
+    [
+      `text = "Raises fire power by " + @rate.to_s + "% more"`,
+      `text = kind + " GRC+" + bonus.to_s`,
+      `text = "Zephyr " + "Quillwind" + "\\n" + "HP" + " Rumblor"`,
+      `text += "Zephyrine"`,
+    ].join("\n"),
+  );
+});
+
 const scriptsOf = (bytes: Uint8Array | undefined) => {
   const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", bytes ?? new Uint8Array()));
   return file._tag === "Scripts" ? file.data.map((script) => script.name) : undefined;
