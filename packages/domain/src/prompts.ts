@@ -68,6 +68,9 @@ const languageInstructions: Record<SourceLanguage, ReadonlyArray<string>> = {
 };
 const scenesInstruction =
   "Entries and context lines with a scene number come from separate scenes of the game: use only a scene's own context for its entries, and treat different scenes as unrelated.";
+/** The answer a translator gives for an entry it won't translate. */
+export const refusedAnswer = "<refused>";
+const refusalsInstruction = `If you won't translate an entry, please answer it with ${refusedAnswer} and still translate every other entry.`;
 const followingInstruction =
   "Following is the text right after the entries, for reference only; don't translate it.";
 
@@ -80,6 +83,7 @@ export function translationSystemPrompt(parts: {
   readonly names: boolean;
   readonly scenes: boolean;
   readonly following: boolean;
+  readonly refusals: boolean;
 }) {
   return [
     translationInstructions,
@@ -87,6 +91,7 @@ export function translationSystemPrompt(parts: {
     ...(parts.names ? [namesInstructions[parts.language]] : []),
     ...(parts.scenes ? [scenesInstruction] : []),
     ...(parts.following ? [followingInstruction] : []),
+    ...(parts.refusals ? [refusalsInstruction] : []),
   ].join("\n");
 }
 

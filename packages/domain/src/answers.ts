@@ -5,6 +5,7 @@ import { isColorCode, keepsControlCodes } from "./controlCodes.ts";
 import { plainDashes } from "./dashes.ts";
 import { requestText, withCodes, withoutCodes, type RequestText } from "./requestText.ts";
 import { onceEach } from "./sounds.ts";
+import { refusedAnswer } from "./prompts.ts";
 import type { Placed } from "./location.ts";
 
 const placeholder = /\{(\d+)\}/g;
@@ -101,6 +102,7 @@ export function checkAnswer(
   { glossary = [], speaker, limit }: AnswerContext = {},
   keepTags = false,
 ): Result.Result<AcceptedAnswer, RejectReason> {
+  if (answer?.trim() === refusedAnswer) return Result.fail("refused");
   const request = requestText(entry, (name) => name === speaker?.source, keepTags);
   const value =
     answer === undefined
