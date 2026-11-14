@@ -1,22 +1,8 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { applyXpTranslations } from "@rpgtl/domain";
-import { rubyObject, xpArchive, xpFile, xpScripts } from "@rpgtl/domain/testUtils/xpGame";
 import { assert, it } from "@effect/vitest";
-import { spawnSync } from "node:child_process";
-import { homedir } from "node:os";
-import * as ConfigProvider from "effect/ConfigProvider";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Path from "effect/Path";
-import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import * as ChildProcess from "effect/process/ChildProcess";
-import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
-import { httpClientAnswering } from "../testUtils/ollama.ts";
-import * as Mkxpz from "./Mkxpz.ts";
+import { cachedMkxpz, mkxpzLayer, playXpGame, xvfbRun } from "../testUtils/mkxpz.ts";
 
 /** Stand-ins for the parts of RGSS's default scripts that the fitting script hooks. */
 const engine = String.raw`
@@ -185,71 +171,15 @@ const Report = Schema.Struct({
   fixedAgain: Message,
 });
 
-const xvfbRun = spawnSync("sh", ["-c", "command -v xvfb-run"]).status === 0;
-
-/**
- * Plays a made-up XP game in RPGTL's mkxp-z, whose translated `Scripts.rxdata` holds the fitting
- * script twice, as pressing F12 loads every script again, and gives what its `Main` saw.
- */
-const playChecks = Effect.fn("playChecks")(function* (program: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const dir = yield* fs.makeTempDirectoryScoped();
-  const report = path.join(dir, "report.json");
-  const scripts = xpFile(xpScripts({ Engine: engine, Main: checks(report) }));
-  const once = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", scripts, []));
-  const twice = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", once ?? scripts, []));
-  yield* fs.makeDirectory(path.join(dir, "game"));
-  yield* fs.makeDirectory(path.join(dir, "run/patches/Data"), { recursive: true });
-  yield* fs.writeFile(
-    path.join(dir, "game/Game.rgssad"),
-    xpArchive({ "System.rxdata": rubyObject("RPG::System", {}) }),
-  );
-  yield* fs.writeFileString(
-    path.join(dir, "game/Game.ini"),
-    "[Game]\r\nLibrary=RGSS102E.dll\r\nScripts=Data\\Scripts.rxdata\r\nTitle=Fixture\r\n",
-  );
-  yield* fs.writeFile(path.join(dir, "run/patches/Data/Scripts.rxdata"), twice ?? scripts);
-  yield* fs.writeFileString(
-    path.join(dir, "run/mkxp.json"),
-    JSON.stringify(
-      Mkxpz.mkxpConfig(
-        path.dirname(program),
-        path.join(dir, "game"),
-        path.join(dir, "run/patches"),
-      ),
-    ),
-  );
-  const output = yield* spawner
-    .string(
-      ChildProcess.make("xvfb-run", ["-a", program], {
-        env: { SRCDIR: path.join(dir, "run") },
-        extendEnv: true,
-        stdin: "ignore",
-      }),
-      { includeStderr: true },
-    )
-    .pipe(Effect.timeout(Duration.seconds(60)));
-  const json = yield* fs.readFileString(report).pipe(
-    Effect.catchTags({
-      PlatformError: () => Effect.die(`mkxp-z wrote no report:\n${output.slice(-2000)}`),
-    }),
-  );
-  return yield* Schema.decodeEffect(Schema.fromJsonString(Report))(json);
-});
-
 it.live.skipIf(!xvfbRun)(
   "fits labels and messages in mkxp-z, with the fitting script loaded twice",
   (context) =>
     Effect.gen(function* () {
-      const mkxpz = yield* Mkxpz.Mkxpz;
-      const program = yield* mkxpz.program.pipe(
-        Effect.asSome,
-        Effect.catchTags({ ProgramMissingError: () => Effect.succeedNone }),
-      );
+      const program = yield* cachedMkxpz;
       if (Option.isNone(program)) return context.skip("mkxp-z isn't in RPGTL's cache folder");
-      const r = yield* playChecks(program.value);
+      const r = yield* Schema.decodeEffect(Schema.fromJsonString(Report))(
+        yield* playXpGame(program.value, { engine, main: checks }),
+      );
       assert.isUndefined(r.error);
 
       assert.isAbove(r.label.natural, 80);
@@ -292,20 +222,6 @@ it.live.skipIf(!xvfbRun)(
       assert.lengthOf(r.fixed.rows, 2);
       assert.isTrue(r.fixed.widths.every((width) => width <= 444));
       assert.deepInclude(r.fixedAgain, { rows: r.fixed.rows, draws: 1 });
-    }).pipe(
-      Effect.scoped,
-      Effect.provide(
-        Mkxpz.layer.pipe(
-          Layer.provideMerge(
-            Layer.mergeAll(
-              NodeServices.layer,
-              httpClientAnswering(() => Effect.succeedNone),
-              // The tests' setup points XDG_CACHE_HOME at an empty folder; mkxp-z is only read.
-              ConfigProvider.layer(ConfigProvider.fromUnknown({ HOME: homedir() })),
-            ),
-          ),
-        ),
-      ),
-    ),
+    }).pipe(Effect.scoped, Effect.provide(mkxpzLayer)),
   90_000,
 );
