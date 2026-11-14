@@ -6,7 +6,7 @@ export default defineConfig({
     // In order, so lint reads the formatted file.
     "*": [
       "vp fmt --no-error-on-unmatched-pattern",
-      "effect-tsgo --tsrs-lint vp lint --no-error-on-unmatched-pattern",
+      "effect-tsgo --tsrs-lint vp lint --deny-warnings --no-error-on-unmatched-pattern",
     ],
     // Knip checks the whole workspace, so it takes no file list.
     "{*.{ts,tsx,mts,js,mjs},package.json,knip.jsonc}": () => "knip --reporter compact",
