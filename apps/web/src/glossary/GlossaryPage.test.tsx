@@ -195,6 +195,27 @@ test("typing saves once it pauses, and a new kind saves at once without the pron
   await expect.element(page.getByText("Set by you.")).toBeVisible();
 });
 
+test("renaming a term renames it in the terms that contain it", async () => {
+  const server = fakeServer();
+  const umbrella = {
+    ...rain,
+    source: "阿琳的伞",
+    translation: { guess: { value: "Arlene's Umbrella" } },
+  };
+  server.catalog = { ...saved, glossary: [arlene, umbrella] };
+  showGlossary();
+  server.activity(idle);
+  const english = page.getByLabelText("English");
+  await english.fill("Arlena");
+  await expect.element(page.getByText("Arlena's Umbrella")).toBeVisible();
+  await english.fill("");
+  await vi.waitFor(() =>
+    expect(server.glossaries.at(-1)?.[0]).toEqual({ source: "阿琳", translation: "" }),
+  );
+  await english.fill("Irene");
+  await expect.element(page.getByText("Irene's Umbrella")).toBeVisible();
+});
+
 test("a cleared term offers its English from before, and using it saves that", async () => {
   const server = fakeServer();
   server.catalog = {

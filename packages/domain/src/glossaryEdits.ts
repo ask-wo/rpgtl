@@ -2,6 +2,8 @@ import type { Catalog, Entry, GlossaryTerm, TermEdit } from "@rpgtl/contracts";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { cleared } from "./catalog.ts";
+import { wordPattern } from "./checks.ts";
+import { hasTerm } from "./termMatch.ts";
 import { entriesToClear } from "./shortNames.ts";
 import { entryTranslation, inUse, mapInUse, termTranslation, termKind } from "./guesses.ts";
 
@@ -64,6 +66,43 @@ export function savedTerm(saved: GlossaryTerm | undefined, edit: TermEdit): Glos
   });
 }
 
+/** The terms whose English changed from `old` to `next` to other English, by source. */
+const renames = (old: ReadonlyArray<GlossaryTerm>, next: ReadonlyArray<GlossaryTerm>) => {
+  const after = new Map(next.map((term) => [term.source, termTranslation(term).trim()]));
+  return new Map(
+    old.flatMap((before) => {
+      const to = after.get(before.source);
+      const from = termTranslation(before).trim();
+      return to && to !== from
+        ? [[before.source, { from, to, previous: before.previous }] as const]
+        : [];
+    }),
+  );
+};
+
+/**
+ * The glossary `next` with each term that contains a renamed term's source, such as an item
+ * named after a character, following the rename in English a run or rule gave. A term typed
+ * again after clearing renames from the English it had before.
+ */
+export function withRenamesFollowed(
+  old: ReadonlyArray<GlossaryTerm>,
+  next: ReadonlyArray<GlossaryTerm>,
+) {
+  const renamed = [...renames(old, next)];
+  if (!renamed.length) return next;
+  return next.map((term) => {
+    if (term.translation.user !== undefined) return term;
+    const translation = renamed.reduce((english, [source, { from, to, previous }]) => {
+      const was = from || previous;
+      return was && source !== term.source && hasTerm(term.source, source)
+        ? mapInUse(english, (value) => value.replace(wordPattern(was), () => to))
+        : english;
+    }, term.translation);
+    return translation === term.translation ? term : { ...term, translation };
+  });
+}
+
 /**
  * The English an entry gets when the glossary changes from `old` to `next`: an entry that is
  * exactly a term whose English changed to another one follows it.
@@ -72,14 +111,7 @@ export function renamedTranslation(
   old: ReadonlyArray<GlossaryTerm>,
   next: ReadonlyArray<GlossaryTerm>,
 ) {
-  const renamed = new Map(
-    old.flatMap((before) => {
-      const after = next.find((other) => other.source === before.source);
-      const to = after && termTranslation(after).trim();
-      const from = termTranslation(before).trim();
-      return to && to !== from ? [[before.source, { from, to }] as const] : [];
-    }),
-  );
+  const renamed = renames(old, next);
   return <T extends Pick<Entry, "source" | "translation">>(entry: T): T => {
     const term = renamed.get(entry.source.trim());
     return term && entryTranslation(entry).trim() === term.from
@@ -96,7 +128,10 @@ export function withGlossary(
   const repeated = repeatedSource(edited);
   if (repeated !== undefined) return Result.fail(new GlossaryTermRepeated({ source: repeated }));
   const saved = new Map(current.glossary.map((term) => [term.source, term]));
-  const glossary = edited.map((edit) => savedTerm(saved.get(edit.source), edit));
+  const glossary = withRenamesFollowed(
+    current.glossary,
+    edited.map((edit) => savedTerm(saved.get(edit.source), edit)),
+  );
   return Result.succeed({
     ...current,
     entries: current.entries.map(renamedTranslation(current.glossary, glossary)),

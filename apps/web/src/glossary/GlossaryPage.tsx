@@ -4,6 +4,7 @@ import {
   entriesToClear,
   glossaryOrder,
   savedTerm,
+  withRenamesFollowed,
   termEdit,
   termTranslation,
   termKind,
@@ -127,7 +128,19 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
   const [notice, setNotice] = useState<Notice>();
   const [clearing, setClearing] = useState(false);
 
-  const edit = (next: ReadonlyArray<GlossaryTerm>, delay: number) => {
+  const edit = (edited: ReadonlyArray<GlossaryTerm>, delay: number) => {
+    const before = new Map(saved.glossary.map((term) => [term.source, term]));
+    const next = withRenamesFollowed(
+      saved.glossary,
+      edited.map((term) => {
+        const guess = before.get(term.source)?.translation.guess;
+        const { user } = term.translation;
+        return {
+          ...term,
+          translation: { ...(guess && { guess }), ...(user !== undefined && { user }) },
+        };
+      }),
+    );
     setDraft(next);
     setNotice(undefined);
     edits.schedule(
