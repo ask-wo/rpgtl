@@ -247,6 +247,24 @@ test("Changed shows only the terms whose English differs from before clearing, w
   await expect.element(page.getByText(/Before:/)).toBeVisible();
 });
 
+test("Custom shows the terms you set, and removing the glossary can keep them", async () => {
+  const server = fakeServer();
+  showGlossary();
+  server.activity(idle);
+  const terms = page.getByRole("region", { name: "Glossary terms" });
+  await page.getByRole("button", { name: "Custom 1" }).click();
+  await expect.element(terms.getByText("雨")).toBeVisible();
+  await expect.element(terms.getByText("阿琳")).not.toBeInTheDocument();
+  await page.getByRole("button", { name: "Remove glossary…" }).click();
+  await expect
+    .element(page.getByRole("checkbox", { name: "Keep the 1 term you set yourself" }))
+    .toBeChecked();
+  await page.getByRole("button", { name: "Remove glossary", exact: true }).click();
+  await vi.waitFor(() =>
+    expect(server.glossaries.at(-1)).toEqual([{ source: "雨", translation: "Rain" }]),
+  );
+});
+
 test("a new term saves once it has an original", async () => {
   const server = fakeServer();
   showGlossary();
@@ -351,11 +369,12 @@ test("a model's pronoun the text argues against waits for you to confirm it", as
   expect(server.glossaries[0]).toEqual([{ source: "阿琳", pronoun: "he" }]);
 });
 
-test("Remove glossary empties the glossary and closes its dialog", async () => {
+test("Remove glossary without keeping your terms empties the glossary and closes its dialog", async () => {
   const server = fakeServer();
   showGlossary();
   server.activity(idle);
   await page.getByRole("button", { name: "Remove glossary…" }).click();
+  await page.getByRole("checkbox", { name: "Keep the 1 term you set yourself" }).click();
   await page.getByRole("button", { name: "Remove glossary", exact: true }).click();
   await vi.waitFor(() => expect(page.getByRole("alertdialog").query()).toBeNull());
   await vi.waitFor(() => expect(server.glossaries).toEqual([[]]));

@@ -15,7 +15,8 @@ import { PlusIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { ButtonGroup } from "~/components/ui/button-group";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { cn } from "cn";
@@ -35,7 +36,7 @@ const sections: ReadonlyArray<{ readonly kind: TermKind; readonly label: string 
   { kind: "word", label: "Words" },
 ];
 
-type Shown = "all" | "untranslated" | "last-run" | "changed";
+type Shown = "all" | "untranslated" | "last-run" | "changed" | "custom";
 
 const filters: ReadonlyArray<{
   readonly show: Shown;
@@ -46,7 +47,12 @@ const filters: ReadonlyArray<{
   { show: "untranslated", label: "Untranslated", does: "Terms without English" },
   { show: "last-run", label: "Last run", does: "Terms the last run translated" },
   { show: "changed", label: "Changed", does: "Terms whose English differs from before clearing" },
+  { show: "custom", label: "Custom", does: "Terms whose English, kind or pronoun you set" },
 ];
+
+/** Whether the user set any of the term's values. */
+const isCustom = ({ translation, kind, pronoun }: GlossaryTerm) =>
+  translation.user !== undefined || kind.user !== undefined || pronoun?.user !== undefined;
 
 function isShown(term: GlossaryTerm, show: Shown, lastRun: string | undefined) {
   const english = termTranslation(term).trim();
@@ -59,6 +65,8 @@ function isShown(term: GlossaryTerm, show: Shown, lastRun: string | undefined) {
       return lastRun !== undefined && term.translation.guess?.run === lastRun;
     case "changed":
       return !!english && term.previous !== undefined && term.previous !== english;
+    case "custom":
+      return isCustom(term);
   }
 }
 
@@ -87,6 +95,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
   const [draft, setDraft] = useState<ReadonlyArray<GlossaryTerm>>();
   // What waits for the user to confirm; a run that takes the game closes it.
   const [removingAll, setRemovingAll] = useState(false);
+  const [keepCustom, setKeepCustom] = useState(true);
   const [removing, setRemoving] = useState<GlossaryTerm>();
   const [clearingAll, setClearingAll] = useState(false);
   const [wasLocked, setWasLocked] = useState(locked);
@@ -159,6 +168,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
   const order = glossaryOrder(glossary, saved.entries);
   const current = selected ?? order[0];
   const term = current === undefined ? undefined : glossary[current];
+  const custom = glossary.filter(isCustom).length;
   const characters = glossary.filter(
     (each) => termKind(each) === "character" && each.source.trim(),
   );
@@ -208,9 +218,13 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
           </p>
         )}
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[24rem_1fr]">
-        <div className="overflow-auto border-r text-sm" aria-label="Glossary terms" role="region">
-          <div className="sticky top-0 z-10 flex flex-wrap gap-2 border-b bg-background p-2">
+      <div className="grid min-h-0 flex-1 grid-cols-[22rem_1fr]">
+        <div
+          className="flex min-h-0 flex-col border-r text-sm"
+          aria-label="Glossary terms"
+          role="region"
+        >
+          <div className="flex flex-wrap gap-2 border-b bg-background p-2">
             <Input
               className="h-8 min-w-0 flex-1"
               placeholder="Filter terms"
@@ -232,13 +246,13 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
               <PlusIcon />
               Add term
             </Button>
-            <ButtonGroup aria-label="Show" className="w-full">
+            <div role="group" aria-label="Show" className="flex basis-full flex-wrap gap-1">
               {filters.map((each) => (
                 <Button
                   key={each.show}
                   variant={each.show === show ? "secondary" : "outline"}
                   size="sm"
-                  className="flex-1 gap-1 px-2 text-xs"
+                  className="gap-1 px-2 text-xs"
                   aria-pressed={each.show === show}
                   title={each.does}
                   onClick={() => setShow(each.show)}
@@ -251,19 +265,21 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
                   </span>
                 </Button>
               ))}
-            </ButtonGroup>
+            </div>
           </div>
-          <TermList
-            glossary={glossary}
-            order={order}
-            filter={filter}
-            show={show}
-            lastRun={saved.lastRun}
-            current={current}
-            locked={locked}
-            onSelect={setSelected}
-            onRemove={setRemoving}
-          />
+          <div className="min-h-0 flex-1 overflow-auto">
+            <TermList
+              glossary={glossary}
+              order={order}
+              filter={filter}
+              show={show}
+              lastRun={saved.lastRun}
+              current={current}
+              locked={locked}
+              onSelect={setSelected}
+              onRemove={setRemoving}
+            />
+          </div>
         </div>
         <div className="min-w-0 overflow-auto p-6">
           {term !== undefined && current !== undefined && (
@@ -295,9 +311,23 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
         keep="Keep it"
         confirm="Remove glossary"
         onConfirm={() => {
-          edit([], 0);
+          edit(keepCustom ? glossary.filter(isCustom) : [], 0);
           setSelected(undefined);
         }}
+        options={
+          custom > 0 && (
+            <Field orientation="horizontal">
+              <Checkbox
+                id="keep-custom-terms"
+                checked={keepCustom}
+                onCheckedChange={setKeepCustom}
+              />
+              <FieldLabel htmlFor="keep-custom-terms">
+                Keep the {counted(custom, "term", "terms")} you set yourself
+              </FieldLabel>
+            </Field>
+          )
+        }
       >
         The translations stay. Build glossary fills it again.
       </ConfirmDialog>
@@ -387,7 +417,7 @@ function TermList({
       if (terms.length === 0) return null;
       return (
         <section key={kind} aria-label={label}>
-          <h3 className="sticky top-[5.5rem] bg-sidebar px-3 py-1.5 text-xs font-medium text-muted-foreground">
+          <h3 className="sticky top-0 bg-sidebar px-3 py-1.5 text-xs font-medium text-muted-foreground">
             {label} · {number(terms.length)}
           </h3>
           {terms.map((index) => {
