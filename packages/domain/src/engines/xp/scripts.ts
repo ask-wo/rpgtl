@@ -238,16 +238,34 @@ const rpgtlScript = (name: string, code: string) => [
   zlibSync(new TextEncoder().encode(code)),
 ];
 
+const fixScripts = (fixes: ReadonlyArray<RubyScript>) =>
+  fixes.map((fix) => rpgtlScript(`RPGTL fix ${fix.name}`, fix.code));
+
+/**
+ * `rows` with `added` before `Main`, which starts the game, or before the last script, which is
+ * `Main` in a game that renamed it.
+ */
+function beforeMain(rows: Array<Array<unknown>>, added: Array<Array<unknown>>) {
+  const main = rows.findLastIndex(
+    ([, name]) =>
+      (typeof name === "string" || name instanceof Uint8Array) &&
+      nameOf(name).trim().toLowerCase() === "main",
+  );
+  rows.splice(main < 0 ? Math.max(rows.length - 1, 0) : main, 0, ...added);
+  return rows;
+}
+
 /**
  * `Scripts.rxdata` with the literals of `texts`, by script and literal index, set to their text,
- * and RPGTL's scripts that draw English into images and fit it into the game's text boxes before
- * `Main`, which starts the game, or before the last script, which is `Main` in a game that renamed
- * it. Scripts without text keep their bytes. Fails when a literal isn't its source anymore.
+ * then the game's fixes and RPGTL's scripts that draw English into images and fit it into the
+ * game's text boxes, before `Main`. Scripts without text keep their bytes. Fails when a literal
+ * isn't its source anymore.
  */
 export const applyScriptTexts = (
   file: string,
   bytes: Uint8Array,
   texts: ReadonlyMap<number, ReadonlyMap<number, LiteralText>>,
+  fixes: ReadonlyArray<RubyScript>,
 ): Result.Result<Uint8Array, GameDataChanged | GameFileInvalid> =>
   Result.flatMap(scriptRows(file, bytes), (rows) => {
     for (const [script, literals] of texts) {
@@ -257,12 +275,17 @@ export const applyScriptTexts = (
       if (!row || changed === undefined) return Result.fail(new GameDataChanged({ file }));
       row[2] = zlibSync(new TextEncoder().encode(changed));
     }
-    const main = rows.findLastIndex(([, name]) => nameOf(name).trim().toLowerCase() === "main");
-    rows.splice(
-      main < 0 ? Math.max(rows.length - 1, 0) : main,
-      0,
-      rpgtlScript("RPGTL image text", xpImageScript),
-      rpgtlScript("RPGTL text fitting", textFittingScript),
+    return Result.succeed(
+      dump(
+        beforeMain(rows, [
+          ...fixScripts(fixes),
+          rpgtlScript("RPGTL image text", xpImageScript),
+          rpgtlScript("RPGTL text fitting", textFittingScript),
+        ]),
+      ),
     );
-    return Result.succeed(dump(rows));
   });
+
+/** `Scripts.rxdata` with only the game's fixes added before `Main`. */
+export const applyXpFixes = (file: string, bytes: Uint8Array, fixes: ReadonlyArray<RubyScript>) =>
+  Result.map(scriptRows(file, bytes), (rows) => dump(beforeMain(rows, fixScripts(fixes))));

@@ -11,7 +11,14 @@ export const xpUnpackedArchiveName = "Game.rgssad.original";
 
 const readmeName = "English patch.txt";
 
-const readme = (title: string) =>
+const fixesNote = (fixes: ReadonlyArray<string>) =>
+  fixes.length === 0
+    ? ""
+    : `
+Its scripts also include these fixes for bugs in the game itself:
+${fixes.map((name) => `- ${name}\n`).join("")}`;
+
+const readme = (title: string, fixes: ReadonlyArray<string>) =>
   `English patch for ${title}, machine-translated using RPGTL (https://github.com/ask-wo/rpgtl).
 
 1. If the game folder already has a file named ${xpArchiveName}, the game prefers its files over
@@ -26,20 +33,21 @@ const readme = (title: string) =>
 
 Images or sounds with Japanese or Chinese file names may not load on a computer set to another
 language. Starting Game.exe with e.g. Locale Emulator usually fixes that.
-`;
+${fixesNote(fixes)}`;
 
 /**
  * The patch Export writes for an XP game: its translated data files by name, in a `Data/` folder
  * to copy over the game's own, the files that draw English into its images by path below the
- * game's folder, and a readme of the steps.
+ * game's folder, and a readme of the steps that names the fixes in its scripts.
  */
 export const xpPatchZip = (
   title: string,
   files: ReadonlyMap<string, Uint8Array>,
   graphics: ReadonlyMap<string, Uint8Array>,
+  fixes: ReadonlyArray<string>,
 ) =>
   zipSync({
-    [readmeName]: strToU8(readme(title).replaceAll("\n", "\r\n")),
+    [readmeName]: strToU8(readme(title, fixes).replaceAll("\n", "\r\n")),
     Data: Object.fromEntries(files),
     ...Object.fromEntries(graphics),
   });

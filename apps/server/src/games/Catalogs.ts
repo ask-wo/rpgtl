@@ -192,6 +192,18 @@ export class Catalogs extends Context.Service<
       Games.GameNotInspectedError | Games.GameBusyError | StateFolder.StateFileError
     >;
     /**
+     * Turns the XP game's fix named `name` on or off, holding the game while it does; the game
+     * plays with it from its next start.
+     */
+    readonly setFix: (
+      id: string,
+      name: string,
+      on: boolean,
+    ) => Effect.Effect<
+      Catalog,
+      Games.GameNotInspectedError | Games.GameBusyError | StateFolder.StateFileError
+    >;
+    /**
      * Sets whether an XP game plays with its scripts unchanged, holding the game while it does;
      * the game plays with it from its next start.
      */
@@ -606,6 +618,20 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const setFix = Effect.fn("Catalogs.setFix")(function* (id: string, name: string, on: boolean) {
+    return yield* games.exclusive(
+      id,
+      get(id).pipe(
+        Effect.map(({ disabledFixes = [], ...catalog }): Catalog => {
+          const off = disabledFixes.filter((other) => other !== name);
+          if (!on) off.push(name);
+          return { ...catalog, ...(off.length > 0 && { disabledFixes: off }) };
+        }),
+        Effect.tap(write),
+      ),
+    );
+  });
+
   const setLanguage = Effect.fn("Catalogs.setLanguage")(function* (
     id: string,
     language: SourceLanguage | null,
@@ -716,6 +742,7 @@ const make = Effect.gen(function* () {
     importChanges,
     setTranslate,
     setOriginalScripts,
+    setFix,
     setLanguage,
     setGlossary,
     setEntries,

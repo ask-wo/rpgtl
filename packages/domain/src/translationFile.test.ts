@@ -243,11 +243,13 @@ it("a translation file carries each erased background as its patches", () => {
   assert.strictEqual(problem(decodeTranslationFile(file)), "format");
 });
 
-it("an import keeps the game's translation switch, whatever the file says", () => {
+it("an import keeps the game's translation switch and fixes that are off, whatever the file says", () => {
   assert.isTrue(Result.getOrThrow(imported({ translate: false })).translate);
-  const off = { ...current, translate: false };
-  const file = Result.getOrThrow(decodeTranslationFile({ ...off, translate: true }));
-  assert.isFalse(Result.getOrThrow(importTranslations(off, file)).translate);
+  const off = { ...current, translate: false, disabledFixes: ["copy.rb"] };
+  const file = Result.getOrThrow(decodeTranslationFile({ ...current, translate: true }));
+  const saved = Result.getOrThrow(importTranslations(off, file));
+  assert.isFalse(saved.translate);
+  assert.deepStrictEqual(saved.disabledFixes, ["copy.rb"]);
 });
 
 const codex = {

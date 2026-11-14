@@ -60,6 +60,7 @@
     }
   ],
   "translate": true,
+  "disabledFixes": ["battle-history.rb"],
   "language": "chinese",
   "imageBold": "never",
   "imageFont": "serif",

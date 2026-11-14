@@ -212,6 +212,7 @@ export function importTranslations(
     glossary,
     translate: current.translate,
     ...(current.originalScripts && { originalScripts: true }),
+    ...(current.disabledFixes?.length && { disabledFixes: current.disabledFixes }),
     ...(file.language && { language: file.language }),
     ...(file.imageBold && { imageBold: file.imageBold }),
     ...(file.imageFont && { imageFont: file.imageFont }),

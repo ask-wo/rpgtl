@@ -13,6 +13,7 @@ import * as Effect from "effect/Effect";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import type * as GameFolder from "../games/GameFolder.ts";
 import { stateFileFailed } from "../state/http.ts";
+import * as XpFixes from "./XpFixes.ts";
 import * as XpPatch from "./XpPatch.ts";
 
 const archiveFailed = {
@@ -22,6 +23,12 @@ const archiveFailed = {
     Effect.logError(error.message, error.cause).pipe(
       Effect.andThen(Effect.fail(GameFileFailed.unreadable(error.file))),
     ),
+} as const;
+
+const fixesFailed = {
+  GameNotInspectedError: () => Effect.fail(new GameNotInspected()),
+  EngineUnsupportedError: () => Effect.fail(new EngineUnsupported()),
+  StateFileError: stateFileFailed,
 } as const;
 
 const readFailed = {
@@ -46,6 +53,7 @@ export const layer = HttpApiBuilder.group(
   "xpPatch",
   Effect.fnUntraced(function* (handlers) {
     const patches = yield* XpPatch.XpPatch;
+    const fixes = yield* XpFixes.XpFixes;
     return handlers.handleAll({
       patch: Effect.fn("xpPatch.patch")(function* ({ query }) {
         return yield* patches.zip(query.id, { images: query.images !== "none" }).pipe(
@@ -67,6 +75,17 @@ export const layer = HttpApiBuilder.group(
       }),
       unpack: Effect.fn("xpPatch.unpack")(function* ({ payload }) {
         return yield* patches.unpack(payload.id).pipe(Effect.catchTags(changeFailed));
+      }),
+      fixes: Effect.fn("xpPatch.fixes")(function* ({ query }) {
+        return yield* fixes.list(query.id).pipe(Effect.catchTags(fixesFailed));
+      }),
+      setFix: Effect.fn("xpPatch.setFix")(function* ({ payload }) {
+        return yield* fixes.set(payload.id, payload.name, payload.on).pipe(
+          Effect.catchTags({
+            ...fixesFailed,
+            GameBusyError: () => Effect.fail(new GameBusy()),
+          }),
+        );
       }),
       pack: Effect.fn("xpPatch.pack")(function* ({ payload }) {
         return yield* patches.pack(payload.id).pipe(Effect.catchTags(changeFailed));

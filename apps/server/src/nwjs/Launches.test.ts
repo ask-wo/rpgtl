@@ -20,6 +20,7 @@ import { translatedSign } from "../testUtils/xpImages.ts";
 import * as Launches from "./Launches.ts";
 import * as Nwjs from "./Nwjs.ts";
 import * as Mkxpz from "../mkxpz/Mkxpz.ts";
+import * as XpFixes from "../xpPatch/XpFixes.ts";
 
 /** An `nw` that logs what it was given to its log file, as NW.js does, and fails. */
 const failingNw = `#!/bin/sh
@@ -292,6 +293,60 @@ it.live(
       assert.notStrictEqual(yield* fs.readFileString(map), "kept");
       yield* again("Hi there", false);
       assert.deepStrictEqual(yield* fs.readDirectory(path.join(patches, "Data")), []);
+    }).pipe(Effect.provide(withFakeMkxpz)),
+  { timeout: 60_000 },
+);
+
+it.live(
+  "an XP game's fixes that are on go into the scripts mkxp-z reads, with its translation off or failing too",
+  () =>
+    Effect.gen(function* () {
+      const launches = yield* Launches.Launches;
+      const catalogs = yield* Catalogs.Catalogs;
+      const xpFixes = yield* XpFixes.XpFixes;
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const state = yield* StateDir;
+      const dir = yield* folderWith({
+        "Data/System.rxdata": xpFile(rubyObject("RPG::System", {})),
+        "Data/Scripts.rxdata": xpFile(xpScripts({ Title: 'text = "你好"', Main: "begin_game" })),
+      });
+      const { game, catalog } = yield* opened(catalogs.inspect(dir));
+      const fixes = path.join(state, gameFiles(game.id).xpFixes);
+      yield* fs.makeDirectory(fixes, { recursive: true });
+      yield* fs.writeFileString(path.join(fixes, "copy.rb"), "# Copies targets\nclass A; end");
+      const scripts = path.join(
+        state,
+        gameFiles(game.id).mkxpz,
+        "patches",
+        "Data",
+        "Scripts.rxdata",
+      );
+
+      const fixed = Effect.gen(function* () {
+        yield* launches.launch(game.id);
+        yield* ended(game.id);
+        return new TextDecoder().decode(yield* fs.readFile(scripts)).includes("RPGTL fix copy.rb");
+      });
+      assert.isTrue(yield* fixed);
+
+      // English whose source the game no longer has fails to apply.
+      yield* catalogs.save({
+        ...catalog,
+        translate: true,
+        entries: catalog.entries.map((entry) => ({
+          ...entry,
+          source: "再见",
+          translation: { user: "Bye" },
+        })),
+      });
+      assert.isTrue(yield* fixed);
+      yield* catalogs.save({ ...catalog, translate: false });
+
+      yield* xpFixes.set(game.id, "copy.rb", false);
+      yield* launches.launch(game.id);
+      yield* ended(game.id);
+      assert.isFalse(yield* fs.exists(scripts));
     }).pipe(Effect.provide(withFakeMkxpz)),
   { timeout: 60_000 },
 );

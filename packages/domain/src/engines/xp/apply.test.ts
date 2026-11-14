@@ -1,7 +1,7 @@
 import type { Entry } from "@rpgtl/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Result from "effect/Result";
-import { applyXpTranslations, decodeXpFile, xpGameEntries } from "../../index.ts";
+import { applyXpTranslations, decodeXpFile, patchXpFile, xpGameEntries } from "../../index.ts";
 import { command, xpFile, xpMap, xpScripts } from "../../testUtils/xpGame.ts";
 import { xpImageScript } from "./images.ts";
 import { textFittingScript } from "./textFitting.ts";
@@ -83,4 +83,25 @@ it("puts translations into an XP game's scripts, keeping their `#{}` code and th
     { name: "RPGTL text fitting", code: textFittingScript },
     { name: "Main", code: "begin_game" },
   ]);
+});
+
+const scriptsOf = (bytes: Uint8Array | undefined) => {
+  const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", bytes ?? new Uint8Array()));
+  return file._tag === "Scripts" ? file.data.map((script) => script.name) : undefined;
+};
+
+it("adds an XP game's fixes before Main, before RPGTL's scripts when the scripts are translated too", () => {
+  const scripts = xpFile(xpScripts({ Game_Action: "def copy; end", Main: "begin_game" }));
+  const fix = { name: "copy.rb", code: "class Game_Action; def copy; dup; end; end" };
+  const fixed = Result.getOrThrow(patchXpFile("Scripts.rxdata", scripts, undefined, [fix]));
+  assert.deepStrictEqual(scriptsOf(fixed), ["Game_Action", "RPGTL fix copy.rb", "Main"]);
+  const both = Result.getOrThrow(patchXpFile("Scripts.rxdata", scripts, [], [fix]));
+  assert.deepStrictEqual(scriptsOf(both), [
+    "Game_Action",
+    "RPGTL fix copy.rb",
+    "RPGTL image text",
+    "RPGTL text fitting",
+    "Main",
+  ]);
+  assert.isUndefined(Result.getOrThrow(patchXpFile("Scripts.rxdata", scripts, undefined, [])));
 });
