@@ -10,13 +10,21 @@ export interface EngineFeatures {
   readonly imageText: boolean;
   /** Finding text in its data that no entry covers, and translated text its logic compares. */
   readonly coverage: boolean;
+  /** Exporting a patch for the game's own player, and unpacking its archive for that patch. */
+  readonly patch: boolean;
 }
 
-const all: EngineFeatures = { play: true, gameScripts: true, imageText: true, coverage: true };
+const all: EngineFeatures = {
+  play: true,
+  gameScripts: true,
+  imageText: true,
+  coverage: true,
+  patch: false,
+};
 
 /** What RPGTL can do with a game of each engine; the page shows only these. */
 export const engineFeatures: Record<Engine, EngineFeatures> = {
   MV: all,
   MZ: all,
-  XP: { play: true, gameScripts: false, imageText: false, coverage: false },
+  XP: { play: true, gameScripts: false, imageText: false, coverage: false, patch: true },
 };

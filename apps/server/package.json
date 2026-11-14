@@ -21,6 +21,7 @@
   "devDependencies": {
     "@effect/vitest": "4.1.2",
     "@types/node": "^26.6.6",
-    "@types/pngjs": "6.0.5"
+    "@types/pngjs": "6.0.5",
+    "fflate": "0.8.3"
   }
 }

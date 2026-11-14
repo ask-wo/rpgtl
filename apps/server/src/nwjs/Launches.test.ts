@@ -13,6 +13,7 @@ import * as Catalogs from "../games/Catalogs.ts";
 import * as Games from "../games/Games.ts";
 import * as Settings from "../settings/Settings.ts";
 import { folderWith, mvGame } from "../testUtils/gameFolder.ts";
+import { writeArchive } from "@rpgtl/domain";
 import { command, rubyObject, xpFile, xpMap, xpScripts } from "@rpgtl/domain/testUtils/xpGame";
 import { noPrograms, opened, playServices, servicesWith, StateDir } from "../testUtils/state.ts";
 import * as Launches from "./Launches.ts";
@@ -260,6 +261,35 @@ it.live(
       assert.notStrictEqual(yield* fs.readFileString(map), "kept");
       yield* again("Hi there", false);
       assert.deepStrictEqual(yield* fs.readDirectory(path.join(patches, "Data")), []);
+    }).pipe(Effect.provide(withFakeMkxpz)),
+  { timeout: 60_000 },
+);
+
+it.live(
+  "an XP game whose archive Unpack renamed plays its own data in mkxp-z, not the loose files copied over it",
+  () =>
+    Effect.gen(function* () {
+      const launches = yield* Launches.Launches;
+      const catalogs = yield* Catalogs.Catalogs;
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const state = yield* StateDir;
+      const map = xpFile(xpMap({ 1: [command(101, "你好")] }));
+      const dir = yield* folderWith({
+        "Game.rgssad.original": writeArchive(
+          new Map([
+            ["Data/System.rxdata", xpFile(rubyObject("RPG::System", {}))],
+            ["Data/Map001.rxdata", map],
+          ]),
+        ),
+        "Data/Map001.rxdata": xpFile(xpMap({ 1: [command(101, "Hello")] })),
+      });
+      const { game } = yield* opened(catalogs.inspect(dir));
+
+      yield* launches.launch(game.id);
+      yield* ended(game.id);
+      const patches = path.join(state, gameFiles(game.id).mkxpz, "patches", "Data");
+      assert.deepStrictEqual(yield* fs.readFile(path.join(patches, "Map001.rxdata")), map);
     }).pipe(Effect.provide(withFakeMkxpz)),
   { timeout: 60_000 },
 );

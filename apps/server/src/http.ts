@@ -12,6 +12,7 @@ import * as NwjsHttp from "./nwjs/http.ts";
 import * as PlayHttp from "./play/http.ts";
 import * as SettingsHttp from "./settings/http.ts";
 import * as TranslationHttp from "./translation/http.ts";
+import * as XpPatchHttp from "./xpPatch/http.ts";
 import * as LocalRequest from "./auth/LocalRequest.ts";
 
 const noStore = HttpRouter.middleware(
@@ -35,6 +36,7 @@ const apiRoutes = HttpApiBuilder.layer(Api).pipe(
     NwjsHttp.layer,
     ActivityHttp.layer,
     SettingsHttp.layer,
+    XpPatchHttp.layer,
   ]),
   Layer.provide(LocalRequest.layer),
 );

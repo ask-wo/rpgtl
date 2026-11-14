@@ -28,7 +28,7 @@ export class EngineUnsupportedError extends Schema.TaggedError<EngineUnsupported
   {
     id: Schema.String,
     engine: Engine,
-    feature: Schema.Literals(["play", "gameScripts", "imageText", "coverage"]),
+    feature: Schema.Literals(["play", "gameScripts", "imageText", "coverage", "patch"]),
   },
 ) {
   override get message() {

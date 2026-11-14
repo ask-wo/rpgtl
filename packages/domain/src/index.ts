@@ -50,3 +50,4 @@ export * from "./engines/xp/gameFile.ts";
 export * from "./engines/xp/location.ts";
 export * from "./engines/features.ts";
 export * from "./engines/xp/apply.ts";
+export * from "./engines/xp/patch.ts";

@@ -261,6 +261,31 @@ export class StopFailed extends Schema.TaggedError<StopFailed>()(
   { httpApiStatus: 500 },
 ) {}
 
+/** Unpacking an XP game's archive, or undoing it, while RPGTL's Play runs the game. */
+export class CloseGameFirst extends Schema.TaggedError<CloseGameFirst>()(
+  "CloseGameFirst",
+  { message: fixedMessage("Close the game first.") },
+  { httpApiStatus: 400 },
+) {}
+
+/** An XP game's archive isn't packed or unpacked, as the request expected. */
+export class ArchiveChanged extends Schema.TaggedError<ArchiveChanged>()(
+  "ArchiveChanged",
+  {
+    message: fixedMessage(
+      "The game's archive changed since the page last looked. Reload the page.",
+    ),
+  },
+  { httpApiStatus: 400 },
+) {}
+
+/** Files in the game's folder couldn't be written, moved or deleted; the server logs why. */
+export class GameFolderWriteFailed extends Schema.TaggedError<GameFolderWriteFailed>()(
+  "GameFolderWriteFailed",
+  { message: fixedMessage("Couldn't change the game's folder. RPGTL's log says why.") },
+  { httpApiStatus: 500 },
+) {}
+
 /** A request from another host or origin, or without this start's token. */
 export class RequestRefused extends Schema.TaggedError<RequestRefused>()(
   "RequestRefused",
@@ -687,6 +712,63 @@ export class SettingsApi extends HttpApiGroup.make("settings")
   .middleware(LocalRequest)
   .prefix("/api") {}
 
+/**
+ * An XP game's archive: `packed` as the game ships it, `unpacked` into loose files with the archive
+ * renamed, or `none` when the game has none.
+ */
+export const XpArchive = Schema.Literals(["none", "packed", "unpacked"]);
+export type XpArchive = typeof XpArchive.Type;
+
+export class XpPatchApi extends HttpApiGroup.make("xpPatch")
+  .add(
+    /** A zip of the XP game's translated data files and a readme, to copy over the game's own. */
+    HttpApiEndpoint.get("patch", "/xp/patch", {
+      query: GameId,
+      success: Schema.Uint8Array.pipe(
+        HttpApiSchema.asUint8Array({ contentType: "application/zip" }),
+      ),
+      error: [GameNotInspected, EngineUnsupported, GameFileFailed, StateFileFailed],
+    }),
+    HttpApiEndpoint.get("archive", "/xp/archive", {
+      query: GameId,
+      success: XpArchive,
+      error: [GameNotInspected, EngineUnsupported, GameFileFailed],
+    }),
+    /**
+     * Writes the files of the XP game's archive into its folder and renames the archive, so the
+     * game's own player loads loose files, such as a patch's.
+     */
+    HttpApiEndpoint.post("unpack", "/xp/unpack", {
+      payload: GameId,
+      success: XpArchive,
+      error: [
+        GameNotInspected,
+        EngineUnsupported,
+        GameBusy,
+        CloseGameFirst,
+        ArchiveChanged,
+        GameFileFailed,
+        GameFolderWriteFailed,
+      ],
+    }),
+    /** Undoes Unpack: names the archive back and deletes the files of the game's folder it holds. */
+    HttpApiEndpoint.post("pack", "/xp/pack", {
+      payload: GameId,
+      success: XpArchive,
+      error: [
+        GameNotInspected,
+        EngineUnsupported,
+        GameBusy,
+        CloseGameFirst,
+        ArchiveChanged,
+        GameFileFailed,
+        GameFolderWriteFailed,
+      ],
+    }),
+  )
+  .middleware(LocalRequest)
+  .prefix("/api") {}
+
 /** RPGTL's API, shared by the server and the page. */
 export class Api extends HttpApi.make("rpgtl")
   .add(GamesApi)
@@ -698,4 +780,5 @@ export class Api extends HttpApi.make("rpgtl")
   .add(NwjsApi)
   .add(ImageReaderApi)
   .add(ActivityApi)
-  .add(SettingsApi) {}
+  .add(SettingsApi)
+  .add(XpPatchApi) {}

@@ -26,5 +26,7 @@ export const gameFiles = (id: string) => {
     nwjsHook: `${folder}/nwjs-hook.js`,
     /** The folder mkxp-z starts in: its `mkxp.json` and the translated data files it reads first. */
     mkxpz: `${folder}/mkxpz`,
+    /** The game's own loose files that Unpack wrote over, which Undo unpack puts back. */
+    unpackedOver: `${folder}/unpacked-over`,
   };
 };

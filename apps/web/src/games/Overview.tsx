@@ -10,6 +10,7 @@ import { TranslationCard } from "../translation/TranslationCard.tsx";
 import { playtime } from "./atoms.ts";
 import { useGame } from "./GameContext.ts";
 import { playtimeText } from "./playtimeText.ts";
+import { XpPatchCard } from "../xpPatch/XpPatchCard.tsx";
 
 const tools = [
   {
@@ -89,6 +90,7 @@ export function Overview() {
           </CardContent>
         </Card>
       )}
+      {engineFeatures[game.engine].patch && <XpPatchCard />}
       <TranslationCard />
     </div>
   );

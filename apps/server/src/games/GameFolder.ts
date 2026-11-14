@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Entry, Game, Plugins } from "@rpgtl/contracts";
 import {
+  type ArchiveEntry,
   archiveEntries,
   bootEngines,
   decodeXpFile,
@@ -21,7 +22,9 @@ import {
   referencedFolders,
   splitVersion,
   textImages,
+  xpArchiveName,
   xpGameEntries,
+  xpUnpackedArchiveName,
 } from "@rpgtl/domain";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -136,12 +139,28 @@ export class GameFolder extends Context.Service<
       GameFileMissingError | GameFileReadError | GameFileInvalid
     >;
     /**
-     * The `.rxdata` files of an XP game by name, as mkxp-z reads them: from its archive, else from
-     * its `Data/` folder.
+     * The `.rxdata` files of an XP game by name: from its archive, renamed by Unpack or not, else
+     * from its `Data/` folder. The renamed archive counts, so files copied over the unpacked ones
+     * never become the game's text.
      */
     readonly xpData: (
       game: FolderGame,
     ) => Effect.Effect<ReadonlyMap<string, Uint8Array>, GameFileReadError | GameFileInvalid>;
+    /** The path of an XP game's archive, and whether Unpack renamed it; none without one. */
+    readonly xpArchive: (
+      game: FolderGame,
+    ) => Effect.Effect<
+      Option.Option<{ readonly file: string; readonly unpacked: boolean }>,
+      GameFileReadError
+    >;
+    /** `use` given the files of the XP archive at `file` and a way to read each one's content. */
+    readonly xpArchiveFiles: <A, E>(
+      file: string,
+      use: (
+        entries: ReadonlyArray<ArchiveEntry>,
+        content: (entry: ArchiveEntry) => Effect.Effect<Uint8Array, GameFileReadError>,
+      ) => Effect.Effect<A, E>,
+    ) => Effect.Effect<A, E | GameFileReadError | GameFileInvalid>;
     /**
      * Every data file, whether RPGTL extracts its text or not, the plugin list and the code of
      * the plugins, for searches of all of the game.
@@ -174,8 +193,6 @@ const SystemHeader = Schema.Struct({
   hasEncryptedAudio: Schema.optionalKey(Schema.Boolean),
   encryptionKey: Schema.optionalKey(Schema.String),
 });
-
-const xpArchive = "Game.rgssad";
 
 /**
  * The title in an XP game's `Game.ini`. The editor writes it in the Windows code page it ran
@@ -325,6 +342,43 @@ const make = Effect.gen(function* () {
     } satisfies FolderGame;
   });
 
+  const findXpArchive = Effect.fnUntraced(function* (root: string) {
+    for (const [name, unpacked] of [
+      [xpArchiveName, false],
+      [xpUnpackedArchiveName, true],
+    ] as const) {
+      const found = yield* matchCase(root, name);
+      if (Option.isSome(found))
+        return Option.some({ file: path.join(root, found.value), unpacked });
+    }
+    return Option.none();
+  });
+
+  const xpArchiveFiles = <A, E>(
+    file: string,
+    use: (
+      entries: ReadonlyArray<ArchiveEntry>,
+      content: (entry: ArchiveEntry) => Effect.Effect<Uint8Array, GameFileReadError>,
+    ) => Effect.Effect<A, E>,
+  ) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const handle = yield* fs.open(file).pipe(Effect.mapError(unreadable(file)));
+        const read = (offset: number, length: number) =>
+          handle
+            .readAlloc(length, { position: BigInt(offset) })
+            .pipe(
+              Effect.map(Option.getOrElse(() => new Uint8Array())),
+              Effect.mapError(unreadable(file)),
+            );
+        const size = Number((yield* handle.stat.pipe(Effect.mapError(unreadable(file)))).size);
+        const entries = yield* archiveEntries(file, size, read);
+        return yield* use(entries, (entry) =>
+          Effect.map(read(entry.offset, entry.size), (bytes) => decryptEntry(entry, bytes)),
+        );
+      }),
+    );
+
   /**
    * The `.rxdata` files of the XP game at `root` by name: its loose `Data/` files, replaced by those
    * its archive holds, since mkxp-z reads the archive first.
@@ -339,24 +393,14 @@ const make = Effect.gen(function* () {
         files.set(name, yield* fs.readFile(file).pipe(Effect.mapError(unreadable(file))));
       }
     }
-    const archive = yield* matchCase(root, xpArchive);
+    const archive = yield* findXpArchive(root);
     if (Option.isNone(archive)) return files;
-    const file = path.join(root, archive.value);
-    return yield* Effect.scoped(
+    return yield* xpArchiveFiles(archive.value.file, (entries, content) =>
       Effect.gen(function* () {
-        const handle = yield* fs.open(file).pipe(Effect.mapError(unreadable(file)));
-        const read = (offset: number, length: number) =>
-          handle
-            .readAlloc(length, { position: BigInt(offset) })
-            .pipe(
-              Effect.map(Option.getOrElse(() => new Uint8Array())),
-              Effect.mapError(unreadable(file)),
-            );
-        const size = Number((yield* handle.stat.pipe(Effect.mapError(unreadable(file)))).size);
-        for (const entry of yield* archiveEntries(file, size, read)) {
+        for (const entry of entries) {
           const [folder, stored] = entry.path.split("/");
           if (folder?.toLowerCase() === "data" && stored?.endsWith(".rxdata"))
-            files.set(stored, decryptEntry(entry, yield* read(entry.offset, entry.size)));
+            files.set(stored, yield* content(entry));
         }
         return files;
       }),
@@ -365,7 +409,7 @@ const make = Effect.gen(function* () {
 
   /** Whether the folder holds an RPG Maker XP game: its archive or its system data. */
   const isXpGame = Effect.fnUntraced(function* (root: string) {
-    if (Option.isSome(yield* matchCase(root, xpArchive))) return true;
+    if (Option.isSome(yield* findXpArchive(root))) return true;
     return Option.isSome(yield* matchCase(root, "Data/System.rxdata"));
   });
 
@@ -391,7 +435,7 @@ const make = Effect.gen(function* () {
       engine: "XP",
       title: named.name,
       files,
-      encryptedAssets: Option.isSome(yield* matchCase(root, xpArchive)),
+      encryptedAssets: Option.isSome(yield* matchCase(root, xpArchiveName)),
       mediaWarnings: [],
       missingImages: [],
       missingAudio: [],
@@ -579,6 +623,18 @@ const make = Effect.gen(function* () {
     entries,
     xpData: Effect.fn("GameFolder.xpData")(function* (game: FolderGame) {
       return yield* xpDataFiles(game.root);
+    }),
+    xpArchive: Effect.fn("GameFolder.xpArchive")(function* (game: FolderGame) {
+      return yield* findXpArchive(game.root);
+    }),
+    xpArchiveFiles: Effect.fn("GameFolder.xpArchiveFiles")(function* <A, E>(
+      file: string,
+      use: (
+        entries: ReadonlyArray<ArchiveEntry>,
+        content: (entry: ArchiveEntry) => Effect.Effect<Uint8Array, GameFileReadError>,
+      ) => Effect.Effect<A, E>,
+    ) {
+      return yield* xpArchiveFiles(file, use);
     }),
     contents,
   });

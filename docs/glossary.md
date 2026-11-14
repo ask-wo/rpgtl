@@ -60,6 +60,8 @@ The words the code and these docs are built from. Use them in code, tests, docs 
 | --- | --- |
 | Browser play | A game played in the browser from RPGTL's server, which applies the translations to the files it serves (`Play`). |
 | RPGTL launch | Starting a game with Play (`Launches`): an MV or MZ game in RPGTL's own NW.js with the **NW.js hook**, which reads the catalog from disk and applies it, and an XP game in mkxp-z, which reads the translated data files RPGTL writes first. Starting the game through its own `Game.exe` is unaffected. |
+| Patch | A zip of an XP game's translated data files and a readme (`XpPatch`), which the player copies over the game's own files to play it in `Game.exe` without RPGTL. |
+| Unpack | Writing the files of an XP game's archive into its folder and renaming the archive to `Game.rgssad.original` (`XpPatch`), so `Game.exe` loads loose files such as a **patch**'s. The one change RPGTL makes in a game folder, and only when the player asks; RPGTL still reads the game's text from the renamed archive. |
 | Translation switch | A game's **Translate this game** switch. Off, the game shows its original text; it doesn't start or stop a run. |
 | Script text | The strings in an XP game's Ruby scripts (`Scripts.rxdata`) that hold Chinese, Japanese or Korean, which the game draws itself, such as its title menu. Not RPGTL's **game scripts**. |
 | Keep original | An entry the game shows as it is and runs don't translate: an image text's original artwork, or a string of **script text**. |
