@@ -38,7 +38,8 @@ The easiest mistake here is a change that works on the path you tried and is mis
 - **Translators.** Ollama, llama-server, Claude and Codex each need a decision, even if it is "not supported here".
 - **Routes.** A route that moves or changes its payload is also called by the verify-rpgtl examples and feature map (`.agents/skills/verify-rpgtl/`); run the ones that use it.
 - **Ways back.** A way in needs a way out and a way to see it: forgetting a game needs inspecting it again, clearing translations needs the backup.
-- **Contracts.** A schema in `packages/contracts` is read by every side; change it and check each one. A schema for a state file or the settings must also read the files players already have. A change that the files in `apps/server/src/state/formats/` no longer decode with needs an upgrade step and a new format (`docs/testing.md`, **State files**). Also run `pnpm run decode-state <copy of a real state folder>`, which decodes each file with the schemas the server uses and writes nothing.
+- **Contracts.** A schema in `packages/contracts` is read by every side; change it and check each one. A schema for a state file or the settings must also read the files players already have. A change that the files in `apps/server/src/state/formats/` no longer decode with needs an upgrade step and a new format (`docs/testing.md`, **State files**). Also run `pnpm run decode-state <copy of a real state folder>`, which decodes each file with the schemas the server uses, applies each catalog to its game's files, and writes nothing.
+- **Saved catalogs.** A change to what extraction makes an entry's source or id must still apply a catalog saved before it, until the player reads the game again. `decode-state` on a copy shows a file that would play untranslated.
 
 ## Where code lives
 
