@@ -59,6 +59,7 @@
     }
   ],
   "translate": true,
+  "originalScripts": true,
   "disabledFixes": ["battle-history.rb"],
   "language": "chinese",
   "imageBold": "never",
