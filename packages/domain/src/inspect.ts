@@ -230,6 +230,7 @@ export function inspectedCatalog(
     ...(previous?.imageBold && { imageBold: previous.imageBold }),
     ...(previous?.imageFont && { imageFont: previous.imageFont }),
     ...(previous?.unchangedImages?.length && { unchangedImages: previous.unchangedImages }),
+    ...(previous?.disabledFixes?.length && { disabledFixes: previous.disabledFixes }),
     ...(previous?.lastRun && { lastRun: previous.lastRun }),
     ...guessRuns({ entries: kept, glossary: previous?.glossary ?? [] }, previous?.runs),
   };

@@ -8,7 +8,13 @@ import { GameDataChanged } from "../mvmz/apply.ts";
 import { GameFileInvalid } from "../mvmz/gameFile.ts";
 import { scriptsFile } from "./gameFile.ts";
 import { xpFileOf } from "./location.ts";
-import { applyScriptTexts, type LiteralText, withTexts } from "./scripts.ts";
+import {
+  applyScriptTexts,
+  applyXpFixes,
+  type LiteralText,
+  type RubyScript,
+  withTexts,
+} from "./scripts.ts";
 
 const utf8 = new TextDecoder();
 // RGSS1 dumps strings as bytes, which load as such; Ruby 1.9 and later mark them as UTF-8, and
@@ -243,15 +249,33 @@ export function translatedByXpFile({ entries, originalScripts }: Catalog) {
 }
 
 /**
+ * The XP data file `file` as RPGTL plays and exports it: translated when `entries` are given, as
+ * `translatedByXpFile` lists them, and `Scripts.rxdata` with the fixes that are on either way.
+ * None when the game's own file serves.
+ */
+export const patchXpFile = (
+  file: string,
+  bytes: Uint8Array,
+  entries: ReadonlyArray<Entry> | undefined,
+  fixes: ReadonlyArray<RubyScript>,
+): Result.Result<Uint8Array | undefined, GameDataChanged | GameFileInvalid> =>
+  entries
+    ? applyXpTranslations(file, bytes, entries, fixes)
+    : file === scriptsFile && fixes.length > 0
+      ? applyXpFixes(file, bytes, fixes)
+      : Result.succeed(undefined);
+
+/**
  * The XP data file `file` (such as `Map001.rxdata`) with the entries' translations in it; none
  * when no entry of the file is translated, except for `Scripts.rxdata`, which always gets the
- * script that fits English. Messages are wrapped to fit the default message window. Fails when
- * the file no longer holds an entry's source.
+ * script that fits English, and `fixes`. Messages are wrapped to fit the default message window.
+ * Fails when the file no longer holds an entry's source.
  */
 export function applyXpTranslations(
   file: string,
   bytes: Uint8Array,
   entries: ReadonlyArray<Entry>,
+  fixes: ReadonlyArray<RubyScript> = [],
 ): Result.Result<Uint8Array | undefined, GameDataChanged | GameFileInvalid> {
   const translated = entries.flatMap((entry) => {
     const text = entryTranslation(entry);
@@ -267,7 +291,7 @@ export function applyXpTranslations(
       const literals = texts.get(script) ?? new Map<number, LiteralText>();
       texts.set(script, literals.set(literal, { source: entry.source, text }));
     }
-    return applyScriptTexts(file, bytes, texts);
+    return applyScriptTexts(file, bytes, texts, fixes);
   }
   if (!translated.length) return Result.succeed(undefined);
   return Result.try({

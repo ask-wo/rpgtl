@@ -146,6 +146,8 @@ export const Catalog = Schema.Struct({
    * and runs leave those strings out; absent means it plays with their English.
    */
   originalScripts: Schema.optionalKey(Schema.Boolean),
+  /** The file names of the XP game's fixes that are off; a fix not listed is on. */
+  disabledFixes: Schema.optionalKey(Schema.Array(Schema.String)),
   /** The language the user chose for the game's text; absent means the one its text looks like. */
   language: Schema.optionalKey(SourceLanguage),
   /** Whether the English in images is always or never bold; absent follows each original's weight. */

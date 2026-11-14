@@ -41,6 +41,7 @@ import * as Runs from "./translation/Runs.ts";
 import * as Http from "./http.ts";
 import * as SessionToken from "./auth/SessionToken.ts";
 import * as StateFolder from "./state/StateFolder.ts";
+import * as XpFixes from "./xpPatch/XpFixes.ts";
 import * as XpPatch from "./xpPatch/XpPatch.ts";
 
 const port = Config.schema(
@@ -54,7 +55,7 @@ const services = <E, R>(frontend: Layer.Layer<Frontend.Frontend, E, R>) =>
     Layer.provideMerge(
       Layer.mergeAll(Runs.layer, ImageReading.layer, Launches.layer, Play.layer, Playtime.layer),
     ),
-    Layer.provideMerge(XpImages.layer),
+    Layer.provideMerge(Layer.mergeAll(XpImages.layer, XpFixes.layer)),
     Layer.provideMerge(
       Layer.mergeAll(
         Catalogs.layer,

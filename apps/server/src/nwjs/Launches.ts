@@ -8,7 +8,9 @@ import {
 } from "@rpgtl/contracts";
 import { hookScript, type HookConfig } from "@rpgtl/game/scripts";
 import {
-  applyXpTranslations,
+  patchXpFile,
+  type RubyScript,
+  scriptsFile,
   entryTranslation,
   translatedByXpFile,
   xpImageFolder,
@@ -39,6 +41,7 @@ import * as StateFolder from "../state/StateFolder.ts";
 import { userFolder } from "../state/userFolders.ts";
 import { OnWindows } from "../OnWindows.ts";
 import * as XpImages from "../imageText/XpImages.ts";
+import * as XpFixes from "../xpPatch/XpFixes.ts";
 import { codeVersion } from "../runningCommit.ts";
 import * as Nwjs from "./Nwjs.ts";
 import * as Mkxpz from "../mkxpz/Mkxpz.ts";
@@ -164,6 +167,7 @@ const make = Effect.gen(function* () {
   const catalogs = yield* Catalogs.Catalogs;
   const gameFolder = yield* GameFolder.GameFolder;
   const xpImages = yield* XpImages.XpImages;
+  const xpFixes = yield* XpFixes.XpFixes;
   // Each start waits for NW.js's exit in a fiber of the layer's scope, which RPGTL exiting ends
   // without stopping NW.js.
   const scope = yield* Effect.scope;
@@ -285,11 +289,13 @@ const make = Effect.gen(function* () {
     name: string,
     bytes: Uint8Array,
     entries: ReadonlyArray<Entry> | undefined,
+    fixes: ReadonlyArray<RubyScript>,
     unpacked: boolean,
   ) => {
     const hash = createHash("sha256").update(writer).update(name).update(bytes);
     for (const entry of entries ?? [])
       hash.update(JSON.stringify([entry.id, entryTranslation(entry)]));
+    for (const fix of fixes) hash.update(JSON.stringify([fix.name, fix.code]));
     if (entries) hash.update("translated");
     if (unpacked) hash.update("unpacked");
     return hash.digest("hex");
@@ -343,6 +349,7 @@ const make = Effect.gen(function* () {
     yield* fs.remove(writtenFile, { force: true });
     const catalog = yield* catalogs.get(game.id);
     const translated = catalog.translate ? translatedByXpFile(catalog) : new Map();
+    const fixes = yield* xpFixes.active(catalog);
     const files = yield* gameFolder.xpData(game);
     // After Unpack, the game's loose data files may be a patch's English, which mkxp-z would read
     // for every file not written here.
@@ -350,19 +357,21 @@ const make = Effect.gen(function* () {
     const prints: Record<string, string> = {};
     for (const [name, bytes] of files) {
       const entries = translated.get(name);
-      const print = fingerprint(name, bytes, entries, unpacked);
+      const fileFixes = name === scriptsFile ? fixes : [];
+      const print = fingerprint(name, bytes, entries, fileFixes, unpacked);
       const file = path.join(data, name);
-      if (written[name] === print && (!entries || (yield* fs.exists(file)))) {
+      const changed = entries !== undefined || fileFixes.length > 0;
+      if (written[name] === print && (!changed || (yield* fs.exists(file)))) {
         prints[name] = print;
         continue;
       }
       yield* fs.remove(file, { force: true });
-      const patched = entries
-        ? applyXpTranslations(name, bytes, entries)
-        : Result.succeed(undefined);
+      const patched = patchXpFile(name, bytes, entries, fileFixes);
       if (Result.isFailure(patched)) {
         yield* Effect.logWarning(`${name} plays untranslated.`, patched.failure);
-        if (unpacked) yield* fs.writeFile(file, bytes);
+        const fixed = Result.getOrUndefined(patchXpFile(name, bytes, undefined, fileFixes));
+        const untranslated = fixed ?? (unpacked ? bytes : undefined);
+        if (untranslated) yield* fs.writeFile(file, untranslated);
         continue;
       }
       const content = patched.success ?? (unpacked ? bytes : undefined);

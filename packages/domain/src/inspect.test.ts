@@ -129,6 +129,7 @@ it("inspecting again keeps the saved translations and settings of the entries st
     translate: false,
     language: "korean",
     imageFont: "serif",
+    disabledFixes: ["copy.rb"],
     lastRun: "2026-10-30T10:00:00.000Z",
     runs: { "2026-10-30T10:00:00.000Z": codex, "2026-10-29T10:00:00.000Z": codex },
   };
@@ -150,6 +151,7 @@ it("inspecting again keeps the saved translations and settings of the entries st
     translate: false,
     language: "korean",
     imageFont: "serif",
+    disabledFixes: ["copy.rb"],
     lastRun: "2026-10-30T10:00:00.000Z",
     runs: { "2026-10-30T10:00:00.000Z": codex },
   });

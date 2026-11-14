@@ -719,8 +719,27 @@ export class SettingsApi extends HttpApiGroup.make("settings")
 export const XpArchive = Schema.Literals(["none", "packed", "unpacked"]);
 export type XpArchive = typeof XpArchive.Type;
 
+/** One of an XP game's fixes: its file name, its first comment line, and whether it is on. */
+export const XpFix = Schema.Struct({
+  name: Schema.String,
+  description: Schema.String,
+  on: Schema.Boolean,
+});
+export type XpFix = typeof XpFix.Type;
+
 export class XpPatchApi extends HttpApiGroup.make("xpPatch")
   .add(
+    HttpApiEndpoint.get("fixes", "/xp/fixes", {
+      query: GameId,
+      success: Schema.Array(XpFix),
+      error: [GameNotInspected, EngineUnsupported, StateFileFailed],
+    }),
+    /** Turns one of the XP game's fixes on or off, for Play and Export patch alike. */
+    HttpApiEndpoint.post("setFix", "/xp/fixes", {
+      payload: Schema.Struct({ id: Schema.String, name: Schema.String, on: Schema.Boolean }),
+      success: Schema.Array(XpFix),
+      error: [GameNotInspected, EngineUnsupported, GameBusy, StateFileFailed],
+    }),
     /**
      * A zip of the XP game's translated data files, the tiles of its translated images unless
      * `images` is `none`, and a readme, to copy over the game's own.

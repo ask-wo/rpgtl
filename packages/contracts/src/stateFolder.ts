@@ -33,5 +33,10 @@ export const gameFiles = (id: string) => {
     letteredImages: `${folder}/lettered`,
     /** The game's own loose files that Unpack wrote over, which Undo unpack puts back. */
     unpackedOver: `${folder}/unpacked-over`,
+    /**
+     * An XP game's fixes: Ruby files, each of which RPGTL adds to the game's scripts while it is
+     * on. The user writes them; RPGTL never does.
+     */
+    xpFixes: `${folder}/fixes`,
   };
 };

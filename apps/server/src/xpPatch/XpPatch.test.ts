@@ -15,6 +15,7 @@ import * as StateFolder from "../state/StateFolder.ts";
 import { folderWith } from "../testUtils/gameFolder.ts";
 import { noPrograms, opened, playServices, servicesWith } from "../testUtils/state.ts";
 import { translatedSign } from "../testUtils/xpImages.ts";
+import * as XpFixes from "./XpFixes.ts";
 import * as XpPatch from "./XpPatch.ts";
 
 const services = XpPatch.layer.pipe(
@@ -88,6 +89,40 @@ it.live("a patch holds the translated data files and a readme, whatever the swit
     ]);
     assert.include(strFromU8(files["Data/Map001.rxdata"] ?? new Uint8Array()), "Hello");
     assert.include(strFromU8(files["English patch.txt"] ?? new Uint8Array()), "Game.rgssad");
+  }).pipe(Effect.provide(services)),
+);
+
+it.live("a patch's scripts hold the fixes that are on, which its readme names", () =>
+  Effect.gen(function* () {
+    const patches = yield* XpPatch.XpPatch;
+    const xpFixes = yield* XpFixes.XpFixes;
+    const catalogs = yield* Catalogs.Catalogs;
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const game = yield* translated(archivedGame);
+    yield* catalogs.setOriginalScripts(game.id, true);
+    const { root } = yield* StateFolder.StateFolder;
+    const fixes = path.join(root, gameFiles(game.id).xpFixes);
+    yield* fs.makeDirectory(fixes, { recursive: true });
+    yield* fs.writeFileString(path.join(fixes, "copy.rb"), "\n# Copies the targets\nclass A; end");
+    yield* fs.writeFileString(path.join(fixes, "notes.txt"), "not a fix");
+    assert.deepStrictEqual(yield* xpFixes.list(game.id), [
+      { name: "copy.rb", description: "Copies the targets", on: true },
+    ]);
+
+    const files = unzipSync(yield* patches.zip(game.id, { images: false }));
+    assert.include(
+      strFromU8(files["Data/Scripts.rxdata"] ?? new Uint8Array()),
+      "RPGTL fix copy.rb",
+    );
+    assert.include(strFromU8(files["English patch.txt"] ?? new Uint8Array()), "- copy.rb");
+
+    assert.deepStrictEqual(yield* xpFixes.set(game.id, "copy.rb", false), [
+      { name: "copy.rb", description: "Copies the targets", on: false },
+    ]);
+    const without = unzipSync(yield* patches.zip(game.id, { images: false }));
+    assert.notProperty(without, "Data/Scripts.rxdata");
+    assert.notInclude(strFromU8(without["English patch.txt"] ?? new Uint8Array()), "copy.rb");
   }).pipe(Effect.provide(services)),
 );
 
