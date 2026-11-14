@@ -15,6 +15,7 @@ import { PlusIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { ButtonGroup } from "~/components/ui/button-group";
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { cn } from "cn";
@@ -33,6 +34,24 @@ const sections: ReadonlyArray<{ readonly kind: TermKind; readonly label: string 
   { kind: "name", label: "Names" },
   { kind: "word", label: "Words" },
 ];
+
+type Shown = "all" | "untranslated" | "last-run";
+
+const filters: ReadonlyArray<{
+  readonly show: Shown;
+  readonly label: string;
+  readonly does: string;
+}> = [
+  { show: "all", label: "All", does: "Every term" },
+  { show: "untranslated", label: "Untranslated", does: "Terms without English" },
+  { show: "last-run", label: "Last run", does: "Terms the last run translated" },
+];
+
+const isShown = (term: GlossaryTerm, show: Shown, lastRun: string | undefined) =>
+  show === "all" ||
+  (show === "untranslated"
+    ? !termTranslation(term).trim()
+    : lastRun !== undefined && term.translation.guess?.run === lastRun);
 
 /** The game's glossary, which every translation follows. */
 export function GlossaryPage() {
@@ -86,6 +105,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
 
   const [selected, setSelected] = useState<number>();
   const [filter, setFilter] = useState("");
+  const [show, setShow] = useState<Shown>("all");
   const [notice, setNotice] = useState<Notice>();
   const [clearing, setClearing] = useState(false);
 
@@ -179,11 +199,11 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
           </p>
         )}
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[22rem_1fr]">
+      <div className="grid min-h-0 flex-1 grid-cols-[24rem_1fr]">
         <div className="overflow-auto border-r text-sm" aria-label="Glossary terms" role="region">
-          <div className="sticky top-0 z-10 flex gap-2 border-b bg-background p-2">
+          <div className="sticky top-0 z-10 flex flex-wrap gap-2 border-b bg-background p-2">
             <Input
-              className="h-8"
+              className="h-8 min-w-0 flex-1"
               placeholder="Filter terms"
               aria-label="Filter terms"
               value={filter}
@@ -196,17 +216,40 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
                 const blank = glossary.findIndex((each) => !each.source.trim());
                 if (blank === -1) edit([...glossary, savedTerm(undefined, { source: "" })], 0);
                 setFilter("");
+                setShow("all");
                 setSelected(blank === -1 ? glossary.length : blank);
               }}
             >
               <PlusIcon />
               Add term
             </Button>
+            <ButtonGroup aria-label="Show" className="w-full">
+              {filters.map((each) => (
+                <Button
+                  key={each.show}
+                  variant={each.show === show ? "secondary" : "outline"}
+                  size="sm"
+                  className="flex-1 gap-1 px-2 text-xs"
+                  aria-pressed={each.show === show}
+                  title={each.does}
+                  onClick={() => setShow(each.show)}
+                >
+                  {each.label}
+                  <span className="text-muted-foreground tabular-nums">
+                    {number(
+                      glossary.filter((one) => isShown(one, each.show, saved.lastRun)).length,
+                    )}
+                  </span>
+                </Button>
+              ))}
+            </ButtonGroup>
           </div>
           <TermList
             glossary={glossary}
             order={order}
             filter={filter}
+            show={show}
+            lastRun={saved.lastRun}
             current={current}
             locked={locked}
             onSelect={setSelected}
@@ -293,6 +336,8 @@ function TermList({
   glossary,
   order,
   filter,
+  show,
+  lastRun,
   current,
   locked,
   onSelect,
@@ -301,6 +346,8 @@ function TermList({
   readonly glossary: ReadonlyArray<GlossaryTerm>;
   readonly order: ReadonlyArray<number>;
   readonly filter: string;
+  readonly show: Shown;
+  readonly lastRun: string | undefined;
   readonly current: number | undefined;
   readonly locked: boolean;
   readonly onSelect: (index: number) => void;
@@ -311,6 +358,7 @@ function TermList({
     const term = glossary[index];
     return (
       term !== undefined &&
+      isShown(term, show, lastRun) &&
       (!query || `${term.source} ${termTranslation(term)}`.toLowerCase().includes(query))
     );
   });
@@ -329,7 +377,7 @@ function TermList({
       if (terms.length === 0) return null;
       return (
         <section key={kind} aria-label={label}>
-          <h3 className="sticky top-12 bg-sidebar px-3 py-1.5 text-xs font-medium text-muted-foreground">
+          <h3 className="sticky top-[5.5rem] bg-sidebar px-3 py-1.5 text-xs font-medium text-muted-foreground">
             {label} · {number(terms.length)}
           </h3>
           {terms.map((index) => {

@@ -210,6 +210,28 @@ test("a cleared term offers its English from before, and using it saves that", a
   await expect.element(page.getByText(/Before clearing/)).not.toBeInTheDocument();
 });
 
+test("Untranslated and Last run show only the terms without English and those the last run gave", async () => {
+  const server = fakeServer();
+  server.catalog = {
+    ...saved,
+    lastRun: "r",
+    glossary: [
+      rain,
+      arlene,
+      { source: "米娅", translation: {}, kind: { guess: { value: "name" } } },
+    ],
+  };
+  showGlossary();
+  server.activity(idle);
+  const terms = page.getByRole("region", { name: "Glossary terms" });
+  await page.getByRole("button", { name: "Untranslated 1" }).click();
+  await expect.element(terms.getByText("米娅")).toBeVisible();
+  await expect.element(terms.getByText("阿琳")).not.toBeInTheDocument();
+  await page.getByRole("button", { name: "Last run 1" }).click();
+  await expect.element(terms.getByText("阿琳")).toBeVisible();
+  await expect.element(terms.getByText("米娅")).not.toBeInTheDocument();
+});
+
 test("a new term saves once it has an original", async () => {
   const server = fakeServer();
   showGlossary();
