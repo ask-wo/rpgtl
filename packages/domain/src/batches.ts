@@ -106,7 +106,8 @@ export const textGroups = (entries: ReadonlyArray<RunEntry>, batchSize: number) 
 
 /**
  * Speakers the glossary has no English for, from Show Text speakers, speaker tags and MZ speaker
- * names, as entries of their own that live only for the run.
+ * names, as entries of their own that live only for the run. A name that is only control codes,
+ * which the game fills in, can't be a term, so it isn't one.
  */
 export function speakerEntries(draft: CatalogDraft, prepared: ReadonlyArray<Prepared>) {
   const names = new Set<string>();
@@ -116,7 +117,8 @@ export function speakerEntries(draft: CatalogDraft, prepared: ReadonlyArray<Prep
       isSpeakerNameEntry(item.entry) ? item.entry.source : undefined,
     ]) {
       const trimmed = name?.trim();
-      if (trimmed && !draft.translatedTerm(trimmed)) names.add(trimmed);
+      if (trimmed && withoutCodes(trimmed).trim() && !draft.translatedTerm(trimmed))
+        names.add(trimmed);
     }
   return [...names].map((name): RunEntry => ({
     id: `speaker:${name}`,
