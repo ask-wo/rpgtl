@@ -1,7 +1,8 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import type { ImageResult } from "@rpgtl/contracts";
-import { erasedName, imageHash } from "@rpgtl/domain";
+import { erasedName, imageHash, writeArchive } from "@rpgtl/domain";
+import { rubyObject, xpFile } from "@rpgtl/domain/testUtils/xpGame";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -98,6 +99,47 @@ it.effect(
           pixelsOf(erased),
         );
       }
+    }).pipe(Effect.provide(services)),
+);
+
+it.effect(
+  "an XP game's image text goes through a translation file with each image's own file, from its archive",
+  () =>
+    Effect.gen(function* () {
+      const sign = greyPng(40, 40);
+      const erased = greyPng(40, 40, [[5, 5]]);
+      const root = yield* folderWith({
+        "Game.rgssad": writeArchive(
+          new Map([
+            ["Data/System.rxdata", xpFile(rubyObject("RPG::System", {}))],
+            ["Graphics/Titles/Cover.png", sign],
+            ["Graphics/Pictures/Note.jpg", new Uint8Array([255, 216, 255])],
+          ]),
+        ),
+      });
+      const game = yield* GameFolder.GameFolder.use((folder) => folder.inspect(root));
+      const files = {
+        results: {
+          version: 1 as const,
+          images: {
+            "Graphics/Titles/Cover": result("Graphics/Titles/Cover.png", sign, erasedName(erased)),
+            "Graphics/Pictures/Note": result("Graphics/Pictures/Note.jpg", sign),
+          },
+        },
+        erased: new Map([[erasedName(erased), erased]]),
+      };
+      const exported = Option.getOrThrow(yield* exportedImageText(game, files));
+      const imported = yield* importedImageFiles(game, exported, () => Effect.void);
+      const cover = imported.results.images["Graphics/Titles/Cover"];
+      assert.strictEqual(cover?.file, "Graphics/Titles/Cover.png");
+      assert.strictEqual(
+        imported.results.images["Graphics/Pictures/Note"]?.file,
+        "Graphics/Pictures/Note.jpg",
+      );
+      assert.deepStrictEqual(
+        pixelsOf(imported.erased.get(cover?.erased ?? "") ?? new Uint8Array()),
+        pixelsOf(erased),
+      );
     }).pipe(Effect.provide(services)),
 );
 

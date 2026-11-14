@@ -67,6 +67,24 @@ const gameEncoding = (game: FolderGame) => {
 };
 
 /**
+ * The file of each of the game's images by its path: the path with the game's image extension,
+ * or for an XP game, whose images have no single extension, the file it has.
+ */
+const imageFiles = Effect.fnUntraced(function* (game: FolderGame) {
+  const { extension } = yield* gameEncoding(game);
+  if (game.engine !== "XP") return (image: string) => `${image}${extension}`;
+  const files = yield* GameFolder.GameFolder.use((folder) => folder.textImages(game)).pipe(
+    Effect.map(({ images }) => new Map(images.map(({ image, file }) => [image, file]))),
+    Effect.catchTags({
+      GameFileMissingError: () => Effect.succeed(new Map<string, string>()),
+      GameFileReadError: () => Effect.succeed(new Map<string, string>()),
+      GameFileInvalid: () => Effect.succeed(new Map<string, string>()),
+    }),
+  );
+  return (image: string) => files.get(image) ?? `${image}${extension}`;
+});
+
+/**
  * The game's image text as a translation file carries it: each erased background as the patches
  * that differ from the game's image. An erased background whose image the game no longer has as
  * it was read can't be put together again, so its result is left out; none when no result is left.
@@ -110,8 +128,8 @@ export const exportedImageText = Effect.fn("exportedImageText")(function* (
 });
 
 /**
- * A translation file's image text put together again: each image's file is its path with the
- * game's image extension, as the engine loads it, and each erased background is the game's image
+ * A translation file's image text put together again: each image's file is the game's file of its
+ * path, as the engine loads it, and each erased background is the game's image
  * with the file's patches drawn over it. A result whose image this game doesn't have as it was
  * read is left out when it has an erased background. Fails when a patch isn't a PNG or reaches
  * outside its image.
@@ -121,7 +139,8 @@ export const importedImageFiles = Effect.fn("importedImageFiles")(function* (
   imported: ExportedImageText,
   progress: (done: number) => Effect.Effect<void>,
 ) {
-  const { extension, key } = yield* gameEncoding(game);
+  const { key } = yield* gameEncoding(game);
+  const fileOf = yield* imageFiles(game);
   const damaged = new TranslationFileInvalid({ problem: "images" });
   const images: Record<string, ImageResult> = {};
   const erased = new Map<string, Uint8Array>();
@@ -129,7 +148,7 @@ export const importedImageFiles = Effect.fn("importedImageFiles")(function* (
     imported.images,
   ).entries()) {
     yield* progress(done);
-    const result = { ...exported, file: `${image}${extension}` };
+    const result = { ...exported, file: fileOf(image) };
     if (!patched) {
       images[image] = result;
       continue;
@@ -163,9 +182,9 @@ export const importedImageResults = Effect.fn("importedImageResults")(function* 
   game: FolderGame,
   imported: ExportedImageText,
 ) {
-  const { extension } = yield* gameEncoding(game);
+  const fileOf = yield* imageFiles(game);
   const images: Record<string, ImageResult> = {};
   for (const [image, { erased: _, ...exported }] of Object.entries(imported.images))
-    images[image] = { ...exported, file: `${image}${extension}` };
+    images[image] = { ...exported, file: fileOf(image) };
   return readResults(images, imported.runs);
 });
