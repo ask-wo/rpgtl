@@ -226,6 +226,7 @@ export function inspectedCatalog(
     entries: kept,
     glossary: previous?.glossary ?? [],
     translate: previous?.translate ?? false,
+    ...(previous?.originalScripts && { originalScripts: true }),
     ...(previous?.language && { language: previous.language }),
     ...(previous?.imageBold && { imageBold: previous.imageBold }),
     ...(previous?.imageFont && { imageFont: previous.imageFont }),
