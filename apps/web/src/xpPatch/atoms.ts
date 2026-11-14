@@ -10,6 +10,8 @@ export const unpack = Rpgtl.mutation("xpPatch", "unpack");
 export const pack = Rpgtl.mutation("xpPatch", "pack");
 
 /** The zip of the game's translated data files that Export patch downloads. */
-export const patchFile = Rpgtl.runtime.fn((id: string) =>
-  Rpgtl.use((client) => client.xpPatch.patch({ query: { id } })),
+export const patchFile = Rpgtl.runtime.fn(({ id, images }: { id: string; images: boolean }) =>
+  Rpgtl.use((client) =>
+    client.xpPatch.patch({ query: { id, ...(!images && { images: "none" as const }) } }),
+  ),
 );

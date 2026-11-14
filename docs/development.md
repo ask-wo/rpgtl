@@ -23,7 +23,7 @@ The server binds to `127.0.0.1`, checks the `Host` header, and requires a per-st
 
 ## Translation files
 
-**Export** writes the catalog as a translation file, and **Import…** reads one back. Each entry and glossary term keeps its **guess** and **user value** (see [glossary.md](glossary.md)), and the file lists the translation and image reading runs whose guesses are still in use.
+**Export** writes the catalog as a translation file, and **Import…** reads one back. Each entry and glossary term keeps its **guess** and **user value** (see [glossary.md](glossary.md)), and the file lists the translation and image reading runs whose guesses are still in use. With **Include images** unticked, it carries the English of the image text but not what reading the images found or the erased tiles, and Export patch leaves out an XP game's tiles; some games are sold, and a player may not want to pass on anything made from their art. The browser keeps the choice.
 
 Import matches a file entry to the game's entry of the same id, which comes from the entry's file, place and source text. An entry whose id the game doesn't have gives its English to the game's lines of the same source text that the file doesn't name, unless the file gives that text different English; the rest are skipped and counted in the import preview. Reading a game's folder again, and replacing a game with another version of it, carry English over the same way. Entries the file leaves out keep their translation, and the file's glossary replaces the saved one.
 

@@ -19,6 +19,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/com
 import { Spinner } from "~/components/ui/spinner";
 import { failureMessage } from "../app/failure.ts";
 import { useGame } from "../games/GameContext.ts";
+import { imagesInExports } from "../images/atoms.ts";
+import { IncludeImages } from "../images/IncludeImages.tsx";
 import { archiveKey, pack, patchFile, unpack, xpArchive } from "./atoms.ts";
 
 const save = (name: string, bytes: Uint8Array<ArrayBuffer>) => {
@@ -57,6 +59,7 @@ export function XpPatchCard() {
   const unpackIt = useAtomSet(unpack, { mode: "promiseExit" });
   const packIt = useAtomSet(pack, { mode: "promiseExit" });
   const [working, setWorking] = useState<Action>();
+  const withImages = useAtomValue(imagesInExports);
   const [asking, setAsking] = useState<"unpack" | "pack">();
   const [result, setResult] = useState<{ readonly text: string; readonly failed: boolean }>();
 
@@ -80,7 +83,7 @@ export function XpPatchCard() {
     run(
       "export",
       async () => {
-        const exit = await download(game.id);
+        const exit = await download({ id: game.id, images: withImages });
         if (Exit.isSuccess(exit)) save(`${game.title} patch.zip`, new Uint8Array(exit.value));
         return exit;
       },
@@ -116,6 +119,7 @@ export function XpPatchCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
+        <IncludeImages gameId={game.id} />
         <ButtonGroup>
           <Button variant="outline" disabled={working !== undefined} onClick={exportPatch}>
             {label("export", "Export patch", "Exporting…")}

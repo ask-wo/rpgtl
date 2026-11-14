@@ -81,11 +81,12 @@ export class XpPatch extends Context.Service<
   {
     /**
      * A zip of the game's data files with their saved English applied, whatever the game's
-     * translation switch says, the tiles that draw English into its images, and a readme of how
-     * to use it.
+     * translation switch says, the tiles that draw English into its images when `images` is on,
+     * and a readme of how to use it.
      */
     readonly zip: (
       id: string,
+      options: { readonly images: boolean },
     ) => Effect.Effect<
       Uint8Array,
       ArchiveErrors | GameFileInvalid | GameDataChanged | StateFolder.StateFileError
@@ -124,7 +125,10 @@ const make = Effect.gen(function* () {
     return game;
   });
 
-  const zip = Effect.fn("XpPatch.zip")(function* (id: string) {
+  const zip = Effect.fn("XpPatch.zip")(function* (
+    id: string,
+    options: { readonly images: boolean },
+  ) {
     const game = yield* xpGame(id);
     const catalog = yield* catalogs.get(id);
     const translated = translatedByXpFile(catalog);
@@ -136,7 +140,7 @@ const make = Effect.gen(function* () {
       if (Result.isFailure(patched)) return yield* patched.failure;
       if (patched.success) files.set(name, patched.success);
     }
-    const images = catalog.originalScripts ? [] : yield* xpImages.drawn(game);
+    const images = catalog.originalScripts || !options.images ? [] : yield* xpImages.drawn(game);
     const graphics = new Map(images.map((image) => [`${image.tiles}.png`, image.bytes]));
     if (images.length > 0) graphics.set(xpImageTableFile, xpImageTable(images));
     return xpPatchZip(game.title, files, graphics);

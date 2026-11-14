@@ -63,13 +63,15 @@ it.live("a patch holds the tiles of the translated images and their table, not w
   Effect.gen(function* () {
     const patches = yield* XpPatch.XpPatch;
     const game = yield* translatedSign("Exit");
-    const files = Object.keys(unzipSync(yield* patches.zip(game.id)));
+    const files = Object.keys(unzipSync(yield* patches.zip(game.id, { images: true })));
     assert.include(files, xpImageTableFile);
     assert.lengthOf(
       files.filter((file) => /^Graphics\/RPGTL\/[0-9a-f]{64}\.png$/.test(file)),
       1,
     );
     assert.notInclude(files, "Graphics/Pictures/Sign.png");
+    const without = Object.keys(unzipSync(yield* patches.zip(game.id, { images: false })));
+    assert.isEmpty(without.filter((file) => file.startsWith("Graphics/")));
   }).pipe(Effect.provide(services)),
 );
 
@@ -77,7 +79,7 @@ it.live("a patch holds the translated data files and a readme, whatever the swit
   Effect.gen(function* () {
     const patches = yield* XpPatch.XpPatch;
     const game = yield* translated(archivedGame);
-    const files = unzipSync(yield* patches.zip(game.id));
+    const files = unzipSync(yield* patches.zip(game.id, { images: true }));
     assert.sameMembers(Object.keys(files), [
       "English patch.txt",
       "Data/",

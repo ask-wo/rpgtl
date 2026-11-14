@@ -63,6 +63,7 @@ export const serveApi = (server: (request: Request) => Promise<Response> | Respo
 const mounted: Array<() => void> = [];
 afterEach(() => {
   for (const unmount of mounted.splice(0)) act(unmount);
+  localStorage.clear();
 });
 
 /** Renders `element` into `parent` with a fresh atom registry, unmounted after the test. */

@@ -18,6 +18,8 @@ import { ButtonGroup } from "~/components/ui/button-group";
 import { Spinner } from "~/components/ui/spinner";
 import { failureMessage } from "../app/failure.ts";
 import { activity } from "../games/activity.ts";
+import { imagesInExports } from "../images/atoms.ts";
+import { IncludeImages } from "../images/IncludeImages.tsx";
 import {
   catalogKey,
   clearAll,
@@ -106,6 +108,7 @@ function GameTranslationActions({ gameId, locked }: TranslationActionsProps) {
   )?.importing;
   const picker = useRef<HTMLInputElement>(null);
   const [working, setWorking] = useState<Action>();
+  const withImages = useAtomValue(imagesInExports);
   const [asking, setAsking] = useState(false);
   const [pending, setPending] = useState<{
     readonly name: string;
@@ -141,7 +144,7 @@ function GameTranslationActions({ gameId, locked }: TranslationActionsProps) {
     run(
       "export",
       async () => {
-        const exit = await exportFile(gameId);
+        const exit = await exportFile({ id: gameId, images: withImages });
         if (Exit.isSuccess(exit)) download(`${gameId}-translations.json`, exit.value);
         return exit;
       },
@@ -198,6 +201,7 @@ function GameTranslationActions({ gameId, locked }: TranslationActionsProps) {
     );
   return (
     <div className="flex flex-col gap-2">
+      <IncludeImages gameId={gameId} />
       <ButtonGroup>
         <Button variant="outline" disabled={busy} onClick={exportTranslations}>
           {label("export", "Export", "Exporting…")}
