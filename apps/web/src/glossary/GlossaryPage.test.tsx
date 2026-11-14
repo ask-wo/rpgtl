@@ -268,6 +268,29 @@ test("Changed shows only the terms whose English differs from before clearing, w
   await expect.element(page.getByText(/Before:/)).toBeVisible();
 });
 
+test("Flagged shows the terms whose English leaves out a name inside them, and names it", async () => {
+  const server = fakeServer();
+  server.catalog = {
+    ...saved,
+    glossary: [
+      rain,
+      arlene,
+      {
+        source: "阿琳之歌",
+        translation: { user: "Irene's Song" },
+        kind: { guess: { value: "name" } },
+      },
+    ],
+  };
+  showGlossary();
+  server.activity(idle);
+  const terms = page.getByRole("region", { name: "Glossary terms" });
+  await page.getByRole("button", { name: "Flagged 1" }).click();
+  await expect.element(terms.getByText("雨")).not.toBeInTheDocument();
+  await terms.getByText("阿琳之歌").click();
+  await expect.element(page.getByText(/inside it: 阿琳 → Arlene/)).toBeVisible();
+});
+
 test("Custom shows the terms you set, and removing the glossary can keep them", async () => {
   const server = fakeServer();
   showGlossary();

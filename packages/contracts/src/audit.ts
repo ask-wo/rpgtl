@@ -78,6 +78,15 @@ export const AuditReport = Schema.Struct({
       of: Schema.Int,
     }),
   ),
+  /** Glossary terms whose English leaves out the English of a name inside them. */
+  terms: Schema.Array(
+    Schema.Struct({
+      source: Schema.String,
+      english: Schema.String,
+      /** Each such name, as `source → English`. */
+      missing: Schema.Array(Schema.String),
+    }),
+  ),
   /** Sources, with their speaker, that got different translations. */
   differing: Schema.Struct({
     count: Schema.Int,

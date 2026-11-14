@@ -1,4 +1,4 @@
-import { sourceLeft, translationChecks } from "./index.ts";
+import { glossaryFindings, sourceLeft, translationChecks } from "./index.ts";
 import { assert, it } from "@effect/vitest";
 import type { GlossaryTerm } from "@rpgtl/contracts";
 
@@ -114,4 +114,31 @@ it("An XP name's tags may keep the source's text, which an MV name's brackets ma
 it("The ミ of a shooting star ★ミ may stay", () => {
   assert.isFalse(sourceLeft("流れ星キック★ミ", "Shooting Star Kick★ミ"));
   assert.isTrue(sourceLeft("流れ星キックミ", "Shooting Star Kickミ"));
+});
+
+const name = (source: string, english: string): GlossaryTerm => ({
+  source,
+  translation: { user: english },
+  kind: { guess: { value: "name" } },
+});
+
+it("a term whose English leaves out a name inside it is flagged, though a character may go by part of their name", () => {
+  const found = glossaryFindings([
+    ...glossary,
+    name("卡洛", "Carlo"),
+    name("卡洛湖", "Lake Carlo"),
+    name("卡洛之雨", "Karlo's Rain"),
+    name("卡洛湖西", "West Carlo Lake"),
+    name("卡洛湖岸", "Shore of Lake Carlo"),
+    name("林若溪的伞", "Ruoxi's Umbrella"),
+    name("卡洛湖$q", "Lake Carlo$q"),
+    name("冰封的$q卡洛湖$q", "Glacial$qLake Carlo$q"),
+    name("ベガ", "Vega"),
+    name("オベガ", "Overga"),
+    name("ベガラ", "Vegara"),
+  ]);
+  assert.deepStrictEqual(Object.fromEntries(found), {
+    卡洛之雨: ["卡洛 → Carlo"],
+    卡洛湖西: ["卡洛湖 → Lake Carlo"],
+  });
 });

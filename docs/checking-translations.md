@@ -26,6 +26,7 @@ Every tool that finds problems in a game's translations goes through `pnpm run a
 | A number added on a last line | fixed while checking; in existing text: check `number added on a last line` |
 | A glossary word capitalised mid-sentence ("the Teacher") | per term in the audit's first list, where a name sorted as a word shows up too |
 | A glossary character or name left out or swapped for another | check `glossary name missing` |
+| A name spelled one way in its own term and another in a term that contains it (an item named after a place) | `glossaryFindings` in `packages/domain/src/checks.ts`: the Glossary page's **Flagged** filter and the audit's list of glossary terms. A character may go by part of their name; a katakana term inside a longer katakana word doesn't count |
 | He for 她, or she for 他 | check `pronoun unlike the source` (only where the source has one of the two) |
 | The same text translated differently | audit: `Sources with different translations` |
 | Text no entry covers | `pnpm run audit --coverage` |

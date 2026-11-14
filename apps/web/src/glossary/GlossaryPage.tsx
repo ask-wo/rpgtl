@@ -2,6 +2,7 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { Catalog, GlossaryTerm, TermKind } from "@rpgtl/contracts";
 import {
   entriesToClear,
+  glossaryFindings,
   glossaryOrder,
   savedTerm,
   withRenamesFollowed,
@@ -13,7 +14,7 @@ import {
 import * as Exit from "effect/Exit";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { PlusIcon, XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -37,7 +38,7 @@ const sections: ReadonlyArray<{ readonly kind: TermKind; readonly label: string 
   { kind: "word", label: "Words" },
 ];
 
-type Shown = "all" | "untranslated" | "last-run" | "changed" | "custom";
+type Shown = "all" | "untranslated" | "last-run" | "changed" | "flagged" | "custom";
 
 const filters: ReadonlyArray<{
   readonly show: Shown;
@@ -48,6 +49,7 @@ const filters: ReadonlyArray<{
   { show: "untranslated", label: "Untranslated", does: "Terms without English" },
   { show: "last-run", label: "Last run", does: "Terms the last run translated" },
   { show: "changed", label: "Changed", does: "Terms whose English differs from before clearing" },
+  { show: "flagged", label: "Flagged", does: "Terms whose English leaves out a name inside them" },
   { show: "custom", label: "Custom", does: "Terms whose English, kind or pronoun you set" },
 ];
 
@@ -55,7 +57,14 @@ const filters: ReadonlyArray<{
 const isCustom = ({ translation, kind, pronoun }: GlossaryTerm) =>
   translation.user !== undefined || kind.user !== undefined || pronoun?.user !== undefined;
 
-function isShown(term: GlossaryTerm, show: Shown, lastRun: string | undefined) {
+/** What the filters need besides the term. */
+interface Seen {
+  readonly lastRun: string | undefined;
+  /** The saved glossary's findings, by term source. */
+  readonly flagged: ReadonlyMap<string, ReadonlyArray<string>>;
+}
+
+function isShown(term: GlossaryTerm, show: Shown, { lastRun, flagged }: Seen) {
   const english = termTranslation(term).trim();
   switch (show) {
     case "all":
@@ -66,6 +75,8 @@ function isShown(term: GlossaryTerm, show: Shown, lastRun: string | undefined) {
       return lastRun !== undefined && term.translation.guess?.run === lastRun;
     case "changed":
       return !!english && term.previous !== undefined && term.previous !== english;
+    case "flagged":
+      return flagged.has(term.source);
     case "custom":
       return isCustom(term);
   }
@@ -110,6 +121,9 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
     }
   }
   const glossary = (!locked && draft) || saved.glossary;
+  // A large game's glossary takes a tenth of a second to check, too long to do on every key.
+  const flagged = useMemo(() => glossaryFindings(saved.glossary), [saved.glossary]);
+  const seen: Seen = { lastRun: saved.lastRun, flagged };
   useEffect(() => {
     if (locked) edits.discard("glossary");
   }, [edits, locked]);
@@ -272,9 +286,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
                 >
                   {each.label}
                   <span className="text-muted-foreground tabular-nums">
-                    {number(
-                      glossary.filter((one) => isShown(one, each.show, saved.lastRun)).length,
-                    )}
+                    {number(glossary.filter((one) => isShown(one, each.show, seen)).length)}
                   </span>
                 </Button>
               ))}
@@ -286,7 +298,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
               order={order}
               filter={filter}
               show={show}
-              lastRun={saved.lastRun}
+              seen={seen}
               current={current}
               locked={locked}
               onSelect={setSelected}
@@ -298,6 +310,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
           {term !== undefined && current !== undefined && (
             <TermDetail
               lastRun={saved.lastRun}
+              missing={flagged.get(term.source) ?? []}
               key={current}
               term={term}
               glossary={glossary}
@@ -390,7 +403,7 @@ function TermList({
   order,
   filter,
   show,
-  lastRun,
+  seen,
   current,
   locked,
   onSelect,
@@ -400,7 +413,7 @@ function TermList({
   readonly order: ReadonlyArray<number>;
   readonly filter: string;
   readonly show: Shown;
-  readonly lastRun: string | undefined;
+  readonly seen: Seen;
   readonly current: number | undefined;
   readonly locked: boolean;
   readonly onSelect: (index: number) => void;
@@ -411,7 +424,7 @@ function TermList({
     const term = glossary[index];
     return (
       term !== undefined &&
-      isShown(term, show, lastRun) &&
+      isShown(term, show, seen) &&
       (!query || `${term.source} ${termTranslation(term)}`.toLowerCase().includes(query))
     );
   });

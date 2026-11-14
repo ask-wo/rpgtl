@@ -171,16 +171,13 @@ const nameParts = (english: string) => [
   ...english.split(/[\s·・.-]+/).filter((part) => part.length > 1),
 ];
 // A name such as "Transform" may also come back as "transforming".
+const mentionsWhole = (text: string, english: string) =>
+  new RegExp(`(?<![\\p{L}\\p{N}])${RegExp.escape(english)}`, "iu").test(text);
 const mentions = (text: string, english: string) =>
-  nameParts(english).some((part) =>
-    new RegExp(`(?<![\\p{L}\\p{N}])${RegExp.escape(part)}`, "iu").test(text),
-  );
+  nameParts(english).some((part) => mentionsWhole(text, part));
 
-export function translationChecks(
-  glossary: ReadonlyArray<GlossaryTerm>,
-  language: SourceLanguage,
-  engine: Engine,
-) {
+/** The translated terms, longest first, and the names among them that the checks look for. */
+function checkedTerms(glossary: ReadonlyArray<GlossaryTerm>) {
   const terms = glossary
     .filter((term) => term.source.trim() && termTranslation(term).trim())
     .toSorted((a, b) => b.source.length - a.source.length);
@@ -191,8 +188,63 @@ export function translationChecks(
       length(term.source.trim()) > 1 &&
       !sourceScript.test(termTranslation(term)),
   );
-  const nearTerms = termLookup(terms);
-  const isName = new Set(names);
+  return { terms, isName: new Set(names), nearTerms: termLookup(terms) };
+}
+
+const katakana = /[\p{Script=Katakana}ー]/u;
+// Katakana words have no spaces between them, so a katakana term with a katakana letter right
+// before or after it is part of a longer word, as ベガ is in オベガ.
+const isWord = (text: string, term: string) => {
+  for (let at = text.indexOf(term); at >= 0; at = text.indexOf(term, at + 1))
+    if (
+      !(katakana.test(term.charAt(0)) && katakana.test(text.charAt(at - 1))) &&
+      !(katakana.test(term.at(-1) ?? "") && katakana.test(text.charAt(at + term.length)))
+    )
+      return true;
+  return false;
+};
+
+/**
+ * The names inside each glossary term whose English the term's own English lacks, as
+ * `source → English`, by the term's source.
+ */
+export function glossaryFindings(
+  glossary: ReadonlyArray<GlossaryTerm>,
+): ReadonlyMap<string, ReadonlyArray<string>> {
+  const { terms, isName, nearTerms } = checkedTerms(glossary);
+  const found = new Map<string, ReadonlyArray<string>>();
+  for (const term of terms) {
+    // A game's own codes in a name, such as `$q`, stay in its English and would hide where a word
+    // starts; the source has them too.
+    const codes = (term.source.match(/[!-~]+/g) ?? []).filter((run) => /[^A-Za-z0-9]/.test(run));
+    const blanked = (text: string) =>
+      codes.reduce((rest, code) => rest.replaceAll(code, " "), text);
+    const english = blanked(termTranslation(term));
+    const missing = termsIn(
+      term.source,
+      nearTerms(term.source).filter((other) => other.source !== term.source),
+    )
+      .filter((inside) => isName.has(inside) && isWord(term.source, inside.source))
+      // Only a character may go by a part of their name: "Karlo Lake" doesn't have
+      // "Lake Carlo" for its word "Lake".
+      .filter((inside) => {
+        const name = blanked(termTranslation(inside)).trim();
+        return termKind(inside) === "character"
+          ? !mentions(english, name)
+          : !mentionsWhole(english, name);
+      })
+      .map((inside) => `${inside.source} → ${termTranslation(inside).trim()}`);
+    if (missing.length) found.set(term.source, missing);
+  }
+  return found;
+}
+
+export function translationChecks(
+  glossary: ReadonlyArray<GlossaryTerm>,
+  language: SourceLanguage,
+  engine: Engine,
+) {
+  const { isName, nearTerms } = checkedTerms(glossary);
   return (entry: Pick<Entry, "source"> & Placed, written: string): Finding[] => {
     if (!written) return [];
     const tags = keepsTags(engine, entry);

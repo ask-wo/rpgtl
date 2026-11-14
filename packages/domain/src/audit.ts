@@ -16,7 +16,12 @@ import {
   type RunTotals,
 } from "@rpgtl/contracts";
 import { guessedValues } from "./catalog.ts";
-import { capitalisedMidSentence, capitalisedWord, translationChecks } from "./checks.ts";
+import {
+  capitalisedMidSentence,
+  capitalisedWord,
+  glossaryFindings,
+  translationChecks,
+} from "./checks.ts";
 import { isNameEntry, isSpeakerNameEntry } from "./nameEntries.ts";
 import { gameLanguage } from "./language.ts";
 import { reuseKeys, showTextSpeakers } from "./reuse.ts";
@@ -212,8 +217,13 @@ export function audit(
         });
     }
 
+  const inGlossary = glossaryFindings(catalog.glossary);
   return {
     capitalised,
+    terms: catalog.glossary.flatMap((term) => {
+      const missing = inGlossary.get(term.source);
+      return missing ? [{ source: term.source, english: termTranslation(term), missing }] : [];
+    }),
     differing: differing(catalog.entries),
     findings,
     ...(log && {
