@@ -233,6 +233,25 @@ it.effect("adding terms keeps the glossary's own, and needs the game free", () =
   }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game]) }))),
 );
 
+it.effect("clearing entries backs up first and clears only English a run gave", () =>
+  Effect.gen(function* () {
+    const catalogs = yield* Catalogs.Catalogs;
+    const guessed: Entry = { ...hello, id: "b", translation: { guess: { value: "Hi" } } };
+    const untranslated: Entry = { ...hello, id: "c", translation: {} };
+    yield* catalogs.save({ ...catalog, entries: [hello, guessed, untranslated] });
+    const ids = ["a", "b", "c"];
+    assert.strictEqual(yield* catalogs.clearEntries(game.id, ids), 1);
+    assert.strictEqual((yield* backups).length, 1);
+    assert.deepStrictEqual((yield* catalogs.get(game.id)).entries, [
+      hello,
+      { ...guessed, translation: {}, previous: "Hi" },
+      untranslated,
+    ]);
+    assert.strictEqual(yield* catalogs.clearEntries(game.id, ids), 0);
+    assert.strictEqual((yield* backups).length, 1);
+  }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game]) }))),
+);
+
 it.effect(
   "the edited glossary saves without a backup, and clearing mismatches backs up first",
   () =>

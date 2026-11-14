@@ -62,7 +62,8 @@ const saved: Catalog = {
 
 /**
  * RPGTL's server with the game's catalog, its checks and its activity, which the test sends;
- * `saves` lists the entries the page saved. An English with "\\" in it is refused.
+ * `saves` lists the entries the page saved and `cleared` the entries it cleared. An English with
+ * "\\" in it is refused.
  */
 const fakeServer = () => {
   const stream = events();
@@ -71,6 +72,7 @@ const fakeServer = () => {
     findings: { "4": [{ check: "length unlike the source" }] } as Findings,
     activity: (now: GameActivity) => stream.send(now),
     saves: [] as Array<ReadonlyArray<{ id: string; translation?: string; keepOriginal?: boolean }>>,
+    cleared: [] as Array<ReadonlyArray<string>>,
     feed: catalogFeed(
       (): Catalog => server.catalog,
       (): Findings => ({
@@ -89,6 +91,11 @@ const fakeServer = () => {
         return stream.response();
       case "/api/catalog/changes":
         return server.feed.response();
+      case "/api/entries/clear": {
+        const { ids } = await request.json();
+        server.cleared.push(ids);
+        return Response.json({ cleared: ids.length });
+      }
       case "/api/entries": {
         const { entries } = await request.json();
         server.saves.push(entries);
@@ -290,6 +297,18 @@ test("Failed, Last run and Flagged show what a run or a check left on the entrie
       entries().getByText("Check: length unlike the source. Editing the English clears this."),
     )
     .toBeVisible();
+});
+
+test("Clear flagged clears the English runs gave the flagged entries, not English the user typed", async () => {
+  const server = fakeServer();
+  server.findings = { ...server.findings, "3": [{ check: "length unlike the source" }] };
+  showText({ show: "flagged" });
+  server.activity(idle);
+  await page.getByRole("button", { name: "Clear flagged" }).click();
+  await expect
+    .element(page.getByRole("status"))
+    .toHaveTextContent("Cleared 1 translation. Translate translates it again.");
+  expect(server.cleared).toEqual([["3"]]);
 });
 
 test("Changed shows only the entries whose English differs from before clearing, with both", async () => {

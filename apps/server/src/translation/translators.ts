@@ -46,6 +46,7 @@ const agentBatches = {
   packsScenes: true,
   capsAnswers: false,
   deterministic: true,
+  marksRefusals: true,
 } as const;
 
 /** Claude and Codex need no GPU, and each request mostly waits for its CLI to start. */
@@ -318,6 +319,7 @@ const ollama = Effect.fn("translators.ollama")(function* (
     capsAnswers: true,
     // Retries sample with Qwen's settings.
     deterministic: false,
+    marksRefusals: false,
   } as const;
   const { expertLayersInRam } = settings;
   if (expertLayersInRam === undefined)

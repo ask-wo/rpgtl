@@ -27,7 +27,13 @@ it("Temperature 0 stays while the model thinks; Qwen's settings follow whether i
 it("A Korean game's prompts are written for Korean, with no Chinese examples or rules", () => {
   const han = /\p{Script=Han}/u;
   const prompts = [
-    translationSystemPrompt({ language: "korean", names: true, scenes: true, following: true }),
+    translationSystemPrompt({
+      language: "korean",
+      names: true,
+      scenes: true,
+      following: true,
+      refusals: true,
+    }),
     kindQuestion([{ term: "김민지", usedAs: [], lines: [] }], "korean").system,
     pronounQuestion({ source: "김민지" }, [], "korean").system,
   ];
@@ -68,10 +74,17 @@ it("Every request for a Japanese game asks to translate katakana that spells a J
     names: false,
     scenes: false,
     following: false,
+    refusals: false,
   });
   assert.include(textPass, "Katakana");
   assert.notInclude(
-    translationSystemPrompt({ language: "chinese", names: true, scenes: false, following: false }),
+    translationSystemPrompt({
+      language: "chinese",
+      names: true,
+      scenes: false,
+      following: false,
+      refusals: false,
+    }),
     "Katakana",
   );
 });

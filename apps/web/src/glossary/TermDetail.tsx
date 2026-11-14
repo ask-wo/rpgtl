@@ -97,6 +97,7 @@ export function TermDetail({
   glossary,
   entries,
   lastRun,
+  missing,
   locked,
   onChange,
   onDone,
@@ -107,6 +108,8 @@ export function TermDetail({
   readonly glossary: ReadonlyArray<GlossaryTerm>;
   readonly entries: ReadonlyArray<Entry>;
   readonly lastRun: string | undefined;
+  /** The names inside the term whose English its English leaves out, as `source → English`. */
+  readonly missing: ReadonlyArray<string>;
   readonly locked: boolean;
   /** Saves after `delay` ms, so typing saves once it pauses. */
   readonly onChange: (term: GlossaryTerm, delay: number) => void;
@@ -205,6 +208,11 @@ export function TermDetail({
                 onChange({ ...term, translation: withUser(term.translation, previous) }, 0)
               }
             />
+          )}
+          {missing.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Leaves out the English of a name inside it: {missing.join(", ")}
+            </p>
           )}
         </Field>
         <div className="flex flex-col gap-1">

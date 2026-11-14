@@ -192,6 +192,17 @@ const CatalogsHandlers = HttpApiBuilder.group(
           .pipe(Effect.catchTags(writeFailed));
         return { cleared };
       }),
+      clearTermGuesses: Effect.fn("catalogs.clearTermGuesses")(function* ({ payload }) {
+        return yield* catalogs
+          .clearTermGuesses(payload.id, payload.sources)
+          .pipe(Effect.catchTags(writeFailed));
+      }),
+      clearEntries: Effect.fn("catalogs.clearEntries")(function* ({ payload }) {
+        const cleared = yield* catalogs
+          .clearEntries(payload.id, payload.ids)
+          .pipe(Effect.catchTags(writeFailed));
+        return { cleared };
+      }),
       restore: Effect.fn("catalogs.restore")(function* ({ payload }) {
         return yield* catalogs.restore(payload.id).pipe(Effect.catchTags(writeFailed));
       }),

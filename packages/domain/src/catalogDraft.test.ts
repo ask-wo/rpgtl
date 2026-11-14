@@ -292,3 +292,17 @@ it("a first line that is only a glossary name is the speaker, kept on its own li
   );
   assert.strictEqual(draft.prepare(sentence).text, "ミナに会うまた明日");
 });
+
+it("a speaker named only by a control code the game fills in isn't a speaker to translate", () => {
+  const draft = new CatalogDraft(
+    catalogOf([line("a", 0, "\\n<\\N[3]>你好"), line("b", 1, "\\n<林雨>再见")]),
+    new Map(),
+  );
+  assert.deepStrictEqual(
+    speakerEntries(
+      draft,
+      draft.entries.map((entry) => draft.prepare(entry)),
+    ).map(({ id }) => id),
+    ["speaker:林雨"],
+  );
+});

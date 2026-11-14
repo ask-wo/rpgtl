@@ -102,6 +102,8 @@ export interface Translator {
    * runs out of room then does so again, so it isn't retried.
    */
   readonly deterministic: boolean;
+  /** Whether the model is asked to mark an entry it won't translate, so the rest of the batch stays. */
+  readonly marksRefusals: boolean;
 }
 
 type Gate = <A, E, R>(request: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
@@ -220,6 +222,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
       names,
       scenes: translator.cachesPrompt || entries.some((entry) => entry.scene !== undefined),
       following: translator.cachesPrompt,
+      refusals: translator.marksRefusals,
     });
 
   /**

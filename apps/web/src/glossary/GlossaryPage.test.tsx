@@ -6,7 +6,7 @@ import type {
   RunStatus,
   TermEdit,
 } from "@rpgtl/contracts";
-import { withGlossary } from "@rpgtl/domain";
+import { withGlossary, withTermGuessesCleared } from "@rpgtl/domain";
 import { Result } from "effect";
 import { page } from "vite-plus/test/browser";
 import { beforeAll, expect, test, vi } from "vite-plus/test";
@@ -72,6 +72,7 @@ const fakeServer = () => {
     glossaries: [] as Array<ReadonlyArray<TermEdit>>,
     cleared: [] as Array<ReadonlyArray<string>>,
     clearedAll: [] as Array<ReadonlyArray<string>>,
+    clearedGuesses: [] as Array<ReadonlyArray<string>>,
     /** Whether the next save or clear is refused as if a run held the game. */
     busy: false,
     /** What a refused save waits for before it answers. */
@@ -105,6 +106,14 @@ const fakeServer = () => {
           return busy();
         }
         return Response.json({ cleared: 1 });
+      }
+      case "/api/glossary/clear-guesses": {
+        const { sources } = await request.json();
+        server.clearedGuesses.push(sources);
+        const { catalog, terms, entries } = withTermGuessesCleared(server.catalog, sources);
+        server.catalog = catalog;
+        server.feed.changed();
+        return Response.json({ terms, entries });
       }
     }
     return new Response(null, { status: 404 });
@@ -266,6 +275,66 @@ test("Changed shows only the terms whose English differs from before clearing, w
   await expect.element(terms.getByText("阿琳")).toBeVisible();
   await expect.element(terms.getByText("雨")).not.toBeInTheDocument();
   await expect.element(page.getByText(/Before:/)).toBeVisible();
+});
+
+test("Flagged shows the terms whose English leaves out a name inside them, and names it", async () => {
+  const server = fakeServer();
+  server.catalog = {
+    ...saved,
+    glossary: [
+      rain,
+      arlene,
+      {
+        source: "阿琳之歌",
+        translation: { user: "Irene's Song" },
+        kind: { guess: { value: "name" } },
+      },
+    ],
+  };
+  showGlossary();
+  server.activity(idle);
+  const terms = page.getByRole("region", { name: "Glossary terms" });
+  await page.getByRole("button", { name: "Flagged 1" }).click();
+  await expect.element(terms.getByText("雨")).not.toBeInTheDocument();
+  await terms.getByText("阿琳之歌").click();
+  await expect.element(page.getByText(/inside it: 阿琳 → Arlene/)).toBeVisible();
+});
+
+const song = (source: string, english: string, typed: boolean): GlossaryTerm => ({
+  source,
+  translation: typed ? { user: english } : { guess: { value: english, run: "r" } },
+  kind: { guess: { value: "name" } },
+});
+
+test("Clear flagged clears the flagged terms listed that a run gave English, not those the user typed, and shows them cleared after an edit", async () => {
+  const server = fakeServer();
+  server.catalog = {
+    ...saved,
+    entries: [
+      ...saved.entries,
+      { ...line("4", "阿琳之歌", ""), translation: { guess: { value: "Irene's Song", run: "r" } } },
+    ],
+    glossary: [
+      rain,
+      arlene,
+      song("阿琳之歌", "Irene's Song", false),
+      song("阿琳之梦", "Irene's Dream", true),
+    ],
+  };
+  showGlossary();
+  server.activity(idle);
+  await page.getByLabelText("English").fill("Arlena");
+  await vi.waitFor(() => expect(server.glossaries).toHaveLength(1));
+  await page.getByRole("button", { name: "Flagged 2" }).click();
+  await page.getByRole("button", { name: "Clear flagged" }).click();
+  await expect
+    .element(page.getByText("Cleared 1 term and 1 translation", { exact: false }))
+    .toBeVisible();
+  expect(server.clearedGuesses).toEqual([["阿琳之歌"]]);
+  await page.getByRole("button", { name: /^All/ }).click();
+  const terms = page.getByRole("region", { name: "Glossary terms" });
+  await expect.element(terms.getByText("阿琳之歌")).toBeVisible();
+  await expect.element(terms.getByText("Irene's Song")).not.toBeInTheDocument();
 });
 
 test("Custom shows the terms you set, and removing the glossary can keep them", async () => {

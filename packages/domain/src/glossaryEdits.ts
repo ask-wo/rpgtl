@@ -3,6 +3,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { cleared } from "./catalog.ts";
 import { wordPattern } from "./checks.ts";
+import { keepsTags, withoutTags } from "./engines/xp/databaseTags.ts";
 import { hasTerm } from "./termMatch.ts";
 import { entriesToClear } from "./shortNames.ts";
 import { entryTranslation, inUse, mapInUse, termTranslation, termKind } from "./guesses.ts";
@@ -161,6 +162,45 @@ export function withTermLinesCleared(
     cleared: ids.size,
     catalog: {
       ...catalog,
+      entries: catalog.entries.map((entry) => (ids.has(entry.id) ? cleared(entry) : entry)),
+    } satisfies Catalog,
+  };
+}
+
+/**
+ * The catalog with the English that runs gave these terms cleared, and the run's English of the
+ * entries that are a cleared term or contain it, so the next run translates them again. English
+ * the user typed stays. A term without an entry of its own stays too: only an entry's answer fills
+ * a term again.
+ */
+export function withTermGuessesCleared(catalog: Catalog, sources: ReadonlyArray<string>) {
+  const wanted = new Set(sources);
+  const ownEntry = new Set(
+    catalog.entries.map((entry) =>
+      (keepsTags(catalog.game.engine, entry) ? withoutTags(entry.source) : entry.source).trim(),
+    ),
+  );
+  const clears = (term: GlossaryTerm) =>
+    wanted.has(term.source) &&
+    term.translation.user === undefined &&
+    termTranslation(term) !== "" &&
+    ownEntry.has(term.source.trim());
+  const terms = catalog.glossary.filter(clears);
+  const ids = new Set(
+    terms.flatMap((term) =>
+      entriesToClear(catalog, term, false)
+        .filter((entry) => entry.translation.user === undefined)
+        .map((entry) => entry.id),
+    ),
+  );
+  return {
+    terms: terms.length,
+    entries: ids.size,
+    catalog: {
+      ...catalog,
+      glossary: catalog.glossary.map((term) =>
+        clears(term) ? { ...term, translation: {}, previous: termTranslation(term) } : term,
+      ),
       entries: catalog.entries.map((entry) => (ids.has(entry.id) ? cleared(entry) : entry)),
     } satisfies Catalog,
   };

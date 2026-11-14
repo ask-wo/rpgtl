@@ -12,6 +12,7 @@ import {
   CatalogDraft,
   isNameEntry,
   retrySampling,
+  runTranslates,
   withRunMarks,
   entryTranslation,
 } from "@rpgtl/domain";
@@ -344,9 +345,15 @@ const make = Effect.gen(function* () {
   const begin = Effect.fn("Runs.begin")(function* (id: string, kind: RunKind) {
     yield* games.hold(id);
     const catalog = yield* catalogs.get(id);
+    const translates = runTranslates(catalog);
     const missing = new Set(
       catalog.entries
-        .filter((entry) => !entryTranslation(entry) && (kind === "translate" || isNameEntry(entry)))
+        .filter(
+          (entry) =>
+            !entryTranslation(entry) &&
+            translates(entry) &&
+            (kind === "translate" || isNameEntry(entry)),
+        )
         .map((entry) => entry.id),
     );
     const names = new Set(

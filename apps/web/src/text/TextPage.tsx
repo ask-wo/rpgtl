@@ -2,6 +2,7 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { Catalog, Entry } from "@rpgtl/contracts";
 import {
   entryTranslation,
+  isUserValue,
   type Place,
   placeKey,
   placeOf,
@@ -12,6 +13,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import * as Exit from "effect/Exit";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { useEffect, useRef, useState } from "react";
+import { cn } from "cn";
 import { Button } from "~/components/ui/button";
 import { ButtonGroup } from "~/components/ui/button-group";
 import { Input } from "~/components/ui/input";
@@ -23,7 +25,7 @@ import { useGame } from "../games/GameContext.ts";
 import { catalog, findings } from "../translation/atoms.ts";
 import { counted, number } from "../translation/counts.ts";
 import { Pager } from "../app/Pager.tsx";
-import { setEntries } from "./atoms.ts";
+import { clearEntries, setEntries } from "./atoms.ts";
 import { EntryRow } from "./EntryRow.tsx";
 import { FileTree, type Selection, type TreeArea } from "./FileTree.tsx";
 import {
@@ -121,6 +123,9 @@ function Text({
   const game = useGame();
   const edits = useGameEdits(game.id);
   const save = useAtomSet(setEntries, { mode: "promiseExit" });
+  const clear = useAtomSet(clearEntries, { mode: "promiseExit" });
+  const [clearing, setClearing] = useState(false);
+  const [notice, setNotice] = useState<{ readonly text: string; readonly failed: boolean }>();
   const now = AsyncResult.getOrElse(useAtomValue(activity(game.id)), () => undefined);
   const locked = gameHeld(now);
   const found = AsyncResult.getOrElse(useAtomValue(findings(game.id)), () => ({}));
@@ -153,6 +158,7 @@ function Text({
     setShownView(view);
     setPage(0);
     setKept(new Set());
+    setNotice(undefined);
   }
   useEffect(() => {
     if (!locked) return;
@@ -259,6 +265,37 @@ function Text({
   };
 
   const selectedIn = searched.filter((entry) => inSelection(entry, selection));
+  const clearable = selectedIn.filter(
+    (entry) =>
+      isShown(entry, "flagged", context) &&
+      !isUserValue(entry.translation) &&
+      context.translates(entry),
+  );
+  const clearFlagged = async () => {
+    setNotice(undefined);
+    const unsaved = await edits.flush();
+    if (unsaved) return setNotice({ text: unsaved, failed: true });
+    let cleared = 0;
+    setClearing(true);
+    const error = await edits.run(async () => {
+      const ids = clearable.map((entry) => entry.id);
+      const exit = await clear({ payload: { id: game.id, ids } });
+      if (Exit.isFailure(exit)) return failureMessage(exit.cause);
+      cleared = exit.value.cleared;
+      return undefined;
+    });
+    setClearing(false);
+    setNotice(
+      error
+        ? { text: error, failed: true }
+        : {
+            text: cleared
+              ? `Cleared ${counted(cleared, "translation", "translations")}. Translate translates ${cleared === 1 ? "it" : "them"} again.`
+              : "None of these translations came from a run.",
+            failed: false,
+          },
+    );
+  };
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[18rem_1fr]">
       <div className="overflow-auto border-r">
@@ -306,6 +343,25 @@ function Text({
               </Button>
             ))}
           </ButtonGroup>
+          {show === "flagged" && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={locked || clearing || clearable.length === 0}
+              title="Clears the English a run gave the flagged entries listed here, so Translate translates them again. English you typed stays."
+              onClick={() => void clearFlagged()}
+            >
+              Clear flagged
+            </Button>
+          )}
+          {notice && (
+            <p
+              role="status"
+              className={cn("basis-full text-sm", notice.failed && "text-destructive")}
+            >
+              {notice.text}
+            </p>
+          )}
         </div>
         <div ref={list} className="min-h-0 flex-1 overflow-auto" role="region" aria-label="Entries">
           {shown.length === 0 ? (

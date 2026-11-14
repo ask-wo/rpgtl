@@ -95,6 +95,11 @@ const reportLines = (report: AuditReport, logFile: (file: string) => string) => 
     lines.push(`  ${term.source} → ${term.english}: ${term.lines} of ${term.of} lines`);
   if (!report.capitalised.length) lines.push("  None.");
 
+  lines.push("", "Glossary terms without the English of a name inside them");
+  for (const term of report.terms)
+    lines.push(`  ${term.source} → ${term.english}: ${term.missing.join(", ")}`);
+  if (!report.terms.length) lines.push("  None.");
+
   lines.push("", `Sources with different translations: ${report.differing.count}`);
   for (const example of report.differing.examples) {
     lines.push(`  ${oneLine(example.source)}${example.speaker ? ` (${example.speaker})` : ""}`);

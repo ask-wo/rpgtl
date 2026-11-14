@@ -32,6 +32,7 @@ const english: Record<string, string> = {
   阿琳: "Arlene",
   阿琳的伞: "Arlene's Umbrella",
   阿琳的鞋: "Arlene's Shoes",
+  不译: "<refused>",
 };
 
 /** Answers each line in `english`, and is flagged by safeguards when asked to translate 禁止. */
@@ -94,6 +95,7 @@ const translated = (entries: Catalog["entries"], batchSize = 40) => {
       cachesPrompt: false,
       capsAnswers: false,
       deterministic: true,
+      marksRefusals: true,
     },
     "translate",
   ).pipe(
@@ -150,6 +152,27 @@ it.effect("a batch the safeguards flag fails whole and is never asked again", ()
       ],
     );
   }),
+);
+
+it.effect(
+  "an entry the model declines is asked again alone, and the rest of its batch is kept",
+  () =>
+    Effect.gen(function* () {
+      const { draft, requests, run } = translated([line("a", 0, "你好"), line("b", 1, "不译")]);
+      yield* run;
+      assert.deepStrictEqual(draft.failed, ["b"]);
+      assert.deepStrictEqual(draft.catalog.entries.map(entryTranslation), ["Hello", ""]);
+      assert.deepStrictEqual(
+        requests.map((request) => [
+          request.entryIds,
+          request.rejected.map(({ id, reason }) => [id, reason]),
+        ]),
+        [
+          [["a", "b"], [["b", "refused"]]],
+          [["b"], [["b", "refused"]]],
+        ],
+      );
+    }),
 );
 
 it.effect("the run stops once the safeguards have flagged three requests", () =>

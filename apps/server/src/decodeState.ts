@@ -10,6 +10,8 @@ import * as Flag from "effect/cli/Flag";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import { appliedCatalogs } from "./games/appliedCatalogs.ts";
+import * as GameFolder from "./games/GameFolder.ts";
 import { decodeSettings, decodeStateFolder } from "./state/decodeStateFolder.ts";
 import * as StateFolder from "./state/StateFolder.ts";
 
@@ -31,19 +33,17 @@ const command = Command.make(
         ),
       ),
     );
-    const folderDecoded = yield* decodeStateFolder().pipe(
-      Effect.provide(
-        StateFolder.layer.pipe(
-          Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ RPGTL_DIR: dir }))),
-        ),
-      ),
+    const state = Layer.mergeAll(StateFolder.layer, GameFolder.layer).pipe(
+      Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ RPGTL_DIR: dir }))),
     );
-    const decoded = [...Option.toArray(settingsDecoded), ...folderDecoded];
+    const folderDecoded = yield* decodeStateFolder().pipe(Effect.provide(state));
+    const applied = yield* appliedCatalogs().pipe(Effect.provide(state));
+    const decoded = [...Option.toArray(settingsDecoded), ...folderDecoded, ...applied];
     for (const { file, problem } of decoded)
       yield* Console.log(problem === undefined ? `ok    ${file}` : `FAIL  ${file}: ${problem}`);
     const count = decoded.filter(({ problem }) => problem !== undefined).length;
     if (count > 0) {
-      yield* Console.log(`${count} of ${decoded.length} files don't decode.`);
+      yield* Console.log(`${count} of ${decoded.length} files don't decode or apply.`);
       yield* Effect.sync(() => {
         process.exitCode = 1;
       });
@@ -51,7 +51,7 @@ const command = Command.make(
   }),
 ).pipe(
   Command.withDescription(
-    "Decodes each file of a state folder with the schemas the server reads it with. Only reads.",
+    "Decodes each file of a state folder with the schemas the server reads it with, and applies each catalog to its game's files. Only reads.",
   ),
 );
 

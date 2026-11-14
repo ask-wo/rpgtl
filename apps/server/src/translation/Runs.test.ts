@@ -361,6 +361,21 @@ layer(Services)((it) => {
 });
 
 layer(Services)((it) => {
+  it.effect("a run counts only the entries it translates", () =>
+    Effect.gen(function* () {
+      yield* (yield* Catalogs.Catalogs).save({
+        ...catalog,
+        entries: [...catalog.entries, { ...dialogue("kept", 2, "回头见"), keepOriginal: true }],
+      });
+      const runs = yield* Runs.Runs;
+      yield* Ref.set(yield* Answers, () => Effect.succeedNone);
+      assert.include(yield* runs.start(game.id, "translate"), { total: 3, left: 3 });
+      assert.include(yield* ended(runs), { done: 3, left: 0 });
+    }),
+  );
+});
+
+layer(Services)((it) => {
   it.effect("stopping a run keeps what it saved and frees the game", () =>
     Effect.gen(function* () {
       const runs = yield* Runs.Runs;
