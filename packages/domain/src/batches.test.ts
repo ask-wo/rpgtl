@@ -1,6 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import type { Entry } from "@rpgtl/contracts";
-import { batchRequest, CatalogDraft, packGroups, textGroups } from "./index.ts";
+import { batchRequest, CatalogDraft, packGroups, sharedNames, textGroups } from "./index.ts";
 
 const line = (id: string, index: number, list: number): Entry => ({
   id,
@@ -75,5 +75,21 @@ it("a long table goes a batch at a time side by side, while an event list stays 
   assert.deepStrictEqual(
     groups.map((group) => group.length),
     [2, 2, 1, 5],
+  );
+});
+
+const name = (id: string, source: string): Entry => ({ ...line(id, 0, 1), source });
+
+it("a name two other names contain is shared once, even when a speaker has it too", () => {
+  const shared = sharedNames([
+    name("1", "阿琳的伞"),
+    name("2", "阿琳的鞋"),
+    name("3", "阿琳"),
+    name("speaker:阿琳", "阿琳"),
+    name("4", "的伞"),
+  ]);
+  assert.deepStrictEqual(
+    shared.map((entry) => entry.id),
+    ["3"],
   );
 });

@@ -9,6 +9,7 @@ import {
   type RunEntry,
   isSuggestible,
   kindQuestion,
+  isNameEntry,
   nameGroups,
   packGroups,
   type Prepared,
@@ -19,6 +20,7 @@ import {
   shownLength,
   shownPronoun,
   shorterAnswersQuestion,
+  sharedNames,
   speakerEntries,
   textGroups,
   tooLongForImage,
@@ -243,10 +245,11 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
     pass: Pass,
     groups: ReadonlyArray<ReadonlyArray<RunEntry>>,
     names: boolean,
+    cached = false,
   ) {
     const queue = translator.packsScenes ? packGroups(groups, translator.batchSize) : groups;
     if (!queue.length) return;
-    const gated = yield* makeGate(names && translator.cachesPrompt);
+    const gated = yield* makeGate(names && translator.cachesPrompt && !cached);
     const warned = yield* Ref.make(false);
     const warnOnce = Effect.flatMap(Ref.getAndSet(warned, true), (done) =>
       done
@@ -580,10 +583,22 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
   const namesPass = Effect.gen(function* () {
     const pass = translator.names;
     yield* report.step(undefined);
-    yield* translateGroups(pass, nameGroups(draft.translatable, translator.batchSize), true);
-    const speakers = speakerEntries(
-      draft,
-      draft.entries.map((entry) => draft.prepare(entry)),
+    const prepareAll = () => draft.entries.map((entry) => draft.prepare(entry));
+    const early = speakerEntries(draft, prepareAll());
+    const shared = sharedNames([...draft.translatable.filter(isNameEntry), ...early]);
+    yield* report.speakers(early.filter((speaker) => shared.includes(speaker)));
+    yield* translateGroups(pass, Arr.chunksOf(shared, translator.batchSize), true);
+    yield* translateGroups(
+      pass,
+      nameGroups(
+        draft.translatable.filter((entry) => !draft.hasFailed(entry.id)),
+        translator.batchSize,
+      ),
+      true,
+      shared.length > 0,
+    );
+    const speakers = speakerEntries(draft, prepareAll()).filter(
+      (speaker) => !draft.hasFailed(speaker.id),
     );
     yield* report.speakers(speakers);
     yield* translateGroups(pass, speakers.length ? [speakers] : [], true);
