@@ -26,6 +26,11 @@ export const gameFiles = (id: string) => {
     nwjsHook: `${folder}/nwjs-hook.js`,
     /** The folder mkxp-z starts in: its `mkxp.json` and the translated data files it reads first. */
     mkxpz: `${folder}/mkxpz`,
+    /**
+     * An XP game's images with English drawn in, as the tiles that differ from its own, kept
+     * until what they are drawn from changes. A missing or broken file is drawn again.
+     */
+    letteredImages: `${folder}/lettered`,
     /** The game's own loose files that Unpack wrote over, which Undo unpack puts back. */
     unpackedOver: `${folder}/unpacked-over`,
   };

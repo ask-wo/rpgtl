@@ -19,8 +19,9 @@
         // The portable download's server, which src/buildArchive.ts bundles.
         "src/portable.ts",
       ],
-      // src/frontend/Frontend.ts builds the page from @rpgtl/web's folder.
-      "ignoreDependencies": ["@rpgtl/web"],
+      // src/frontend/Frontend.ts builds the page from @rpgtl/web's folder, and
+      // src/imageText/XpImages.ts finds the font files by path.
+      "ignoreDependencies": ["@rpgtl/web", "@fontsource/noto-sans", "@fontsource/noto-serif"],
     },
     "packages/game": {
       // src/build.ts builds the game scripts from these by path.

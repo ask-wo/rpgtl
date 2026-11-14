@@ -7,7 +7,14 @@ import {
   type ProgramStatus,
 } from "@rpgtl/contracts";
 import { hookScript, type HookConfig } from "@rpgtl/game/scripts";
-import { applyXpTranslations, entryTranslation, translatedByXpFile } from "@rpgtl/domain";
+import {
+  applyXpTranslations,
+  entryTranslation,
+  translatedByXpFile,
+  xpImageFolder,
+  xpImageTable,
+  xpImageTableFile,
+} from "@rpgtl/domain";
 import * as Result from "effect/Result";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -31,6 +38,7 @@ import * as Settings from "../settings/Settings.ts";
 import * as StateFolder from "../state/StateFolder.ts";
 import { userFolder } from "../state/userFolders.ts";
 import { OnWindows } from "../OnWindows.ts";
+import * as XpImages from "../imageText/XpImages.ts";
 import { codeVersion } from "../runningCommit.ts";
 import * as Nwjs from "./Nwjs.ts";
 import * as Mkxpz from "../mkxpz/Mkxpz.ts";
@@ -155,6 +163,7 @@ const make = Effect.gen(function* () {
   const mkxpz = yield* Mkxpz.Mkxpz;
   const catalogs = yield* Catalogs.Catalogs;
   const gameFolder = yield* GameFolder.GameFolder;
+  const xpImages = yield* XpImages.XpImages;
   // Each start waits for NW.js's exit in a fiber of the layer's scope, which RPGTL exiting ends
   // without stopping NW.js.
   const scope = yield* Effect.scope;
@@ -287,6 +296,31 @@ const make = Effect.gen(function* () {
   };
 
   /**
+   * The tiles of the game's images with English drawn in, and their table, in the patches folder
+   * when `on`; none otherwise. Tiles are named by what they are drawn from, so a file that is
+   * there already, whole, is kept.
+   */
+  const writeImages = Effect.fnUntraced(function* (game: Game, patches: string, on: boolean) {
+    const dir = path.join(patches, xpImageFolder);
+    const drawn = on ? yield* xpImages.drawn(game) : [];
+    if (drawn.length === 0) return yield* fs.remove(dir, { recursive: true, force: true });
+    yield* fs.makeDirectory(dir, { recursive: true });
+    const names = new Set(drawn.map((image) => `${path.basename(image.tiles)}.png`));
+    for (const name of yield* fs.readDirectory(dir))
+      if (!names.has(name)) yield* fs.remove(path.join(dir, name), { force: true });
+    for (const image of drawn) {
+      const file = path.join(patches, `${image.tiles}.png`);
+      // A launch that stopped while writing leaves a shorter file.
+      const whole = yield* fs.stat(file).pipe(
+        Effect.map((info) => Number(info.size) === image.bytes.length),
+        Effect.catchTags({ PlatformError: () => Effect.succeed(false) }),
+      );
+      if (!whole) yield* fs.writeFile(file, image.bytes);
+    }
+    yield* fs.writeFile(path.join(patches, xpImageTableFile), xpImageTable(drawn));
+  });
+
+  /**
    * The folder mkxp-z starts in: its `mkxp.json`, and the data files that hold translated text
    * while the game's translation switch is on, which it reads before the game's own. A data file
    * whose game file, English and RPGTL are those of the last launch stays as it is.
@@ -337,6 +371,7 @@ const make = Effect.gen(function* () {
     }
     for (const name of Object.keys(written))
       if (!files.has(name)) yield* fs.remove(path.join(data, name), { force: true });
+    yield* writeImages(game, patches, catalog.translate && !catalog.originalScripts);
     yield* fs.writeFileString(writtenFile, JSON.stringify(prints));
     const config = mkxpConfig(path.dirname(program), game.root, patches);
     yield* fs.writeFileString(path.join(dir, "mkxp.json"), JSON.stringify(config, null, 2));

@@ -1,7 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { gameFiles } from "@rpgtl/contracts";
-import { writeArchive } from "@rpgtl/domain";
+import { writeArchive, xpImageTableFile } from "@rpgtl/domain";
 import { command, rubyObject, xpFile, xpMap, xpScripts } from "@rpgtl/domain/testUtils/xpGame";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -14,6 +14,7 @@ import * as Catalogs from "../games/Catalogs.ts";
 import * as StateFolder from "../state/StateFolder.ts";
 import { folderWith } from "../testUtils/gameFolder.ts";
 import { noPrograms, opened, playServices, servicesWith } from "../testUtils/state.ts";
+import { translatedSign } from "../testUtils/xpImages.ts";
 import * as XpPatch from "./XpPatch.ts";
 
 const services = XpPatch.layer.pipe(
@@ -57,6 +58,20 @@ const translated = Effect.fnUntraced(function* (files: Record<string, string | U
   });
   return game;
 });
+
+it.live("a patch holds the tiles of the translated images and their table, not whole images", () =>
+  Effect.gen(function* () {
+    const patches = yield* XpPatch.XpPatch;
+    const game = yield* translatedSign("Exit");
+    const files = Object.keys(unzipSync(yield* patches.zip(game.id)));
+    assert.include(files, xpImageTableFile);
+    assert.lengthOf(
+      files.filter((file) => /^Graphics\/RPGTL\/[0-9a-f]{64}\.png$/.test(file)),
+      1,
+    );
+    assert.notInclude(files, "Graphics/Pictures/Sign.png");
+  }).pipe(Effect.provide(services)),
+);
 
 it.live("a patch holds the translated data files and a readme, whatever the switch says", () =>
   Effect.gen(function* () {

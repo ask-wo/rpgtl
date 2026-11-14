@@ -5,6 +5,8 @@ import {
   type GameFileInvalid,
   translatedByXpFile,
   xpArchiveName,
+  xpImageTable,
+  xpImageTableFile,
   xpPatchZip,
   xpUnpackedArchiveName,
 } from "@rpgtl/domain";
@@ -20,6 +22,7 @@ import * as Stream from "effect/Stream";
 import * as Catalogs from "../games/Catalogs.ts";
 import * as GameFolder from "../games/GameFolder.ts";
 import * as Games from "../games/Games.ts";
+import * as XpImages from "../imageText/XpImages.ts";
 import * as Launches from "../nwjs/Launches.ts";
 import * as StateFolder from "../state/StateFolder.ts";
 
@@ -78,7 +81,8 @@ export class XpPatch extends Context.Service<
   {
     /**
      * A zip of the game's data files with their saved English applied, whatever the game's
-     * translation switch says, and a readme of how to use it.
+     * translation switch says, the tiles that draw English into its images, and a readme of how
+     * to use it.
      */
     readonly zip: (
       id: string,
@@ -110,6 +114,7 @@ const make = Effect.gen(function* () {
   const catalogs = yield* Catalogs.Catalogs;
   const gameFolder = yield* GameFolder.GameFolder;
   const launches = yield* Launches.Launches;
+  const xpImages = yield* XpImages.XpImages;
   const state = yield* StateFolder.StateFolder;
   const replacedFolder = (id: string) => path.join(state.root, gameFiles(id).unpackedOver);
 
@@ -121,7 +126,8 @@ const make = Effect.gen(function* () {
 
   const zip = Effect.fn("XpPatch.zip")(function* (id: string) {
     const game = yield* xpGame(id);
-    const translated = translatedByXpFile(yield* catalogs.get(id));
+    const catalog = yield* catalogs.get(id);
+    const translated = translatedByXpFile(catalog);
     const files = new Map<string, Uint8Array>();
     for (const [name, bytes] of yield* gameFolder.xpData(game)) {
       const entries = translated.get(name);
@@ -130,7 +136,10 @@ const make = Effect.gen(function* () {
       if (Result.isFailure(patched)) return yield* patched.failure;
       if (patched.success) files.set(name, patched.success);
     }
-    return xpPatchZip(game.title, files);
+    const images = catalog.originalScripts ? [] : yield* xpImages.drawn(game);
+    const graphics = new Map(images.map((image) => [`${image.tiles}.png`, image.bytes]));
+    if (images.length > 0) graphics.set(xpImageTableFile, xpImageTable(images));
+    return xpPatchZip(game.title, files, graphics);
   });
 
   const archive = Effect.fn("XpPatch.archive")(function* (id: string) {
