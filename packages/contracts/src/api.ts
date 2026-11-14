@@ -721,7 +721,10 @@ export type XpArchive = typeof XpArchive.Type;
 
 export class XpPatchApi extends HttpApiGroup.make("xpPatch")
   .add(
-    /** A zip of the XP game's translated data files and a readme, to copy over the game's own. */
+    /**
+     * A zip of the XP game's translated data files, the tiles of its translated images and a
+     * readme, to copy over the game's own.
+     */
     HttpApiEndpoint.get("patch", "/xp/patch", {
       query: GameId,
       success: Schema.Uint8Array.pipe(

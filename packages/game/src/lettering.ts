@@ -1,5 +1,5 @@
-// Lays out and draws the English into a game image whose text was erased. The runtime and the
-// RPGTL page both use it.
+// Lays out and draws the English into a game image whose text was erased. The runtime, the RPGTL
+// page and the server, which draws XP games' images, all use it.
 import type { DrawBlock } from "@rpgtl/contracts";
 
 /** What lettering uses of a Canvas 2D context, so it draws on a canvas outside a browser too. */
