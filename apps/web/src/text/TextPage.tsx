@@ -54,6 +54,7 @@ const filters: ReadonlyArray<{
     does: "Entries a run couldn't translate, with the answer it rejected",
   },
   { show: "last-run", label: "Last run", does: "Entries the last run translated" },
+  { show: "changed", label: "Changed", does: "Entries whose English differs from before clearing" },
   { show: "flagged", label: "Flagged", does: "Translations a check found worth a look" },
 ];
 

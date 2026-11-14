@@ -232,6 +232,21 @@ test("Untranslated and Last run show only the terms without English and those th
   await expect.element(terms.getByText("米娅")).not.toBeInTheDocument();
 });
 
+test("Changed shows only the terms whose English differs from before clearing, with the old one", async () => {
+  const server = fakeServer();
+  server.catalog = {
+    ...saved,
+    glossary: [rain, { ...arlene, previous: "Irene" }],
+  };
+  showGlossary();
+  server.activity(idle);
+  const terms = page.getByRole("region", { name: "Glossary terms" });
+  await page.getByRole("button", { name: "Changed 1" }).click();
+  await expect.element(terms.getByText("阿琳")).toBeVisible();
+  await expect.element(terms.getByText("雨")).not.toBeInTheDocument();
+  await expect.element(page.getByText(/Before:/)).toBeVisible();
+});
+
 test("a new term saves once it has an original", async () => {
   const server = fakeServer();
   showGlossary();

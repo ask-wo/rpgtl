@@ -7,7 +7,14 @@ export const Area = Schema.Literals(["Maps", "Database", "System", "Plugins", "S
 export type Area = typeof Area.Type;
 export const areas = Area.literals;
 
-export const Shown = Schema.Literals(["all", "untranslated", "failed", "last-run", "flagged"]);
+export const Shown = Schema.Literals([
+  "all",
+  "untranslated",
+  "failed",
+  "last-run",
+  "changed",
+  "flagged",
+]);
 export type Shown = typeof Shown.Type;
 
 /** What the Text page shows, kept in its address: a place or an area, a search and a filter. */
@@ -122,6 +129,12 @@ export interface ShownContext {
   readonly translates: (entry: Entry) => boolean;
 }
 
+/** Whether the entry has English other than the one it had before it was cleared. */
+const isChanged = (entry: Entry) => {
+  const english = entryTranslation(entry);
+  return !!english && entry.previous !== undefined && entry.previous !== english;
+};
+
 export const isShown = (entry: Entry, show: Shown, context: ShownContext) => {
   switch (show) {
     case "all":
@@ -132,6 +145,8 @@ export const isShown = (entry: Entry, show: Shown, context: ShownContext) => {
       return context.failed.has(entry.id) || (!entryTranslation(entry) && !!entry.suggestion);
     case "last-run":
       return context.lastRun !== undefined && entry.translation.guess?.run === context.lastRun;
+    case "changed":
+      return isChanged(entry);
     case "flagged":
       return !!entryTranslation(entry) && checkNotes(entry, context.findings).length > 0;
   }

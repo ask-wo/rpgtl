@@ -35,7 +35,7 @@ const sections: ReadonlyArray<{ readonly kind: TermKind; readonly label: string 
   { kind: "word", label: "Words" },
 ];
 
-type Shown = "all" | "untranslated" | "last-run";
+type Shown = "all" | "untranslated" | "last-run" | "changed";
 
 const filters: ReadonlyArray<{
   readonly show: Shown;
@@ -45,13 +45,22 @@ const filters: ReadonlyArray<{
   { show: "all", label: "All", does: "Every term" },
   { show: "untranslated", label: "Untranslated", does: "Terms without English" },
   { show: "last-run", label: "Last run", does: "Terms the last run translated" },
+  { show: "changed", label: "Changed", does: "Terms whose English differs from before clearing" },
 ];
 
-const isShown = (term: GlossaryTerm, show: Shown, lastRun: string | undefined) =>
-  show === "all" ||
-  (show === "untranslated"
-    ? !termTranslation(term).trim()
-    : lastRun !== undefined && term.translation.guess?.run === lastRun);
+function isShown(term: GlossaryTerm, show: Shown, lastRun: string | undefined) {
+  const english = termTranslation(term).trim();
+  switch (show) {
+    case "all":
+      return true;
+    case "untranslated":
+      return !english;
+    case "last-run":
+      return lastRun !== undefined && term.translation.guess?.run === lastRun;
+    case "changed":
+      return !!english && term.previous !== undefined && term.previous !== english;
+  }
+}
 
 /** The game's glossary, which every translation follows. */
 export function GlossaryPage() {
@@ -259,6 +268,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
         <div className="min-w-0 overflow-auto p-6">
           {term !== undefined && current !== undefined && (
             <TermDetail
+              lastRun={saved.lastRun}
               key={current}
               term={term}
               glossary={glossary}

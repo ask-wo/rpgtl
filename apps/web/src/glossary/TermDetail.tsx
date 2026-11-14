@@ -95,6 +95,7 @@ export function TermDetail({
   term,
   glossary,
   entries,
+  lastRun,
   locked,
   onChange,
   onDone,
@@ -104,6 +105,7 @@ export function TermDetail({
   readonly term: GlossaryTerm;
   readonly glossary: ReadonlyArray<GlossaryTerm>;
   readonly entries: ReadonlyArray<Entry>;
+  readonly lastRun: string | undefined;
   readonly locked: boolean;
   /** Saves after `delay` ms, so typing saves once it pauses. */
   readonly onChange: (term: GlossaryTerm, delay: number) => void;
@@ -189,7 +191,13 @@ export function TermDetail({
           )}
           {previous && previous !== translation && (
             <Restore
-              label={translation ? "Before the last run:" : "Before clearing:"}
+              label={
+                !translation
+                  ? "Before clearing:"
+                  : lastRun !== undefined && term.translation.guess?.run === lastRun
+                    ? "Before the last run:"
+                    : "Before:"
+              }
               guess={previous}
               onRestore={() =>
                 onChange({ ...term, translation: withUser(term.translation, previous) }, 0)
