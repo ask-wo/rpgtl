@@ -16,6 +16,9 @@ export const RecordWith = <S extends Schema.Top>(key: RegExp, expected: string, 
     ),
   );
 
+/** An image's path: below `img/` in an MV or MZ game, below `Graphics/` in an XP game. */
+export const imagePath = /^(?:img|graphics)\//i;
+
 const Point = Schema.Tuple([Schema.Finite, Schema.Finite]);
 /** Left, top, right and bottom, in pixels. */
 export const Box = Schema.Tuple([Schema.Finite, Schema.Finite, Schema.Finite, Schema.Finite]);
@@ -140,7 +143,7 @@ export type ImageResult = typeof ImageResult.Type;
 /** `games/<game id>/images.json` in the state folder: what the reader found, by image path. */
 export const ImageReadResults = Schema.Struct({
   version: Schema.Literal(1),
-  images: RecordWith(/^img\//, "an image path", ImageResult),
+  images: RecordWith(imagePath, "an image path", ImageResult),
   /** What each run an image's `run` names used, by that start time. */
   runs: Schema.optionalKey(Schema.Record(Schema.String, ImageRun)),
 });
@@ -167,7 +170,7 @@ export type ExportedImage = typeof ExportedImage.Type;
 
 /** The read results of the images the game still has as they were read, and their runs. */
 export const ExportedImageText = Schema.Struct({
-  images: RecordWith(/^img\//, "an image path", ExportedImage),
+  images: RecordWith(imagePath, "an image path", ExportedImage),
   runs: ImageReadResults.fields.runs,
 });
 export type ExportedImageText = typeof ExportedImageText.Type;
@@ -196,7 +199,7 @@ export type ImageReadingSettings = typeof ImageReadingSettings.Type;
 /** The images a run reads from scratch even when their saved result is current: all, or these. */
 export const ReadAgain = Schema.Union([
   Schema.Literal("all"),
-  Schema.Array(Schema.String.check(Schema.isPattern(/^img\//))),
+  Schema.Array(Schema.String.check(Schema.isPattern(imagePath))),
 ]).annotate({ message: 'again must be "all" or a list of image paths.' });
 export type ReadAgain = typeof ReadAgain.Type;
 

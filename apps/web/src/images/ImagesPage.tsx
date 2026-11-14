@@ -1,6 +1,13 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { Catalog, Entry, Game, ImageReadResults, ImageResult } from "@rpgtl/contracts";
-import { gameLanguage, placeKey, placeOf, withTranslation, withImageText } from "@rpgtl/domain";
+import {
+  gameLanguage,
+  imageFontOf,
+  placeKey,
+  placeOf,
+  withTranslation,
+  withImageText,
+} from "@rpgtl/domain";
 import * as Exit from "effect/Exit";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { useEffect, useRef, useState } from "react";
@@ -112,7 +119,8 @@ function Images({
     [edits],
   );
 
-  const { imageBold, imageFont } = lettering ?? saved;
+  const { imageBold } = lettering ?? saved;
+  const imageFont = imageFontOf(game.engine, (lettering ?? saved).imageFont);
   const unchangedImages = keptImages ?? saved.unchangedImages;
   const shown: ShownImages = {
     entries: saved.entries.map((entry) => {

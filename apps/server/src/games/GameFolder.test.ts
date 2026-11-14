@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import { fileOf } from "@rpgtl/domain";
+import { fileOf, writeArchive } from "@rpgtl/domain";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -195,6 +195,49 @@ it.effect(
         ["苔藓", "早安", "风"],
       );
       assert.isTrue(yield* gameFolder.present(game));
+    }).pipe(Effect.provide(services)),
+);
+
+const bytes = (...values: number[]) => Uint8Array.from(values);
+const xpArchiveWithSign = (sign: Uint8Array) =>
+  writeArchive(
+    new Map([
+      ["Data/System.rxdata", xpFile(rubyObject("RPG::System", {}))],
+      ["Graphics/Pictures/Sign.png", sign],
+    ]),
+  );
+
+it.effect(
+  "an XP game's images come from its archive before its Graphics folder, read again once the archive changes",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const gameFolder = yield* GameFolder.GameFolder;
+      const root = yield* folderWith({
+        "Game.rgssad": xpArchiveWithSign(bytes(1)),
+        "Graphics/pictures/sign.png": bytes(2),
+        "Graphics/Titles/Cover.jpg": bytes(3),
+      });
+      const game = yield* gameFolder.inspect(root);
+      assert.deepStrictEqual((yield* gameFolder.textImages(game)).images, [
+        { image: "Graphics/Pictures/Sign", file: "Graphics/Pictures/Sign.png" },
+        { image: "Graphics/Titles/Cover", file: "Graphics/Titles/Cover.jpg" },
+      ]);
+      assert.deepStrictEqual(
+        yield* gameFolder.readFile(game, "Graphics/Pictures/Sign.png"),
+        bytes(1),
+      );
+      assert.deepStrictEqual(
+        yield* gameFolder.readFile(game, "Graphics/Titles/Cover.jpg"),
+        bytes(3),
+      );
+
+      yield* fs.writeFile(path.join(root, "Game.rgssad"), xpArchiveWithSign(bytes(4, 5)));
+      assert.deepStrictEqual(
+        yield* gameFolder.readFile(game, "Graphics/Pictures/Sign.png"),
+        bytes(4, 5),
+      );
     }).pipe(Effect.provide(services)),
 );
 

@@ -122,6 +122,51 @@ export function textImages(game: {
   }));
 }
 
+const xpTextFolders = ["pictures", "titles", "gameovers"];
+const xpSpriteFolders = new Set([
+  "animations",
+  "autotiles",
+  "battlebacks",
+  "battlers",
+  "characters",
+  "fogs",
+  "icons",
+  "panoramas",
+  "tilesets",
+  "transitions",
+  "windowskins",
+]);
+const xpImage = /^graphics\/[^/]+\/.+\.(png|jpe?g)$/i;
+
+/**
+ * The images to read for text in an XP game, from its files below `Graphics/` in the archive and
+ * its folder: the text folders first, then folders of its own. Folder names match in any letter
+ * case, as `Game.exe` finds files on Windows. Of two files that differ only in letter case or
+ * extension, the first is kept, so the archive's should come first, and a PNG wins over a JPEG.
+ */
+export function xpTextImages(files: ReadonlyArray<string>): ReadonlyArray<GameImage> {
+  const found = new Map<string, GameImage>();
+  for (const file of files.filter((each) => xpImage.test(each)).toSorted(byPng)) {
+    const image = file.slice(0, file.lastIndexOf("."));
+    if (!found.has(image.toLowerCase())) found.set(image.toLowerCase(), { image, file });
+  }
+  const images = [...found.values()];
+  const xpFolder = (image: GameImage) => folder(image.image).toLowerCase();
+  const sorted = (list: ReadonlyArray<GameImage>) =>
+    list.toSorted((a, b) => byFolders(a.image, b.image));
+  return [
+    ...xpTextFolders.flatMap((name) => sorted(images.filter((image) => xpFolder(image) === name))),
+    ...sorted(
+      images.filter(
+        (image) =>
+          !xpTextFolders.includes(xpFolder(image)) && !xpSpriteFolders.has(xpFolder(image)),
+      ),
+    ),
+  ];
+}
+
+const byPng = (a: string, b: string) => Number(!/\.png$/i.test(a)) - Number(!/\.png$/i.test(b));
+
 /** Why an image file can't be read as a picture. */
 export type ImageFileProblem = "encryptionKey" | "notAnImage";
 

@@ -92,7 +92,7 @@ export function LetteringRow({
             label="English lettering font"
             labelHidden
             value={shown.imageFont ?? "game"}
-            choices={fonts}
+            choices={game.engine === "XP" ? fonts.filter((font) => font.value !== "game") : fonts}
             onChoose={(font) =>
               onLettering({ ...lettering, imageFont: font === "game" ? undefined : font })
             }

@@ -52,16 +52,21 @@ export const gameFont = (game: Game) =>
     return `${family}, sans-serif`;
   }).catch(() => "sans-serif");
 
+const gameUrl = (game: Game, file: string) =>
+  `/game/${game.id}/${file.split("/").map(encodeURIComponent).join("/")}`;
+
 /**
- * An address the page can show the game's image `file` (`img/…` without its extension) from. An
- * encrypted image is the PNG with a 16-byte header and its first 16 bytes XORed with the key.
+ * An address the page can show the game's `image` (`img/…` without its extension) from, read
+ * from `file`. An encrypted image is the PNG with a 16-byte header and its first 16 bytes XORed
+ * with the key. An XP game has no System.json and no encrypted images, and its images may be JPEGs.
  */
-async function imageAddress(game: Game, file: string) {
+async function imageAddress(game: Game, image: string, file: string) {
+  if (game.engine === "XP") return gameUrl(game, file);
   const { hasEncryptedImages, encryptionKey } = await system(game);
-  const url = `/game/${game.id}/${file.split("/").map(encodeURIComponent).join("/")}`;
-  if (!hasEncryptedImages || !encryptionKey || game.engine === "XP") return `${url}.png`;
+  const url = gameUrl(game, image);
+  if (!hasEncryptedImages || !encryptionKey) return `${url}.png`;
   const response = await fetch(url + imageExtension(game.engine, true));
-  if (!response.ok) throw new Error(`Could not load ${file}.`);
+  if (!response.ok) throw new Error(`Could not load ${image}.`);
   const bytes = new Uint8Array((await response.arrayBuffer()).slice(16));
   for (const [i, byte] of bytes.subarray(0, 16).entries())
     bytes[i] = byte ^ parseInt(encryptionKey.slice(i * 2, i * 2 + 2), 16);
@@ -87,7 +92,7 @@ const assets = new Map<string, Promise<ImageAssets>>();
 export const imageAssets = (game: Game, image: string, result: ImageResult) =>
   once(assets, `${game.id} ${image} ${result.erased ?? ""}`, async () => {
     const [original, erased] = await Promise.all([
-      imageAddress(game, image).then((src) => loadImage(src, image)),
+      imageAddress(game, image, result.file).then((src) => loadImage(src, image)),
       result.erased ? loadImage(`/erased/${game.id}/${result.erased}`, image) : undefined,
     ]);
     return { original, erased };

@@ -28,6 +28,8 @@ const gameFile = Effect.fn("play.file")(
       Stored: ({ path }) => HttpServerResponse.file(path),
       Made: ({ text, contentType }) =>
         Effect.succeed(HttpServerResponse.text(text, { contentType })),
+      Read: ({ bytes, contentType }) =>
+        Effect.succeed(HttpServerResponse.uint8Array(bytes, { contentType })),
     });
   },
   Effect.catchTags({

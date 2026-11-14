@@ -152,7 +152,10 @@ export const Catalog = Schema.Struct({
   imageBold: Schema.optionalKey(Schema.Literals(["always", "never"])),
   /** A bundled font for the English in images; absent uses the game's own font. */
   imageFont: Schema.optionalKey(LetteringFont),
-  /** Images the game always shows unchanged, by a path like `img/pictures/Notice`. */
+  /**
+   * Images the game always shows unchanged, by a path like `img/pictures/Notice`, or
+   * `Graphics/Pictures/Notice` in an XP game.
+   */
   unchangedImages: Schema.optionalKey(Schema.Array(Schema.String)),
   /** When the last run that translated entries started, as an ISO time. */
   lastRun: Schema.optionalKey(Schema.String),

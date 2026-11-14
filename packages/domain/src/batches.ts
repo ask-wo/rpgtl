@@ -1,3 +1,4 @@
+import { imagePath } from "@rpgtl/contracts";
 import type { CatalogDraft, Prepared, RunEntry } from "./catalogDraft.ts";
 import { seriesName } from "./imageText.ts";
 import { isNameEntry, isSpeakerNameEntry } from "./nameEntries.ts";
@@ -155,7 +156,7 @@ export function batchRequest(
       ...sceneOf(item),
       ...speakerOf(item),
       text: item.text,
-      ...(isImageText(item.entry) && { image: item.entry.location.image.slice("img/".length) }),
+      ...(isImageText(item.entry) && { image: item.entry.location.image.replace(imagePath, "") }),
       ...(limit !== undefined && { limit }),
     };
   });
