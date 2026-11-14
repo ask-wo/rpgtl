@@ -4,7 +4,9 @@
  * box or the bitmap's edge, down to 3/5 of its size, below which the engine squeezes it. Games
  * often give a label a box wider than the gap before what they draw next on its row, so left-aligned
  * text is drawn only when something else touches its place, the bitmap is read or the frame is
- * shown, and then fits the gap before whatever starts to its right. A draw a few pixels from it,
+ * shown, and then fits the gap before whatever starts to its right. Right-aligned or centred text,
+ * such as a number games draw into the same box as its label, starts where its ink does, before
+ * or after the label is drawn. A draw a few pixels from it,
  * as for an outline, is the same label. Only a draw across its middle row draws it first: a gauge
  * along the bottom of a row then goes under the text instead of over it. Copying a bitmap whole carries its waiting text along, as
  * games draw a label with its icon into a bitmap of its own and copy that next to the others. A
@@ -35,6 +37,7 @@ export const textFittingScript = String.raw`class Bitmap
     next if !method_defined?(name) || method_defined?(raw)
     alias_method raw, name
     define_method(name) do |*args|
+      rpgtl_unplace(*rpgtl_area(args))
       rpgtl_touch(*rpgtl_area(args))
       send(raw, *args)
     end
@@ -68,7 +71,14 @@ export const textFittingScript = String.raw`class Bitmap
     size = text_size(text)
     top = y + (h - size.height) / 2
     item = RpgtlText.new(x, y, w, h, top, size.height, text, align, size.width, [w, width - x].min, font.size / 2, rpgtl_font)
-    if align != 0 || item.room <= 0
+    if align != 0
+      shown = [size.width, w].min
+      left = x + (align == 2 ? w - shown : (w - shown) / 2)
+      rpgtl_touch(left, y, shown, h)
+      @rpgtl_placed = (@rpgtl_placed || []).last(63) << [left, top, size.height]
+      return rpgtl_put(item)
+    end
+    if item.room <= 0
       rpgtl_touch(x, y, w, h)
       return rpgtl_put(item)
     end
@@ -95,10 +105,10 @@ export const textFittingScript = String.raw`class Bitmap
 
   def rpgtl_wait(item)
     rpgtl_bound(item.x, item.top, item.height)
-    (@rpgtl_waiting || []).each do |other|
-      next unless rpgtl_rows?(other.top, other.height, item.top, item.height)
-      next unless other.x > item.x + item.near && other.x < item.x + item.room
-      item.room = other.x - item.x
+    starts = (@rpgtl_waiting || []).map { |other| [other.x, other.top, other.height] }
+    (starts + (@rpgtl_placed || [])).each do |x, top, height|
+      next unless rpgtl_rows?(top, height, item.top, item.height)
+      item.room = x - item.x if x > item.x + item.near && x < item.x + item.room
     end
     if @rpgtl_waiting.nil? || @rpgtl_waiting.empty?
       @rpgtl_waiting = []
@@ -134,6 +144,7 @@ export const textFittingScript = String.raw`class Bitmap
   end
 
   def fill_rect(*args)
+    rpgtl_unplace(*rpgtl_area(args))
     rpgtl_touch(*rpgtl_area(args))
     rpgtl_fill_rect(*args)
   end
@@ -145,11 +156,13 @@ export const textFittingScript = String.raw`class Bitmap
 
   def clear(*args)
     @rpgtl_waiting = nil
+    @rpgtl_placed = nil
     rpgtl_clear(*args)
   end
 
   def dispose(*args)
     @rpgtl_waiting = nil
+    @rpgtl_placed = nil
     rpgtl_dispose(*args)
   end
 
@@ -175,6 +188,11 @@ export const textFittingScript = String.raw`class Bitmap
       next unless rpgtl_rows?(item.top, item.height, top, height)
       item.room = x - item.x if x > item.x + item.near && x < item.x + item.room
     end
+  end
+
+  def rpgtl_unplace(x, y, w, h)
+    return if @rpgtl_placed.nil?
+    @rpgtl_placed.reject! { |left, top, height| left >= x && left < x + w && rpgtl_rows?(top, height, y, h) }
   end
 
   def rpgtl_touch(x, y, w, h)

@@ -56,6 +56,10 @@ INKED = lambda { |c| c.alpha > 0 }
 def rightmost(b, test, xs = 0...b.width, ys = 0...b.height)
   xs.select { |x| ys.any? { |y| test.call(b.get_pixel(x, y)) } }.max || -1
 end
+GREEN = lambda { |c| c.alpha > 200 && c.green > 200 && c.red < 80 }
+def leftmost(b, test)
+  (0...b.width).find { |x| (0...b.height).any? { |y| test.call(b.get_pixel(x, y)) } } || -1
+end
 def red_bitmap(w, h = 32)
   b = Bitmap.new(w, h)
   b.font.color = Color.new(255, 0, 0)
@@ -111,6 +115,15 @@ begin
     buf.dispose
   end
   r["copied"] = [160, 288, 416].map { |edge| rightmost(bar, RED, 0...edge) }
+  r["beforeNumber"] = [true, false].map do |label_first|
+    b = red_bitmap(200)
+    draws = [
+      lambda { b.font.color = Color.new(255, 0, 0); b.draw_frame_text(0, 0, 168, 32, "Panels acquired in total") },
+      lambda { b.font.color = Color.new(0, 255, 0); b.draw_frame_text(0, 0, 168, 32, "36", 2) },
+    ]
+    (label_first ? draws : draws.reverse).each(&:call)
+    { "label" => rightmost(b, RED), "number" => leftmost(b, GREEN) }
+  end
   b = red_bitmap(300)
   b.draw_text(0, 0, 300, 32, "Room to spare")
   r["alone"] = { "natural" => b.text_size("Room to spare").width, "right" => rightmost(b, RED) }
@@ -157,6 +170,7 @@ const Report = Schema.Struct({
   overGauge: Fitted,
   copied: Schema.Tuple([Schema.Int, Schema.Int, Schema.Int]),
   alone: Fitted,
+  beforeNumber: Schema.Array(Schema.Struct({ label: Schema.Int, number: Schema.Int })),
   choicesBelow: Message,
   long: Schema.Struct({
     text: Schema.String,
@@ -194,6 +208,8 @@ it.live.skipIf(!xvfbRun)(
       assert.isBelow(r.overGauge.right, 316);
       assert.isTrue(r.copied[0] < 160 && r.copied[1] < 288 && r.copied[2] < 416);
       assert.isAtLeast(r.alone.right, r.alone.natural - 3);
+      assert.lengthOf(r.beforeNumber, 2);
+      for (const { label, number } of r.beforeNumber) assert.isBelow(label, number);
 
       assert.deepStrictEqual(r.choicesBelow.rows, [
         "Short line",
