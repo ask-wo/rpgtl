@@ -2,11 +2,13 @@ import type {
   Box,
   Catalog,
   DrawBlock,
+  Engine,
   Entry,
   ImageLine,
   ImageReadResults,
   ImageResult,
   ImageTextHint,
+  LetteringFont,
   Location,
   PreparedBlock,
 } from "@rpgtl/contracts";
@@ -460,6 +462,14 @@ export const seriesOf = (image: string, images: Iterable<string>) => {
     ? []
     : [...images].filter((other) => other !== image && seriesName(other) === name);
 };
+
+/**
+ * The bundled font a game's image English is drawn in; none for the game's own font. An XP game's
+ * font is one installed on the player's Windows, which neither the page nor the server has, so
+ * its images take Noto Sans.
+ */
+export const imageFontOf = (engine: Engine, imageFont: LetteringFont | undefined) =>
+  imageFont ?? (engine === "XP" ? "sans" : undefined);
 
 /**
  * What the game needs to draw the English into images, by image path such as `img/pictures/Notice`.

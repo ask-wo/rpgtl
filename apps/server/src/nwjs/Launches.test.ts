@@ -13,9 +13,10 @@ import * as Catalogs from "../games/Catalogs.ts";
 import * as Games from "../games/Games.ts";
 import * as Settings from "../settings/Settings.ts";
 import { folderWith, mvGame } from "../testUtils/gameFolder.ts";
-import { writeArchive } from "@rpgtl/domain";
+import { writeArchive, xpImageFolder, xpImageTableFile } from "@rpgtl/domain";
 import { command, rubyObject, xpFile, xpMap, xpScripts } from "@rpgtl/domain/testUtils/xpGame";
 import { noPrograms, opened, playServices, servicesWith, StateDir } from "../testUtils/state.ts";
+import { translatedSign } from "../testUtils/xpImages.ts";
 import * as Launches from "./Launches.ts";
 import * as Nwjs from "./Nwjs.ts";
 import * as Mkxpz from "../mkxpz/Mkxpz.ts";
@@ -194,6 +195,36 @@ it.live(
         })};`,
       );
     }).pipe(Effect.provide(withFakeNw)),
+  { timeout: 60_000 },
+);
+
+it.live(
+  "an XP game's translated images go into mkxp-z's patches as tiles while its translation is on",
+  () =>
+    Effect.gen(function* () {
+      const launches = yield* Launches.Launches;
+      const catalogs = yield* Catalogs.Catalogs;
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const state = yield* StateDir;
+      const game = yield* translatedSign("Exit");
+      const patches = path.join(state, gameFiles(game.id).mkxpz, "patches");
+      const lettered = path.join(patches, xpImageFolder);
+
+      yield* launches.launch(game.id);
+      yield* ended(game.id);
+      const files = yield* fs.readDirectory(lettered);
+      assert.lengthOf(files, 2);
+      assert.include(files, path.basename(xpImageTableFile));
+      const table = yield* fs.readFile(path.join(patches, xpImageTableFile));
+      assert.include(new TextDecoder().decode(table), "graphics/pictures/sign");
+
+      const catalog = yield* catalogs.get(game.id);
+      yield* catalogs.save({ ...catalog, translate: false });
+      yield* launches.launch(game.id);
+      yield* ended(game.id);
+      assert.isFalse(yield* fs.exists(lettered));
+    }).pipe(Effect.provide(withFakeMkxpz)),
   { timeout: 60_000 },
 );
 

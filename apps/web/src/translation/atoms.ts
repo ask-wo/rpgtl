@@ -77,22 +77,23 @@ export const stopReadingImages = Rpgtl.mutation("images", "stop");
 /**
  * The saved catalog, its images' read results and the runs that made them, encoded as Export
  * writes them into a translation file: the erased backgrounds' patches as base64 again, since the
- * client decodes them into bytes.
+ * client decodes them into bytes. Without `images`, the file carries the image text's English but
+ * no read results or patches.
  */
-export const translationFile = Rpgtl.runtime.fn((id: string) =>
+export const translationFile = Rpgtl.runtime.fn(({ id, images }: { id: string; images: boolean }) =>
   Rpgtl.use((client) =>
     Effect.all([
       client.catalogs.get({ query: { id } }),
-      client.images.export({ query: { id } }),
+      images ? client.images.export({ query: { id } }) : Effect.succeed(null),
     ]).pipe(
-      Effect.flatMap(([saved, images]) =>
+      Effect.flatMap(([saved, exported]) =>
         Effect.all([
           Schema.encodeEffect(Catalog)(saved),
-          Schema.encodeEffect(Schema.NullOr(ExportedImageText))(images),
+          Schema.encodeEffect(Schema.NullOr(ExportedImageText))(exported),
         ]).pipe(
           Effect.map(([encoded, imageText]) => ({
             ...Struct.omit(encoded, ["runs"]),
-            ...exportedRuns(saved, images ?? undefined),
+            ...exportedRuns(saved, exported ?? undefined),
             ...(imageText && { images: imageText.images }),
           })),
         ),

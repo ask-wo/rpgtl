@@ -48,6 +48,7 @@ const contents = (file: Play.PlayFile) =>
   Play.PlayFile.$match(file, {
     Made: ({ text }) => text,
     Stored: ({ path }) => `stored ${path}`,
+    Read: ({ bytes }) => new TextDecoder().decode(bytes),
   });
 
 it.effect(

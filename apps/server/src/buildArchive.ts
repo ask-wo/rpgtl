@@ -38,6 +38,34 @@ const node = {
 const targets = ["linux-x64", "win-x64"] as const;
 type Target = (typeof targets)[number];
 
+/**
+ * The native part of `@napi-rs/canvas` each download carries, checked against npm's integrity.
+ * pnpm installs only this computer's, so the build fetches the one for the download's system.
+ */
+const canvas = {
+  version: "1.1.1",
+  "linux-x64": {
+    name: "canvas-linux-x64-gnu",
+    integrity:
+      "sha512-7bZfDI9lxKqj9wJRHiSQBimCRanxDGHYE7TugnOmFJ9ScpgFSsLHFQtOH9wvmbQvBwv5nBuDBGJlG0+7iGkN+w==",
+  },
+  "win-x64": {
+    name: "canvas-win32-x64-msvc",
+    integrity:
+      "sha512-6Ge1AF1SVO+Ypjaw9IPcApm95krR3GQ32HgVqlIckbN/WqUlWYS0hnb8ZIdu3e0IbutbJgd8D2qSeb2/Cdpbdw==",
+  },
+} as const;
+
+/** The lettering fonts' files, which `LetteringFontFiles` in the download points at. */
+const letteringFonts = [
+  "noto-sans/files/noto-sans-latin-400-normal.woff2",
+  "noto-sans/files/noto-sans-latin-700-normal.woff2",
+  "noto-serif/files/noto-serif-latin-400-normal.woff2",
+  "noto-serif/files/noto-serif-latin-700-normal.woff2",
+  "noto-sans/LICENSE",
+  "noto-serif/LICENSE",
+] as const;
+
 /** The image reader's Python project, without its tests and comparison tools. */
 const readerFiles = [
   "server.py",
@@ -165,8 +193,9 @@ const buildArchive = Effect.fn("buildArchive")(function* (target: Target) {
               server: path.join(import.meta.dirname, "portable.ts"),
               cli: path.join(import.meta.dirname, "bin.ts"),
             },
-            // Only the Vite layer loads these, which the download never uses.
-            external: ["vite-plus", "@rpgtl/game/build"],
+            // Only the Vite layer loads these, which the download never uses. The canvas loads
+            // its native part, which the download carries in its node_modules.
+            external: ["vite-plus", "@rpgtl/game/build", "@napi-rs/canvas"],
             output: {
               format: "es",
               entryFileNames: "[name].mjs",
@@ -218,6 +247,75 @@ const buildArchive = Effect.fn("buildArchive")(function* (target: Target) {
     .copyFile(path.join(nodeRoot, "LICENSE"), path.join(nodeDir, "LICENSE"))
     .pipe(Effect.mapError(failed("add Node.js")));
   yield* fs.remove(unpacked, { recursive: true }).pipe(Effect.mapError(failed("clean")));
+
+  yield* Console.log(`Adding @napi-rs/canvas ${canvas.version}…`);
+  const canvasJs = path.dirname(
+    yield* path
+      .fromFileUrl(new URL(import.meta.resolve("@napi-rs/canvas/package.json")))
+      .pipe(Effect.mapError(failed("find @napi-rs/canvas"))),
+  );
+  const installed = JSON.parse(
+    yield* fs
+      .readFileString(path.join(canvasJs, "package.json"))
+      .pipe(Effect.mapError(failed("read @napi-rs/canvas"))),
+  ).version;
+  if (installed !== canvas.version)
+    return yield* new BuildFailed({
+      step: `@napi-rs/canvas is ${installed}, but the build fetches ${canvas.version}`,
+    });
+  const modules = path.join(app, "node_modules", "@napi-rs");
+  yield* fs
+    .copy(canvasJs, path.join(modules, "canvas"))
+    .pipe(Effect.mapError(failed("add @napi-rs/canvas")));
+  const native = canvas[target];
+  const tarball = path.join(cache, `${native.name}-${canvas.version}.tgz`);
+  const integrity = (file: string) =>
+    fs.stream(file).pipe(
+      Stream.runFold(
+        () => createHash("sha512"),
+        (hash, chunk) => hash.update(chunk),
+      ),
+      Effect.map((hash) => `sha512-${hash.digest("base64")}`),
+      Effect.mapError(failed("hash @napi-rs/canvas")),
+    );
+  if (
+    !(yield* fs.exists(tarball).pipe(Effect.mapError(failed("cache")))) ||
+    (yield* integrity(tarball)) !== native.integrity
+  ) {
+    const response = yield* client
+      .get(
+        `https://registry.npmjs.org/@napi-rs/${native.name}/-/${native.name}-${canvas.version}.tgz`,
+      )
+      .pipe(Effect.flatMap(HttpClientResponse.filterStatusOk), Effect.mapError(failed("download")));
+    yield* response.stream.pipe(Stream.run(fs.sink(tarball)), Effect.mapError(failed("download")));
+  }
+  if ((yield* integrity(tarball)) !== native.integrity)
+    return yield* new BuildFailed({ step: `@napi-rs/${native.name}'s integrity doesn't match` });
+  const nativeDir = path.join(modules, native.name);
+  yield* fs
+    .makeDirectory(nativeDir, { recursive: true })
+    .pipe(Effect.mapError(failed("add @napi-rs/canvas")));
+  yield* run("unpack @napi-rs/canvas", "tar", [
+    "-xzf",
+    tarball,
+    "-C",
+    nativeDir,
+    "--strip-components=1",
+  ]);
+
+  for (const file of letteringFonts) {
+    const [family = "", ...rest] = file.split("/");
+    const found = yield* path
+      .fromFileUrl(new URL(import.meta.resolve(`@fontsource/${family}/package.json`)))
+      .pipe(Effect.mapError(failed("find the lettering fonts")));
+    const name = rest.join("/") === "LICENSE" ? `LICENSE-${family}` : path.basename(file);
+    yield* fs
+      .makeDirectory(path.join(app, "fonts"), { recursive: true })
+      .pipe(Effect.mapError(failed("add the lettering fonts")));
+    yield* fs
+      .copyFile(path.join(path.dirname(found), ...rest), path.join(app, "fonts", name))
+      .pipe(Effect.mapError(failed("add the lettering fonts")));
+  }
 
   // RPGTL sets the image reader up from these with uv; see ImageReaderSetup.
   for (const file of readerFiles) {

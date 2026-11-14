@@ -17,6 +17,7 @@ import {
   readVersion,
   contrastVersion,
   textImages,
+  xpTextImages,
   withDoubledLines,
 } from "./index.ts";
 
@@ -74,6 +75,31 @@ it("text images are the text folders without the engine's icon sheets, the game'
     ],
   );
   assert.strictEqual(images[0]?.file, "img/pictures/nested/Background.png_");
+});
+
+it("an XP game's text images are its pictures, titles, game overs and folders of its own", () => {
+  const images = xpTextImages([
+    "Graphics/Pictures/Sign.png",
+    "Graphics/Battlers/Slime.png",
+    "Graphics/Titles/Cover.jpg",
+    "Graphics/Menus/Banner.png",
+    "Graphics/pictures/sign.PNG",
+    "Graphics/Pictures/Board.jpg",
+    "Graphics/Pictures/Board.png",
+    "Graphics/Gameovers/End.png",
+    "Graphics/Windowskins/Frame.png",
+    "Graphics/Pictures/Notes.txt",
+    "Graphics/Loose.png",
+    "Graphics/RPGTL/0a1b2c.png",
+    "Audio/SE/Bell.png",
+  ]);
+  assert.deepStrictEqual(images, [
+    { image: "Graphics/Pictures/Board", file: "Graphics/Pictures/Board.png" },
+    { image: "Graphics/Pictures/Sign", file: "Graphics/Pictures/Sign.png" },
+    { image: "Graphics/Titles/Cover", file: "Graphics/Titles/Cover.jpg" },
+    { image: "Graphics/Gameovers/End", file: "Graphics/Gameovers/End.png" },
+    { image: "Graphics/Menus/Banner", file: "Graphics/Menus/Banner.png" },
+  ]);
 });
 
 it("a folder's files sort where the folder sorts among its siblings", () => {

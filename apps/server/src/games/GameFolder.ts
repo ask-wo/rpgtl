@@ -23,6 +23,7 @@ import {
   splitVersion,
   textImages,
   xpArchiveName,
+  xpTextImages,
   xpGameEntries,
   xpUnpackedArchiveName,
 } from "@rpgtl/domain";
@@ -32,6 +33,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Ref from "effect/Ref";
 import type * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 
@@ -98,7 +100,7 @@ export class GameFolder extends Context.Service<
     readonly present: (game: FolderGame) => Effect.Effect<boolean, GameFileReadError>;
     /**
      * The extension of the game's image files and the key its encrypted images need, from its
-     * `data/System.json`. RPGTL reads no images of XP games yet.
+     * `data/System.json`. An XP game's images have no single extension, so this says `.png`.
      */
     readonly imageEncoding: (
       game: FolderGame,
@@ -107,8 +109,8 @@ export class GameFolder extends Context.Service<
       GameFileMissingError | GameFileReadError | GameFileInvalid
     >;
     /**
-     * The game's images that may hold text, and the key its encrypted images need; none for an XP
-     * game yet.
+     * The game's images that may hold text, and the key its encrypted images need, which an XP
+     * game has none of.
      */
     readonly textImages: (
       game: FolderGame,
@@ -126,7 +128,10 @@ export class GameFolder extends Context.Service<
     ) => Effect.Effect<string, GameFileMissingError | GameFileReadError>;
     /** The files below the game's `img/` folder, as paths below its web folder. */
     readonly images: (game: FolderGame) => Effect.Effect<ReadonlyArray<string>, GameFileReadError>;
-    /** The bytes of the game's file at `relative`, as `find` finds it. */
+    /**
+     * The bytes of the game's file at `relative`, as `find` finds it, or for an XP game from its
+     * archive first, as `Game.exe` reads it.
+     */
     readonly readFile: (
       game: FolderGame,
       relative: string,
@@ -354,6 +359,12 @@ const make = Effect.gen(function* () {
     return Option.none();
   });
 
+  // Listing a large archive's files takes about 0.3 s, and image reading reads its files one at a
+  // time, so the list of the archive read last is kept while its size and time stay the same.
+  const lastArchive = yield* Ref.make<
+    Option.Option<{ file: string; stamp: string; entries: ReadonlyArray<ArchiveEntry> }>
+  >(Option.none());
+
   const xpArchiveFiles = <A, E>(
     file: string,
     use: (
@@ -371,8 +382,17 @@ const make = Effect.gen(function* () {
               Effect.map(Option.getOrElse(() => new Uint8Array())),
               Effect.mapError(unreadable(file)),
             );
-        const size = Number((yield* handle.stat.pipe(Effect.mapError(unreadable(file)))).size);
-        const entries = yield* archiveEntries(file, size, read);
+        const info = yield* handle.stat.pipe(Effect.mapError(unreadable(file)));
+        const size = Number(info.size);
+        const stamp = `${size}:${Option.getOrUndefined(info.mtime)?.getTime()}`;
+        const kept = Option.filter(
+          yield* Ref.get(lastArchive),
+          (last) => last.file === file && last.stamp === stamp,
+        );
+        const entries = Option.isSome(kept)
+          ? kept.value.entries
+          : yield* archiveEntries(file, size, read);
+        yield* Ref.set(lastArchive, Option.some({ file, stamp, entries }));
         return yield* use(entries, (entry) =>
           Effect.map(read(entry.offset, entry.size), (bytes) => decryptEntry(entry, bytes)),
         );
@@ -405,6 +425,49 @@ const make = Effect.gen(function* () {
         return files;
       }),
     );
+  });
+
+  /**
+   * The files below the XP game's `Graphics/` folder: its archive's, renamed by Unpack or not, then
+   * its loose files, as paths such as `Graphics/Pictures/Sign.png`.
+   */
+  const xpGraphics = Effect.fnUntraced(function* (root: string) {
+    const archive = yield* findXpArchive(root);
+    const archived = Option.isSome(archive)
+      ? yield* xpArchiveFiles(archive.value.file, (entries) =>
+          Effect.succeed(entries.map((entry) => entry.path)),
+        )
+      : [];
+    const folder = yield* matchCase(root, "Graphics");
+    const loose = Option.isSome(folder)
+      ? (yield* filesUnder(path.join(root, folder.value))).map((file) => `${folder.value}/${file}`)
+      : [];
+    return [...archived.filter((file) => /^graphics\//i.test(file)), ...loose];
+  });
+
+  /** The bytes of an XP game's file: its archive's, renamed by Unpack or not, else the loose one. */
+  const xpFile = Effect.fnUntraced(function* (root: string, relative: string) {
+    const archive = yield* findXpArchive(root);
+    const wanted = relative.toLowerCase();
+    const archived = Option.isSome(archive)
+      ? yield* xpArchiveFiles(archive.value.file, (entries, content) => {
+          const entry = entries.find((each) => each.path.toLowerCase() === wanted);
+          return entry ? Effect.asSome(content(entry)) : Effect.succeedNone;
+        }).pipe(
+          Effect.catchTags({
+            GameFileInvalid: (cause) =>
+              Effect.fail(new GameFileReadError({ file: archive.value.file, cause })),
+          }),
+        )
+      : Option.none<Uint8Array>();
+    if (Option.isSome(archived)) return archived.value;
+    const matched = yield* matchCase(root, relative);
+    const file = Option.isSome(matched)
+      ? yield* fileInside(root, matched.value)
+      : Option.none<string>();
+    if (Option.isNone(file))
+      return yield* new GameFileMissingError({ file: path.join(root, relative) });
+    return yield* fs.readFile(file.value).pipe(Effect.mapError(unreadable(file.value)));
   });
 
   /** Whether the folder holds an RPG Maker XP game: its archive or its system data. */
@@ -540,7 +603,8 @@ const make = Effect.gen(function* () {
   });
 
   const findTextImages = Effect.fn("GameFolder.textImages")(function* (game: FolderGame) {
-    if (game.engine === "XP") return { images: [], key: Option.none<string>() };
+    if (game.engine === "XP")
+      return { images: xpTextImages(yield* xpGraphics(game.root)), key: Option.none<string>() };
     const system = yield* systemHeader(game.webRoot);
     const files = yield* filesUnder(path.join(game.webRoot, "img"));
     const maps = yield* Effect.forEach(
@@ -608,6 +672,7 @@ const make = Effect.gen(function* () {
     return yield* isFile(path.join(game.webRoot, "data", "System.json"));
   });
   const readFile = Effect.fn("GameFolder.readFile")(function* (game: FolderGame, relative: string) {
+    if (game.engine === "XP") return yield* xpFile(game.root, relative);
     const file = yield* find(game, relative);
     return yield* fs.readFile(file).pipe(Effect.mapError(unreadable(file)));
   });

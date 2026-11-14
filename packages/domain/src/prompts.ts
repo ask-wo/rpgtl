@@ -17,7 +17,10 @@ export interface RequestEntry {
   readonly scene?: number;
   readonly speaker?: string;
   readonly text: string;
-  /** The image the text is drawn in, below `img/`, such as `titles1/Command_0`. */
+  /**
+   * The image the text is drawn in, below `img/` or an XP game's `Graphics/`, such as
+   * `titles1/Command_0`.
+   */
   readonly image?: string;
   /** Only set where the natural English would not fit its image. */
   readonly limit?: number;

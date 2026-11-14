@@ -26,5 +26,5 @@ const all: EngineFeatures = {
 export const engineFeatures: Record<Engine, EngineFeatures> = {
   MV: all,
   MZ: all,
-  XP: { play: true, gameScripts: false, imageText: false, coverage: false, patch: true },
+  XP: { play: true, gameScripts: false, imageText: true, coverage: false, patch: true },
 };

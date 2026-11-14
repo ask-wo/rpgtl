@@ -48,7 +48,7 @@ export const layer = HttpApiBuilder.group(
     const patches = yield* XpPatch.XpPatch;
     return handlers.handleAll({
       patch: Effect.fn("xpPatch.patch")(function* ({ query }) {
-        return yield* patches.zip(query.id).pipe(
+        return yield* patches.zip(query.id, { images: query.images !== "none" }).pipe(
           Effect.catchTags({
             ...readFailed,
             StateFileError: stateFileFailed,

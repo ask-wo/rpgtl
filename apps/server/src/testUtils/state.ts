@@ -15,6 +15,7 @@ import * as ImageReader from "../imageText/ImageReader.ts";
 import * as ImageReaderSetup from "../imageText/ImageReaderSetup.ts";
 import * as ImageReading from "../imageText/ImageReading.ts";
 import * as ImageTexts from "../imageText/ImageTexts.ts";
+import * as XpImages from "../imageText/XpImages.ts";
 import * as VisionModel from "../imageText/VisionModel.ts";
 import * as StateFolder from "../state/StateFolder.ts";
 import * as FreeMemory from "../localModels/FreeMemory.ts";
@@ -139,6 +140,6 @@ export const noPrograms = Layer.mergeAll(Nwjs.layer, Mkxpz.layer).pipe(
  * NW.js and the state services.
  */
 export const playServices = Layer.mergeAll(Play.layer, Playtime.layer, Launches.layer).pipe(
-  Layer.provideMerge(Layer.mergeAll(Settings.layer, Frontend.layer)),
+  Layer.provideMerge(Layer.mergeAll(Settings.layer, Frontend.layer, XpImages.layer)),
   Layer.provide(NodeChildProcessSpawner.layer),
 );

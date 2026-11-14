@@ -20,6 +20,7 @@ import {
   gameLanguage,
   type ImageFileProblem,
   imageBlocks,
+  imageEntries,
   imageHash,
   type ImagePlan,
   imagePlan,
@@ -351,10 +352,19 @@ const make = Effect.gen(function* () {
     // loading its models takes a while.
     if (pending.length > 0) yield* loading("imageReader", Effect.andThen(reader.start, thisRun));
 
+    // Most images give no entries, and rewriting a large catalog for each of them can take as long as
+    // reading the image, so the catalog is written only when the image entries change.
+    let writtenEntries: string | undefined;
     const save = Effect.gen(function* () {
+      const entryIds = imageEntries(read)
+        .map((entry) => entry.id)
+        .join();
+      if (entryIds === writtenEntries)
+        return yield* imageTexts.save(id, readResults(read.images, runs));
       const next = withImageEntries(yield* catalogs.get(id), read, before);
       yield* imageTexts.save(id, readResults(read.images, runs));
       yield* catalogs.write(next);
+      writtenEntries = entryIds;
       const entries = next.entries.filter(isImageText).length;
       yield* update((now) => ({ ...now, entries }));
     }).pipe(Effect.uninterruptible);

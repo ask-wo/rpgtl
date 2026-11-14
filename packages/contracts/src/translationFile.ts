@@ -7,7 +7,7 @@ import {
   PronounValue,
   SourceLanguage,
 } from "./catalog.ts";
-import { ExportedImage, ImageRun, RecordWith } from "./imageText.ts";
+import { ExportedImage, ImageRun, imagePath, RecordWith } from "./imageText.ts";
 import { RunModels } from "./runLog.ts";
 
 const Text = Schema.Trim.check(Schema.isNonEmpty());
@@ -43,7 +43,7 @@ export const TranslationFile = Schema.Struct({
   imageBold: Schema.optionalKey(Schema.Literals(["always", "never"])),
   imageFont: Schema.optionalKey(LetteringFont),
   unchangedImages: Schema.optionalKey(
-    Schema.Array(Schema.String.check(Schema.isStartingWith("img/"))),
+    Schema.Array(Schema.String.check(Schema.isPattern(imagePath))),
   ),
   /**
    * What each run a guess's `run` names used, by that start time. An export adds each run's
@@ -56,7 +56,7 @@ export const TranslationFile = Schema.Struct({
    */
   imageRuns: Schema.optionalKey(Schema.Record(Schema.String, ImageRun)),
   /** The read results and erased backgrounds of the game's images, when exported with them. */
-  images: Schema.optionalKey(RecordWith(/^img\//, "an image path", ExportedImage)),
+  images: Schema.optionalKey(RecordWith(imagePath, "an image path", ExportedImage)),
 });
 export type TranslationFile = typeof TranslationFile.Type;
 

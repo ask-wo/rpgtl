@@ -21,6 +21,7 @@ import * as Games from "./games/Games.ts";
 import * as ImageReader from "./imageText/ImageReader.ts";
 import * as ImageReaderSetup from "./imageText/ImageReaderSetup.ts";
 import * as ImageReading from "./imageText/ImageReading.ts";
+import * as XpImages from "./imageText/XpImages.ts";
 import * as ImageTexts from "./imageText/ImageTexts.ts";
 import * as VisionModel from "./imageText/VisionModel.ts";
 import * as RunKinds from "./runs/RunKinds.ts";
@@ -53,6 +54,7 @@ const services = <E, R>(frontend: Layer.Layer<Frontend.Frontend, E, R>) =>
     Layer.provideMerge(
       Layer.mergeAll(Runs.layer, ImageReading.layer, Launches.layer, Play.layer, Playtime.layer),
     ),
+    Layer.provideMerge(XpImages.layer),
     Layer.provideMerge(
       Layer.mergeAll(
         Catalogs.layer,

@@ -29,8 +29,16 @@ import { displayFlags } from "./displayFlags.ts";
 export type PlayFile = Data.TaggedEnum<{
   Stored: { readonly path: string };
   Made: { readonly text: string; readonly contentType: string };
+  /** A file of an XP game, which may be in its archive. */
+  Read: { readonly bytes: Uint8Array; readonly contentType: string };
 }>;
 export const PlayFile = Data.taggedEnum<PlayFile>();
+
+const imageTypes: Readonly<Record<string, string>> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+};
 
 const dataFile = /^data\/[^/]+\.json$/;
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
@@ -119,6 +127,11 @@ const make = Effect.gen(function* () {
 
   const file = Effect.fn("Play.file")(function* (id: string, relative: string) {
     const game = yield* games.get(id);
+    if (game.engine === "XP")
+      return PlayFile.Read({
+        bytes: yield* gameFolder.readFile(game, relative),
+        contentType: imageTypes[path.extname(relative).toLowerCase()] ?? "application/octet-stream",
+      });
     const found = yield* gameFolder.find(game, relative || "index.html");
     const below = path.relative(game.webRoot, found).split(path.sep).join("/");
     if (below === "index.html")

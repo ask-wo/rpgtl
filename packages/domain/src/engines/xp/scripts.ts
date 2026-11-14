@@ -6,6 +6,7 @@ import { sourceText } from "../mvmz/extract.ts";
 import { GameFile, GameFileInvalid } from "../mvmz/gameFile.ts";
 import { GameDataChanged } from "../mvmz/apply.ts";
 import { type RubyLiteral, rubyLiterals } from "./rubyLiterals.ts";
+import { xpImageScript } from "./images.ts";
 import { textFittingScript } from "./textFitting.ts";
 
 const utf8 = new TextDecoder();
@@ -231,11 +232,17 @@ export function withTexts(code: string, texts: ReadonlyMap<number, LiteralText>)
     : undefined;
 }
 
+const rpgtlScript = (name: string, code: string) => [
+  0,
+  new TextEncoder().encode(name),
+  zlibSync(new TextEncoder().encode(code)),
+];
+
 /**
  * `Scripts.rxdata` with the literals of `texts`, by script and literal index, set to their text,
- * and the script that fits English into the game's text boxes before `Main`, which starts the
- * game, or before the last script, which is `Main` in a game that renamed it. Scripts without
- * text keep their bytes. Fails when a literal isn't its source anymore.
+ * and RPGTL's scripts that draw English into images and fit it into the game's text boxes before
+ * `Main`, which starts the game, or before the last script, which is `Main` in a game that renamed
+ * it. Scripts without text keep their bytes. Fails when a literal isn't its source anymore.
  */
 export const applyScriptTexts = (
   file: string,
@@ -251,10 +258,11 @@ export const applyScriptTexts = (
       row[2] = zlibSync(new TextEncoder().encode(changed));
     }
     const main = rows.findLastIndex(([, name]) => nameOf(name).trim().toLowerCase() === "main");
-    rows.splice(main < 0 ? Math.max(rows.length - 1, 0) : main, 0, [
+    rows.splice(
+      main < 0 ? Math.max(rows.length - 1, 0) : main,
       0,
-      new TextEncoder().encode("RPGTL text fitting"),
-      zlibSync(new TextEncoder().encode(textFittingScript)),
-    ]);
+      rpgtlScript("RPGTL image text", xpImageScript),
+      rpgtlScript("RPGTL text fitting", textFittingScript),
+    );
     return Result.succeed(dump(rows));
   });
