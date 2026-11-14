@@ -50,7 +50,7 @@ The words the code and these docs are built from. Use them in code, tests, docs 
 | --- | --- |
 | Image text | Entries read from a game's images. |
 | Image reading | A run that reads a game's images with the **image reader** (`apps/image-reader`), and with the **fallback reader** (the page's **Backup reader**), a vision model, where it isn't sure. |
-| Erased background | A copy of an image with its text filled in, which the English is drawn on. |
+| Erased background | A copy of an image with its text filled in, which the English is drawn on. The state folder keeps the whole copy, but a translation file carries only the tiles where it differs from the game's image (`erasedPatches`). |
 | Lettering | Drawing an image text entry's English into its erased background, by the game, the page and, for an XP game, the server alike (`lettering.ts`). |
 | Limit, room | The limit is how many characters the translator is asked to keep an image text entry within. The room is the space its English may be drawn in, which sets its size. |
 
