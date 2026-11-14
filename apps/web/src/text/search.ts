@@ -137,8 +137,9 @@ export const isShown = (entry: Entry, show: Shown, context: ShownContext) => {
   }
 };
 
-/** Whether the entry's original or English holds the search, ignoring case. */
+/** Whether the entry's original, English or English from before clearing holds the search, ignoring case. */
 export const matches = (entry: Entry, query: string) =>
   !query ||
   entry.source.toLowerCase().includes(query) ||
-  entryTranslation(entry).toLowerCase().includes(query);
+  entryTranslation(entry).toLowerCase().includes(query) ||
+  (entry.previous ?? "").toLowerCase().includes(query);

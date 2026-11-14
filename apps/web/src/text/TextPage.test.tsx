@@ -292,6 +292,31 @@ test("Failed, Last run and Flagged show what a run or a check left on the entrie
     .toBeVisible();
 });
 
+test("a cleared line offers its English from before clearing, which a search finds", async () => {
+  const server = fakeServer();
+  server.catalog = {
+    ...saved,
+    entries: [
+      ...saved.entries,
+      { ...line("7", message(2, 4), "晚安", ""), previous: "Good night" },
+    ],
+  };
+  showText();
+  server.activity(idle);
+  const row = page.getByRole("group", { name: "晚安" });
+  await page.getByRole("searchbox", { name: "Search the text" }).fill("good night");
+  await expect
+    .element(page.getByRole("textbox", { name: "English for 你好" }))
+    .not.toBeInTheDocument();
+  await expect.element(row.getByText("Before clearing:", { exact: false })).toBeVisible();
+  await row.getByRole("button", { name: "Use the old one" }).click();
+  await vi.waitFor(() => expect(server.saves).toEqual([[{ id: "7", translation: "Good night" }]]));
+  await expect
+    .element(page.getByRole("textbox", { name: "English for 晚安" }))
+    .toHaveValue("Good night");
+  await expect.element(row.getByText("Before clearing:", { exact: false })).not.toBeInTheDocument();
+});
+
 test("while a run goes the English can't be edited", async () => {
   const server = fakeServer();
   showText();
