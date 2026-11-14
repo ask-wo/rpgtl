@@ -10,6 +10,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import * as Ref from "effect/Ref";
+import * as Semaphore from "effect/Semaphore";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 import * as StateFolder from "../state/StateFolder.ts";
 
@@ -128,6 +129,14 @@ export class Games extends Context.Service<
       id: string,
       effect: Effect.Effect<A, E, R>,
     ) => Effect.Effect<A, E | GameBusyError, R>;
+    /**
+     * Runs a short change of the game's state holding the game, after the edits before it; fails
+     * at once when another kind of operation, such as a run, holds it.
+     */
+    readonly edit: <A, E, R>(
+      id: string,
+      effect: Effect.Effect<A, E, R>,
+    ) => Effect.Effect<A, E | GameBusyError, R>;
   }
 >()("@rpgtl/server/games/Games") {}
 
@@ -174,6 +183,18 @@ const make = Effect.gen(function* () {
     effect: Effect.Effect<A, E, R>,
   ) {
     return yield* Effect.scoped(Effect.andThen(hold(id), effect));
+  });
+  const editQueues = new Map<string, Semaphore.Semaphore>();
+  const edit = Effect.fn("Games.edit")(function* <A, E, R>(
+    id: string,
+    effect: Effect.Effect<A, E, R>,
+  ) {
+    let queue = editQueues.get(id);
+    if (queue === undefined) {
+      queue = Semaphore.makeUnsafe(1);
+      editQueues.set(id, queue);
+    }
+    return yield* queue.withPermits(1)(exclusive(id, effect));
   });
 
   const idAt = Effect.fn("Games.idAt")(function* (webRoot: string) {
@@ -248,6 +269,7 @@ const make = Effect.gen(function* () {
     delete: deleteGame,
     hold,
     exclusive,
+    edit,
   });
 });
 

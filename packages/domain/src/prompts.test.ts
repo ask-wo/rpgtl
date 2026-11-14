@@ -61,3 +61,17 @@ it("A pronoun is shown by what the character says or a gendered word in the game
     "unknown",
   );
 });
+
+it("Every request for a Japanese game asks to translate katakana that spells a Japanese word, in the text pass too", () => {
+  const textPass = translationSystemPrompt({
+    language: "japanese",
+    names: false,
+    scenes: false,
+    following: false,
+  });
+  assert.include(textPass, "Katakana");
+  assert.notInclude(
+    translationSystemPrompt({ language: "chinese", names: true, scenes: false, following: false }),
+    "Katakana",
+  );
+});

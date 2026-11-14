@@ -292,6 +292,17 @@ test("Failed, Last run and Flagged show what a run or a check left on the entrie
     .toBeVisible();
 });
 
+test("Changed shows only the entries whose English differs from before clearing, with both", async () => {
+  fakeServer();
+  showText({ show: "changed" });
+  await expect.element(page.getByRole("button", { name: "Changed 1" })).toBeVisible();
+  await expect.element(page.getByRole("textbox", { name: "English for 再见" })).toHaveValue("Bye");
+  await expect.element(entries().getByText("Before the last run:", { exact: false })).toBeVisible();
+  await expect
+    .element(page.getByRole("textbox", { name: "English for 你好" }))
+    .not.toBeInTheDocument();
+});
+
 test("a cleared line offers its English from before clearing, which a search finds", async () => {
   const server = fakeServer();
   server.catalog = {

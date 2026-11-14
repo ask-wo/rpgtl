@@ -90,7 +90,7 @@ function lengthUnlike(source: string, translation: string) {
 // "Body" counts; "HP" doesn't, since it is not capitalised only at its first letter.
 export const capitalisedWord = (word: string) =>
   /^\p{Lu}/u.test(word) && /\p{Ll}/u.test(word) && !/\p{Lu}/u.test(word.slice(1));
-const wordPattern = (english: string) =>
+export const wordPattern = (english: string) =>
   new RegExp(`(?<![\\p{L}\\p{N}])${RegExp.escape(english)}(?![\\p{L}\\p{N}])`, "gu");
 
 // Most longer words capitalised, as in a map name such as "Return to the Old Lighthouse".

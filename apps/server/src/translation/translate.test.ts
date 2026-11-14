@@ -26,13 +26,22 @@ const Request = Schema.fromJsonString(
   }),
 );
 
-const english: Record<string, string> = { 你好: "Hello", 再见: "Goodbye" };
+const english: Record<string, string> = {
+  你好: "Hello",
+  再见: "Goodbye",
+  阿琳: "Arlene",
+  阿琳的伞: "Arlene's Umbrella",
+  阿琳的鞋: "Arlene's Shoes",
+};
 
 /** Answers each line in `english`, and is flagged by safeguards when asked to translate 禁止. */
 const model = LanguageModel.make({
   generateText: Effect.fnUntraced(function* (provider) {
     const user = (yield* textMessages("test", provider.prompt)).at(-1)?.content ?? "";
-    const { entries } = yield* Schema.decodeEffect(Request)(user).pipe(Effect.orDie);
+    // A question such as a term's kind gets no answer.
+    const { entries } = yield* Schema.decodeEffect(Request)(user).pipe(
+      Effect.catchTags({ SchemaError: () => Effect.succeed({ entries: [] }) }),
+    );
     if (entries.some(({ text }) => text.includes("禁止")))
       return yield* AiError.make({
         module: "test",
@@ -94,11 +103,35 @@ const translated = (entries: Catalog["entries"], batchSize = 40) => {
       warn: () => Effect.void,
       request: (request) => Effect.sync(() => requests.push(request)),
       ask: () => Effect.void,
+      speakers: () => Effect.void,
       progress: Effect.void,
     }),
   );
   return { draft, requests, run };
 };
+
+const item = (record: number, source: string): Entry => ({
+  ...line(String(record), 0, source),
+  location: { _tag: "RecordField", table: "items", record, field: "name" },
+});
+
+it.effect(
+  "a name that other names contain is translated first, and their requests use its English",
+  () =>
+    Effect.gen(function* () {
+      const { requests, run } = translated(
+        [item(1, "阿琳的伞"), item(2, "阿琳的鞋"), item(3, "阿琳")],
+        1,
+      );
+      yield* run;
+      assert.deepStrictEqual(
+        requests.map((request) => request.entryIds),
+        [["3"], ["1"], ["2"]],
+      );
+      for (const request of requests.slice(1))
+        assert.include(JSON.stringify(request.request.messages).toLowerCase(), "arlene");
+    }),
+);
 
 it.effect("a batch the safeguards flag fails whole and is never asked again", () =>
   Effect.gen(function* () {

@@ -62,6 +62,7 @@ const english: Record<string, string> = {
   艾琳: "Arlene",
   你好: "Hello",
   艾琳来了: "Arlene is here",
+  米娅: "Mia",
 };
 
 /** The saved settings the runs read: Ollama with the model the fake Ollama answers as. */
@@ -545,6 +546,28 @@ layer(Services)((it) => {
       assert.include(last, { kind: "build-glossary", total: 1, done: 1, left: 0 });
       assert.deepStrictEqual(yield* translations, { actor: "Arlene", hello: "", arrives: "" });
       assert.deepStrictEqual(yield* Ref.get(yield* Unloaded), ["qwen"]);
+    }),
+  );
+});
+
+layer(
+  runServicesWith({
+    [gameFiles(game.id).catalog]: JSON.stringify({
+      ...catalog,
+      entries: [...catalog.entries, { ...dialogue("greets", 2, "你好"), speaker: "米娅" }],
+    }),
+  }),
+)((it) => {
+  it.effect("a Build glossary run counts the speakers it translates with the names", () =>
+    Effect.gen(function* () {
+      const runs = yield* Runs.Runs;
+      yield* runs.start(game.id, "build-glossary");
+      const last = yield* ended(runs);
+      assert.deepInclude(last, { names: { total: 2, done: 2, failed: 0 } });
+      const { glossary } = yield* (yield* Catalogs.Catalogs).get(game.id);
+      assert.isNotEmpty(
+        termTranslation(glossary.find((term) => term.source === "米娅") ?? { translation: {} }),
+      );
     }),
   );
 });

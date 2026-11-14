@@ -1,6 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import type { Catalog, Entry, GlossaryTerm } from "@rpgtl/contracts";
-import { CatalogDraft, entryTranslation } from "./index.ts";
+import { CatalogDraft, entryTranslation, speakerEntries } from "./index.ts";
 
 const line = (id: string, index: number, source: string, list = 1): Entry => ({
   id,
@@ -208,6 +208,39 @@ it("a name made only of control codes is no glossary term, so the model is never
     draft.catalog.glossary.map((each) => [each.source, each.pronoun]),
     [["\\N[7]", undefined]],
   );
+});
+
+it("a speaker whose term was cleared is translated again, and its English fills the term", () => {
+  const message = line("a", 0, "林雨\n你好");
+  const draft = new CatalogDraft(
+    {
+      ...catalogOf([message]),
+      glossary: [
+        {
+          source: "林雨",
+          translation: {},
+          kind: { guess: { value: "character", run: "earlier" } },
+          previous: "Lin Yu",
+        },
+      ],
+    },
+    new Map(),
+    run,
+  );
+  const prepared = draft.prepare(message);
+  assert.strictEqual(draft.speaker(prepared), "林雨");
+  assert.deepStrictEqual(
+    speakerEntries(draft, [prepared]).map((entry) => entry.id),
+    ["speaker:林雨"],
+  );
+  draft.addTerm("林雨", "Lin Yu", true);
+  assert.deepStrictEqual(draft.catalog.glossary, [
+    {
+      source: "林雨",
+      translation: { guess: { value: "Lin Yu", run } },
+      kind: { guess: { value: "character", run: "earlier" } },
+    },
+  ]);
 });
 
 it("a first line that is only a glossary name is the speaker, kept on its own line in English", () => {

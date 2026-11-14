@@ -115,6 +115,8 @@ export const GlossaryTerm = Schema.Struct({
   kind: Schema.Struct({ guess: Guess(TermKind, {}), user: Schema.optionalKey(TermKind) }),
   /** Only characters have one; none means RPGTL has not checked the character yet. */
   pronoun: Schema.optionalKey(Pronoun),
+  /** The English the term had before it was last cleared; dropped once it is that English again. */
+  previous: Schema.optionalKey(Schema.String),
 });
 export type GlossaryTerm = typeof GlossaryTerm.Type;
 

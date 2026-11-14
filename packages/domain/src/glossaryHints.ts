@@ -42,6 +42,7 @@ export function requestGlossary(
   const shorts = shortNameTranslations(glossary);
   const terms = new Map<string, PromptTerm>();
   for (const term of glossary) {
+    if (!termTranslation(term)) continue;
     const mentionsShort =
       termKind(term) === "character" &&
       nameParts(term.source.trim()).some(

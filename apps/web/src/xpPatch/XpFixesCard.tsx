@@ -18,15 +18,25 @@ export function XpFixesCard() {
   const fixes = AsyncResult.getOrElse(useAtomValue(xpFixes(game.id)), () => []);
   const set = useAtomSet(setFix, { mode: "promiseExit" });
   const [error, setError] = useState<string>();
+  // Saving rewrites the game's whole catalog, so a switch shows its new state before the save ends.
+  const [wanted, setWanted] = useState<ReadonlyMap<string, boolean>>(new Map());
   if (fixes.length === 0) return null;
 
   const change = async (name: string, on: boolean) => {
     setError(undefined);
+    setWanted((now) => new Map(now).set(name, on));
     const exit = await set({
       payload: { id: game.id, name, on },
       reactivityKeys: fixesKey(game.id),
     });
-    if (Exit.isFailure(exit)) setError(failureMessage(exit.cause));
+    if (Exit.isFailure(exit)) {
+      setWanted((now) => {
+        const next = new Map(now);
+        next.delete(name);
+        return next;
+      });
+      setError(failureMessage(exit.cause));
+    }
   };
   return (
     <Card>
@@ -41,7 +51,7 @@ export function XpFixesCard() {
           <div key={fix.name} className="flex items-start gap-2">
             <Switch
               id={`fix-${fix.name}`}
-              checked={fix.on}
+              checked={wanted.get(fix.name) ?? fix.on}
               onCheckedChange={(on) => void change(fix.name, on)}
             />
             <Label htmlFor={`fix-${fix.name}`} className="flex flex-col items-start gap-0.5">

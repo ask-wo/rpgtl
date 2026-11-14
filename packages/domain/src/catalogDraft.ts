@@ -17,7 +17,7 @@ import { keepsTags, withoutTags } from "./engines/xp/databaseTags.ts";
 import { gameLanguage } from "./language.ts";
 import { isImageText, isMessage, isScriptText, type Placed } from "./location.ts";
 import { isActorName, isSpeakerNameEntry } from "./nameEntries.ts";
-import { type NamedTerm, nameTerm } from "./nameTerm.ts";
+import { nameTerm } from "./nameTerm.ts";
 import { collectClues, linesAbout, pronounFromClues } from "./pronouns.ts";
 import { type RequestText, requestText, withoutCodes } from "./requestText.ts";
 import { showTextSpeakers, translationReuse } from "./reuse.ts";
@@ -127,6 +127,10 @@ export class CatalogDraft {
     return this.#entries.filter((entry) => this.#failed.has(entry.id)).map((e) => e.id);
   }
 
+  hasFailed(id: string) {
+    return this.#failed.has(id);
+  }
+
   term(source: string): DraftTerm | undefined {
     return this.#terms.get(source.trim());
   }
@@ -140,16 +144,31 @@ export class CatalogDraft {
     this.#terms.set(term.source, term);
   }
 
+  /** The term for the source, when it has English. */
+  translatedTerm(source: string): DraftTerm | undefined {
+    const term = this.term(source);
+    return term && termTranslation(term) ? term : undefined;
+  }
+
+  /** Gives a term without English the run's English, keeping its kind and pronoun. */
+  #fill(term: DraftTerm, translation: string) {
+    term.translation = { guess: this.#guess(translation) };
+    if (term.previous === translation) delete term.previous;
+    return term;
+  }
+
   /**
-   * Adds a term for a name and the run's English, unless the glossary has one. Its kind is the
-   * rules' guess, for the model to check.
+   * Adds a term for a name and the run's English, unless the glossary has one with English. Its
+   * kind is the rules' guess, for the model to check.
    */
   addTerm(source: string, translation: string, fromOrigin: boolean): DraftTerm | undefined {
     const trimmedSource = source.trim();
     const trimmedTranslation = translation.trim();
-    if (!hasWords(trimmedSource) || !trimmedTranslation || this.#terms.has(trimmedSource))
+    if (!hasWords(trimmedSource) || !trimmedTranslation || this.translatedTerm(trimmedSource))
       return undefined;
     const named = nameTerm(trimmedSource, trimmedTranslation, fromOrigin, this.language);
+    const existing = this.term(named.source);
+    if (existing) return this.#fill(existing, named.translation);
     const term: DraftTerm = {
       source: named.source,
       translation: { guess: this.#guess(named.translation) },
@@ -179,17 +198,6 @@ export class CatalogDraft {
     return keepsTags(this.#catalog.game.engine, entry);
   }
 
-  /** Adds the names the model found, such as Claude's reading of the game, with its kinds. */
-  addTerms(names: ReadonlyArray<NamedTerm>) {
-    for (const { source, translation, kind } of names)
-      if (!this.#terms.has(source))
-        this.#add({
-          source,
-          translation: { guess: this.#guess(translation) },
-          kind: { guess: this.#guess(kind) },
-        });
-  }
-
   /**
    * The entry's source as a request sends it. In a message, a first line that is only a
    * glossary term or the speaker's name is the speaker, kept aside from the text.
@@ -216,7 +224,7 @@ export class CatalogDraft {
   /** The speaker as requests name them: in English when the glossary has the name. */
   speaker(item: Prepared): string | undefined {
     const name = this.speakerName(item);
-    const term = name === undefined ? undefined : this.term(name);
+    const term = name === undefined ? undefined : this.translatedTerm(name);
     return term ? termTranslation(term) : name;
   }
 
@@ -257,7 +265,7 @@ export class CatalogDraft {
   /** The text with the speaker's names in English, where the glossary has them. */
   #withSpeakerNames(item: Prepared, text: string) {
     const tagged = text.replace(speakerTagPattern, (tag, name: string) => {
-      const term = this.term(name);
+      const term = this.translatedTerm(name);
       const translation = term && termTranslation(term);
       return translation === undefined ? tag : tag.replace(/<[^>]*>/, () => `<${translation}>`);
     });

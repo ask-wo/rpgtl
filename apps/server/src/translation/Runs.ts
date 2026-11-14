@@ -243,6 +243,7 @@ const make = Effect.gen(function* () {
     const id = catalog.game.id;
     const draft = new CatalogDraft(catalog, yield* catalogs.imageLimits(id), started);
     const saves = yield* Semaphore.make(1);
+    const speakers = new Map<string, string>();
     // Saves the draft as it is when the save starts, so an earlier save never overwrites a later;
     // the status counts what the file holds, so Stop can't come between the two.
     const save = saves.withPermits(1)(
@@ -257,9 +258,13 @@ const make = Effect.gen(function* () {
             ...now,
             done,
             names: {
-              total: names.size,
-              done: translated.filter((entry) => names.has(entry.id)).length,
-              failed: failed.filter((failedId) => names.has(failedId)).length,
+              total: names.size + speakers.size,
+              done:
+                translated.filter((entry) => names.has(entry.id)).length +
+                [...speakers.values()].filter((source) => draft.translatedTerm(source)).length,
+              failed:
+                failed.filter((failedId) => names.has(failedId)).length +
+                [...speakers.keys()].filter((speaker) => draft.hasFailed(speaker)).length,
             },
             translated: translated.length,
             failed,
@@ -290,6 +295,10 @@ const make = Effect.gen(function* () {
       }),
       ask: Effect.fn("RunReport.ask")(function* (line) {
         yield* log.write({ type: "ask", ...line }).pipe(Effect.orDie);
+      }),
+      speakers: Effect.fn("RunReport.speakers")(function* (entries) {
+        for (const speaker of entries) speakers.set(speaker.id, speaker.source);
+        yield* save;
       }),
       progress: save,
     });

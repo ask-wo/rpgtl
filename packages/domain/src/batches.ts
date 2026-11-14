@@ -6,6 +6,7 @@ import type { ContextLine, RequestEntry } from "./prompts.ts";
 import { withoutCodes } from "./requestText.ts";
 import { entryTranslation } from "./guesses.ts";
 import { isImageText, listKey, type Placed, placeKey, placeOf } from "./location.ts";
+import { hasTerm } from "./termMatch.ts";
 
 /**
  * The event list an entry belongs to, or its file outside event lists: one scene of the game. The
@@ -56,6 +57,39 @@ export const nameGroups = (entries: ReadonlyArray<RunEntry>, batchSize: number) 
   ).flatMap((group) => cut(group, batchSize));
 
 /**
+ * The untranslated names that two or more other untranslated names contain, such as a character's
+ * name in the items named after her. The glossary pass translates them first, so that the batches
+ * of those other names, which run side by side, get their English as a hint. A source listed twice,
+ * such as a character's name and the same character as a speaker, goes once.
+ */
+export function sharedNames(entries: ReadonlyArray<RunEntry>) {
+  const sources = [
+    ...new Set(entries.filter((entry) => !entryTranslation(entry)).map((e) => e.source.trim())),
+  ];
+  const shorter = sources.filter((source) => Array.from(source).length >= 2);
+  const lengths = [...new Set(shorter.map((source) => source.length))];
+  const known = new Set(shorter);
+  const containing = new Map<string, number>();
+  for (const name of sources) {
+    const inside = new Set<string>();
+    for (const length of lengths)
+      for (let at = 0; at + length <= name.length; at++) {
+        const part = name.slice(at, at + length);
+        if (part !== name && known.has(part) && hasTerm(name, part)) inside.add(part);
+      }
+    for (const part of inside) containing.set(part, (containing.get(part) ?? 0) + 1);
+  }
+  const picked = new Set<string>();
+  return entries.filter((entry) => {
+    const source = entry.source.trim();
+    if (entryTranslation(entry) || (containing.get(source) ?? 0) < 2 || picked.has(source))
+      return false;
+    picked.add(source);
+    return true;
+  });
+}
+
+/**
  * The other entries by scene, which see the scene's earlier lines as context. Only an event list
  * needs them in order; a scene outside one, such as a table's thousands of descriptions, is cut
  * like `nameGroups` so its batches run side by side.
@@ -82,7 +116,7 @@ export function speakerEntries(draft: CatalogDraft, prepared: ReadonlyArray<Prep
       isSpeakerNameEntry(item.entry) ? item.entry.source : undefined,
     ]) {
       const trimmed = name?.trim();
-      if (trimmed && !draft.term(trimmed)) names.add(trimmed);
+      if (trimmed && !draft.translatedTerm(trimmed)) names.add(trimmed);
     }
   return [...names].map((name): RunEntry => ({
     id: `speaker:${name}`,

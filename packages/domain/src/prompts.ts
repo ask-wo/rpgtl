@@ -59,6 +59,13 @@ const namesInstructions: Record<SourceLanguage, string> = {
   korean:
     "Write Korean person names with the family name first in its usual spelling and the given name in Revised Romanization as one word (김민지 → Kim Minji, 이서준 → Lee Seojun), and names that sound Western or Japanese in their usual English spelling (엘리자베스 → Elizabeth, 하루토 → Haruto).",
 };
+const languageInstructions: Record<SourceLanguage, ReadonlyArray<string>> = {
+  chinese: [],
+  japanese: [
+    "Katakana can also spell an ordinary Japanese word for style, not a loanword or a name: translate its meaning, also inside a name or title (ソヨカゼ村 → Breeze Village, オヤカタ → Foreman), and keep honorifics in romaji as usual.",
+  ],
+  korean: [],
+};
 const scenesInstruction =
   "Entries and context lines with a scene number come from separate scenes of the game: use only a scene's own context for its entries, and treat different scenes as unrelated.";
 const followingInstruction =
@@ -76,6 +83,7 @@ export function translationSystemPrompt(parts: {
 }) {
   return [
     translationInstructions,
+    ...languageInstructions[parts.language],
     ...(parts.names ? [namesInstructions[parts.language]] : []),
     ...(parts.scenes ? [scenesInstruction] : []),
     ...(parts.following ? [followingInstruction] : []),

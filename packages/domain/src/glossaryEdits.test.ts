@@ -5,6 +5,7 @@ import {
   entryTranslation,
   newEntry,
   termEdit,
+  termTranslation,
   withGlossary,
   withTermLinesCleared,
 } from "./index.ts";
@@ -53,6 +54,44 @@ it("a saved glossary renames the entries that are exactly a renamed term, and on
   assert.deepStrictEqual(saved.glossary[0]?.pronoun, { user: "she" });
 });
 
+const item = (source: string, value: string): GlossaryTerm => ({
+  source,
+  translation: { guess: { value, run } },
+  kind: { guess: { value: "name", run } },
+});
+
+it("renaming a term renames it in the run's English of the terms that contain it", () => {
+  const umbrella = item("阿琳的伞", "Arlene's Umbrella");
+  const typed = { ...item("阿琳的鞋", "Arlene's Shoes"), translation: { user: "Arlene's Boots" } };
+  const longer = item("阿琳娜", "Arlenea");
+  const withItems: Catalog = {
+    ...catalog,
+    entries: [...catalog.entries, line(4, "阿琳的伞", "Arlene's Umbrella")],
+    glossary: [arlene, umbrella, typed, longer],
+  };
+  const saved = Result.getOrThrow(
+    withGlossary(withItems, [
+      { source: "阿琳", translation: "Irene" },
+      ...[umbrella, typed, longer].map(termEdit),
+    ]),
+  );
+  assert.deepStrictEqual(saved.glossary.map(termTranslation), [
+    "Irene",
+    "Irene's Umbrella",
+    "Arlene's Boots",
+    "Arlenea",
+  ]);
+  assert.strictEqual(saved.entries.map(entryTranslation).at(-1), "Irene's Umbrella");
+  const rest = [umbrella, typed, longer].map(termEdit);
+  const emptied = Result.getOrThrow(
+    withGlossary(withItems, [{ source: "阿琳", translation: "" }, ...rest]),
+  );
+  const retyped = Result.getOrThrow(
+    withGlossary(emptied, [{ source: "阿琳", translation: "Irene" }, ...rest]),
+  );
+  assert.strictEqual(retyped.glossary.map(termTranslation)[1], "Irene's Umbrella");
+});
+
 it("a term's English saved blank or with spaces around it renames no entry to that", () => {
   const blank = Result.getOrThrow(withGlossary(catalog, [{ source: "阿琳", translation: " " }]));
   assert.deepStrictEqual(blank.entries, catalog.entries);
@@ -86,6 +125,16 @@ it("a saved term keeps its run's guesses beside the user's values, and without t
   assert.deepStrictEqual(added.glossary, [
     { source: "米娅", translation: { user: "Mia" }, kind: { guess: { value: "name" } } },
   ]);
+});
+
+it("a saved term keeps the English it had before clearing until the user types it again", () => {
+  const emptied = Result.getOrThrow(withGlossary(catalog, [{ source: "阿琳", translation: "" }]));
+  assert.strictEqual(emptied.glossary[0]?.previous, "Arlene");
+  const cleared = { ...catalog, glossary: [{ ...arlene, translation: {}, previous: "Arlene" }] };
+  const typed = (translation: string) =>
+    Result.getOrThrow(withGlossary(cleared, [{ source: "阿琳", translation }])).glossary[0];
+  assert.strictEqual(typed("Irene")?.previous, "Arlene");
+  assert.isUndefined(typed("Arlene")?.previous);
 });
 
 it("a glossary that lists a source twice isn't saved, and the error names it", () => {

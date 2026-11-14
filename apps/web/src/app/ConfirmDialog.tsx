@@ -16,6 +16,7 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   children,
+  options,
   keep,
   confirm,
   onConfirm,
@@ -24,6 +25,8 @@ export function ConfirmDialog({
   readonly onOpenChange: (open: boolean) => void;
   readonly title: ReactNode;
   readonly children: ReactNode;
+  /** Choices about the change, below its description. */
+  readonly options?: ReactNode;
   readonly keep: string;
   readonly confirm: string;
   readonly onConfirm: () => void;
@@ -35,6 +38,7 @@ export function ConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{children}</AlertDialogDescription>
         </AlertDialogHeader>
+        {options}
         <AlertDialogFooter>
           <AlertDialogCancel>{keep}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={onConfirm}>

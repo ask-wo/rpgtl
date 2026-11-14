@@ -2,8 +2,10 @@ import type { Catalog, Entry, GlossaryTerm, TermEdit } from "@rpgtl/contracts";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { cleared } from "./catalog.ts";
+import { wordPattern } from "./checks.ts";
+import { hasTerm } from "./termMatch.ts";
 import { entriesToClear } from "./shortNames.ts";
-import { entryTranslation, mapInUse, termTranslation, termKind } from "./guesses.ts";
+import { entryTranslation, inUse, mapInUse, termTranslation, termKind } from "./guesses.ts";
 
 /** A glossary that lists the same source twice. */
 export class GlossaryTermRepeated extends Schema.TaggedError<GlossaryTermRepeated>()(
@@ -52,11 +54,52 @@ const withOwn = <A, G>(guess: G | undefined, user: A | undefined) => ({
 export function savedTerm(saved: GlossaryTerm | undefined, edit: TermEdit): GlossaryTerm {
   const translation = edit.translation?.trim();
   const pronoun = withOwn(saved?.pronoun?.guess, edit.pronoun);
+  const english = translation === "" ? {} : withOwn(saved?.translation.guess, translation);
+  const previous =
+    translation === "" && saved ? termTranslation(saved) || saved.previous : saved?.previous;
   return withoutStrayPronoun({
     source: edit.source,
-    translation: translation === "" ? {} : withOwn(saved?.translation.guess, translation),
+    translation: english,
     kind: { guess: saved?.kind.guess ?? { value: "name" }, ...withOwn(undefined, edit.kind) },
     ...((pronoun.guess || pronoun.user) && { pronoun }),
+    ...(previous !== undefined && previous !== inUse(english) && { previous }),
+  });
+}
+
+/** The terms whose English changed from `old` to `next` to other English, by source. */
+const renames = (old: ReadonlyArray<GlossaryTerm>, next: ReadonlyArray<GlossaryTerm>) => {
+  const after = new Map(next.map((term) => [term.source, termTranslation(term).trim()]));
+  return new Map(
+    old.flatMap((before) => {
+      const to = after.get(before.source);
+      const from = termTranslation(before).trim();
+      return to && to !== from
+        ? [[before.source, { from, to, previous: before.previous }] as const]
+        : [];
+    }),
+  );
+};
+
+/**
+ * The glossary `next` with each term that contains a renamed term's source, such as an item
+ * named after a character, following the rename in English a run or rule gave. A term typed
+ * again after clearing renames from the English it had before.
+ */
+export function withRenamesFollowed(
+  old: ReadonlyArray<GlossaryTerm>,
+  next: ReadonlyArray<GlossaryTerm>,
+) {
+  const renamed = [...renames(old, next)];
+  if (!renamed.length) return next;
+  return next.map((term) => {
+    if (term.translation.user !== undefined) return term;
+    const translation = renamed.reduce((english, [source, { from, to, previous }]) => {
+      const was = from || previous;
+      return was && source !== term.source && hasTerm(term.source, source)
+        ? mapInUse(english, (value) => value.replace(wordPattern(was), () => to))
+        : english;
+    }, term.translation);
+    return translation === term.translation ? term : { ...term, translation };
   });
 }
 
@@ -68,14 +111,7 @@ export function renamedTranslation(
   old: ReadonlyArray<GlossaryTerm>,
   next: ReadonlyArray<GlossaryTerm>,
 ) {
-  const renamed = new Map(
-    old.flatMap((before) => {
-      const after = next.find((other) => other.source === before.source);
-      const to = after && termTranslation(after).trim();
-      const from = termTranslation(before).trim();
-      return to && to !== from ? [[before.source, { from, to }] as const] : [];
-    }),
-  );
+  const renamed = renames(old, next);
   return <T extends Pick<Entry, "source" | "translation">>(entry: T): T => {
     const term = renamed.get(entry.source.trim());
     return term && entryTranslation(entry).trim() === term.from
@@ -92,7 +128,10 @@ export function withGlossary(
   const repeated = repeatedSource(edited);
   if (repeated !== undefined) return Result.fail(new GlossaryTermRepeated({ source: repeated }));
   const saved = new Map(current.glossary.map((term) => [term.source, term]));
-  const glossary = edited.map((edit) => savedTerm(saved.get(edit.source), edit));
+  const glossary = withRenamesFollowed(
+    current.glossary,
+    edited.map((edit) => savedTerm(saved.get(edit.source), edit)),
+  );
   return Result.succeed({
     ...current,
     entries: current.entries.map(renamedTranslation(current.glossary, glossary)),

@@ -4,6 +4,7 @@ import {
   entriesToClear,
   glossaryOrder,
   savedTerm,
+  withRenamesFollowed,
   termEdit,
   termTranslation,
   termKind,
@@ -15,6 +16,8 @@ import { PlusIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { cn } from "cn";
@@ -33,6 +36,40 @@ const sections: ReadonlyArray<{ readonly kind: TermKind; readonly label: string 
   { kind: "name", label: "Names" },
   { kind: "word", label: "Words" },
 ];
+
+type Shown = "all" | "untranslated" | "last-run" | "changed" | "custom";
+
+const filters: ReadonlyArray<{
+  readonly show: Shown;
+  readonly label: string;
+  readonly does: string;
+}> = [
+  { show: "all", label: "All", does: "Every term" },
+  { show: "untranslated", label: "Untranslated", does: "Terms without English" },
+  { show: "last-run", label: "Last run", does: "Terms the last run translated" },
+  { show: "changed", label: "Changed", does: "Terms whose English differs from before clearing" },
+  { show: "custom", label: "Custom", does: "Terms whose English, kind or pronoun you set" },
+];
+
+/** Whether the user set any of the term's values. */
+const isCustom = ({ translation, kind, pronoun }: GlossaryTerm) =>
+  translation.user !== undefined || kind.user !== undefined || pronoun?.user !== undefined;
+
+function isShown(term: GlossaryTerm, show: Shown, lastRun: string | undefined) {
+  const english = termTranslation(term).trim();
+  switch (show) {
+    case "all":
+      return true;
+    case "untranslated":
+      return !english;
+    case "last-run":
+      return lastRun !== undefined && term.translation.guess?.run === lastRun;
+    case "changed":
+      return !!english && term.previous !== undefined && term.previous !== english;
+    case "custom":
+      return isCustom(term);
+  }
+}
 
 /** The game's glossary, which every translation follows. */
 export function GlossaryPage() {
@@ -59,6 +96,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
   const [draft, setDraft] = useState<ReadonlyArray<GlossaryTerm>>();
   // What waits for the user to confirm; a run that takes the game closes it.
   const [removingAll, setRemovingAll] = useState(false);
+  const [keepCustom, setKeepCustom] = useState(true);
   const [removing, setRemoving] = useState<GlossaryTerm>();
   const [clearingAll, setClearingAll] = useState(false);
   const [wasLocked, setWasLocked] = useState(locked);
@@ -86,10 +124,23 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
 
   const [selected, setSelected] = useState<number>();
   const [filter, setFilter] = useState("");
+  const [show, setShow] = useState<Shown>("all");
   const [notice, setNotice] = useState<Notice>();
   const [clearing, setClearing] = useState(false);
 
-  const edit = (next: ReadonlyArray<GlossaryTerm>, delay: number) => {
+  const edit = (edited: ReadonlyArray<GlossaryTerm>, delay: number) => {
+    const before = new Map(saved.glossary.map((term) => [term.source, term]));
+    const next = withRenamesFollowed(
+      saved.glossary,
+      edited.map((term) => {
+        const guess = before.get(term.source)?.translation.guess;
+        const { user } = term.translation;
+        return {
+          ...term,
+          translation: { ...(guess && { guess }), ...(user !== undefined && { user }) },
+        };
+      }),
+    );
     setDraft(next);
     setNotice(undefined);
     edits.schedule(
@@ -130,6 +181,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
   const order = glossaryOrder(glossary, saved.entries);
   const current = selected ?? order[0];
   const term = current === undefined ? undefined : glossary[current];
+  const custom = glossary.filter(isCustom).length;
   const characters = glossary.filter(
     (each) => termKind(each) === "character" && each.source.trim(),
   );
@@ -180,10 +232,14 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
         )}
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-[22rem_1fr]">
-        <div className="overflow-auto border-r text-sm" aria-label="Glossary terms" role="region">
-          <div className="sticky top-0 z-10 flex gap-2 border-b bg-background p-2">
+        <div
+          className="flex min-h-0 flex-col border-r text-sm"
+          aria-label="Glossary terms"
+          role="region"
+        >
+          <div className="flex flex-wrap gap-2 border-b bg-background p-2">
             <Input
-              className="h-8"
+              className="h-8 min-w-0 flex-1"
               placeholder="Filter terms"
               aria-label="Filter terms"
               value={filter}
@@ -196,26 +252,52 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
                 const blank = glossary.findIndex((each) => !each.source.trim());
                 if (blank === -1) edit([...glossary, savedTerm(undefined, { source: "" })], 0);
                 setFilter("");
+                setShow("all");
                 setSelected(blank === -1 ? glossary.length : blank);
               }}
             >
               <PlusIcon />
               Add term
             </Button>
+            <div role="group" aria-label="Show" className="flex basis-full flex-wrap gap-1">
+              {filters.map((each) => (
+                <Button
+                  key={each.show}
+                  variant={each.show === show ? "secondary" : "outline"}
+                  size="sm"
+                  className="gap-1 px-2 text-xs"
+                  aria-pressed={each.show === show}
+                  title={each.does}
+                  onClick={() => setShow(each.show)}
+                >
+                  {each.label}
+                  <span className="text-muted-foreground tabular-nums">
+                    {number(
+                      glossary.filter((one) => isShown(one, each.show, saved.lastRun)).length,
+                    )}
+                  </span>
+                </Button>
+              ))}
+            </div>
           </div>
-          <TermList
-            glossary={glossary}
-            order={order}
-            filter={filter}
-            current={current}
-            locked={locked}
-            onSelect={setSelected}
-            onRemove={setRemoving}
-          />
+          <div className="min-h-0 flex-1 overflow-auto">
+            <TermList
+              glossary={glossary}
+              order={order}
+              filter={filter}
+              show={show}
+              lastRun={saved.lastRun}
+              current={current}
+              locked={locked}
+              onSelect={setSelected}
+              onRemove={setRemoving}
+            />
+          </div>
         </div>
         <div className="min-w-0 overflow-auto p-6">
           {term !== undefined && current !== undefined && (
             <TermDetail
+              lastRun={saved.lastRun}
               key={current}
               term={term}
               glossary={glossary}
@@ -242,9 +324,23 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
         keep="Keep it"
         confirm="Remove glossary"
         onConfirm={() => {
-          edit([], 0);
+          edit(keepCustom ? glossary.filter(isCustom) : [], 0);
           setSelected(undefined);
         }}
+        options={
+          custom > 0 && (
+            <Field orientation="horizontal">
+              <Checkbox
+                id="keep-custom-terms"
+                checked={keepCustom}
+                onCheckedChange={setKeepCustom}
+              />
+              <FieldLabel htmlFor="keep-custom-terms">
+                Keep the {counted(custom, "term", "terms")} you set yourself
+              </FieldLabel>
+            </Field>
+          )
+        }
       >
         The translations stay. Build glossary fills it again.
       </ConfirmDialog>
@@ -293,6 +389,8 @@ function TermList({
   glossary,
   order,
   filter,
+  show,
+  lastRun,
   current,
   locked,
   onSelect,
@@ -301,6 +399,8 @@ function TermList({
   readonly glossary: ReadonlyArray<GlossaryTerm>;
   readonly order: ReadonlyArray<number>;
   readonly filter: string;
+  readonly show: Shown;
+  readonly lastRun: string | undefined;
   readonly current: number | undefined;
   readonly locked: boolean;
   readonly onSelect: (index: number) => void;
@@ -311,6 +411,7 @@ function TermList({
     const term = glossary[index];
     return (
       term !== undefined &&
+      isShown(term, show, lastRun) &&
       (!query || `${term.source} ${termTranslation(term)}`.toLowerCase().includes(query))
     );
   });
@@ -329,7 +430,7 @@ function TermList({
       if (terms.length === 0) return null;
       return (
         <section key={kind} aria-label={label}>
-          <h3 className="sticky top-12 bg-sidebar px-3 py-1.5 text-xs font-medium text-muted-foreground">
+          <h3 className="sticky top-0 bg-sidebar px-3 py-1.5 text-xs font-medium text-muted-foreground">
             {label} · {number(terms.length)}
           </h3>
           {terms.map((index) => {

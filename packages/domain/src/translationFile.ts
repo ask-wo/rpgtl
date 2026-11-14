@@ -18,7 +18,13 @@ import { idText } from "./imageText.ts";
 import { keepsControlCodes } from "./controlCodes.ts";
 import { englishByText } from "./inspect.ts";
 import { renamedTranslation, repeatedSource, withoutStrayPronoun } from "./glossaryEdits.ts";
-import { entryTranslation, importedValue, termTranslation, withoutGuess } from "./guesses.ts";
+import {
+  entryTranslation,
+  importedValue,
+  inUse,
+  termTranslation,
+  withoutGuess,
+} from "./guesses.ts";
 import { canKeepOriginal, isImageText } from "./location.ts";
 
 /** A translation file that can't be imported into the catalog, and why. */
@@ -130,14 +136,17 @@ const importedTerm = (
   known: (run: string) => boolean,
 ): GlossaryTerm => {
   const kind = importedValue(saved?.kind ?? { guess: term.kind.guess }, term.kind, known);
+  const translation = importedValue(saved?.translation ?? {}, term.translation, known);
+  const previous = saved?.previous;
   return withoutStrayPronoun({
     source: term.source,
-    translation: importedValue(saved?.translation ?? {}, term.translation, known),
+    translation,
     kind: {
       guess: kind.guess ?? term.kind.guess,
       ...(kind.user !== undefined && { user: kind.user }),
     },
     ...(term.pronoun && { pronoun: importedValue(saved?.pronoun ?? {}, term.pronoun, known) }),
+    ...(previous !== undefined && previous !== inUse(translation) && { previous }),
   });
 };
 
