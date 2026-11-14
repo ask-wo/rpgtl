@@ -15,3 +15,11 @@ export const patchFile = Rpgtl.runtime.fn(({ id, images }: { id: string; images:
     client.xpPatch.patch({ query: { id, ...(!images && { images: "none" as const }) } }),
   ),
 );
+
+/** Refreshed by turning a fix on or off. */
+export const fixesKey = (id: string) => ({ xpFixes: [id] });
+
+export const xpFixes = (id: string) =>
+  Rpgtl.query("xpPatch", "fixes", { query: { id }, reactivityKeys: fixesKey(id) });
+
+export const setFix = Rpgtl.mutation("xpPatch", "setFix");
