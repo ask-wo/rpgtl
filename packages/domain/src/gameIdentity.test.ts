@@ -54,6 +54,16 @@ it("MZ's game id says two games are the same, an encryption key with the title i
   assert.isUndefined(sameGameAs(mz, { ...mz, engine: "MV" }));
 });
 
+it("titles that differ only in the number they end with are maybe the same game", () => {
+  const xp = { engine: "XP" as const, identity: {} };
+  const maybe = (a: string, b: string) => sameGameAs({ ...xp, title: a }, { ...xp, title: b });
+  assert.strictEqual(maybe("Rain_TEST12", "Rain_TEST40"), "maybe");
+  assert.strictEqual(maybe("Rain 2", "Rain 3"), "maybe");
+  assert.isUndefined(maybe("Rain_TEST12", "Snow_TEST12"));
+  assert.isUndefined(maybe("Rain", "Rain 2"));
+  assert.isUndefined(maybe("12", "13"));
+});
+
 it("other versions are saved games in other folders, the surest and then the latest saved first", () => {
   const saved = (id: string, webRoot: string, gameId?: number): SavedGame => ({
     ...mz,

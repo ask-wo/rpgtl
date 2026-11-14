@@ -26,15 +26,27 @@ export function splitVersion(name: string): { readonly name: string; readonly ve
 
 type Identified = Pick<Game, "engine" | "title" | "identity">;
 
+const unnumbered = (title: string) => /^(.*\D)\d+$/u.exec(title)?.[1];
+
+/**
+ * Whether two titles differ only in the number they end with, as a build number does in titles
+ * such as `Rain_TEST12` and `Rain_TEST40`.
+ */
+const countedUp = (a: string, b: string) => {
+  const named = unnumbered(a);
+  return named !== undefined && named.trim() !== "" && named === unnumbered(b);
+};
+
 /**
  * Whether two games are versions of the same game: `sure` when their data says so, `maybe` when
- * only their titles match. Titles repeat and change between versions, so a `maybe` needs the user.
+ * only their titles match, or differ only in the number they end with. Titles repeat and change
+ * between versions, so a `maybe` needs the user.
  */
 export function sameGameAs(a: Identified, b: Identified): "sure" | "maybe" | undefined {
   if (a.engine !== b.engine) return undefined;
   const ids = [a.identity?.gameId, b.identity?.gameId];
   if (ids[0] !== undefined && ids[1] !== undefined) return ids[0] === ids[1] ? "sure" : undefined;
-  if (a.title !== b.title) return undefined;
+  if (a.title !== b.title) return countedUp(a.title, b.title) ? "maybe" : undefined;
   const key = a.identity?.encryptionKey;
   return key !== undefined && key === b.identity?.encryptionKey ? "sure" : "maybe";
 }
