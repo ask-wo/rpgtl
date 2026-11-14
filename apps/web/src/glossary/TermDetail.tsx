@@ -16,6 +16,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { useState } from "react";
 import { ChoiceField } from "../translation/ChoiceField.tsx";
 import type { Choice } from "../translation/choices.ts";
 import { counted, number } from "../translation/counts.ts";
@@ -122,6 +123,7 @@ export function TermDetail({
   const pronoun = termPronoun(term);
   const texts = termTexts(term, shortNameTranslations(glossary), characterAliases(glossary));
   const uses = entries.filter((entry) => texts.some((text) => entry.source.includes(text)));
+  const [showAll, setShowAll] = useState(false);
   const translated = entriesToClear({ entries, glossary }, term, false).length;
   return (
     <div
@@ -275,16 +277,26 @@ export function TermDetail({
             ? `Used in ${counted(uses.length, "entry", "entries")}${counting(texts.slice(1))}`
             : "Type the original to see where the game uses it"}
         </h3>
-        {uses.slice(0, listed).map((entry) => (
-          <div key={entry.id} className="grid grid-cols-2 gap-4 border-b py-1.5">
+        {(showAll ? uses : uses.slice(0, listed)).map((entry) => (
+          <div
+            key={entry.id}
+            className="grid grid-cols-2 gap-4 border-b py-1.5 [contain-intrinsic-size:auto_2rem] [content-visibility:auto]"
+          >
             <span>{oneLine(entry.source)}</span>
             <span className={entryTranslation(entry) ? undefined : "text-muted-foreground italic"}>
               {entryTranslation(entry) ? oneLine(entryTranslation(entry)) : "Not translated"}
             </span>
           </div>
         ))}
-        {uses.length > listed && (
-          <p className="text-muted-foreground">and {number(uses.length - listed)} more.</p>
+        {!showAll && uses.length > listed && (
+          <Button
+            variant="link"
+            size="sm"
+            className="self-start px-0"
+            onClick={() => setShowAll(true)}
+          >
+            Show the other {number(uses.length - listed)}
+          </Button>
         )}
       </section>
     </div>

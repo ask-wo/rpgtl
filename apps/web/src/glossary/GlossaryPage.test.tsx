@@ -265,6 +265,21 @@ test("Custom shows the terms you set, and removing the glossary can keep them", 
   );
 });
 
+test("a term used in more entries than the list holds shows the rest on request", async () => {
+  const server = fakeServer();
+  server.catalog = {
+    ...saved,
+    entries: Array.from({ length: 101 }, (_, i) => line(String(i), `阿琳${i}号`, "")),
+  };
+  showGlossary();
+  server.activity(idle);
+  const uses = page.getByRole("region", { name: "Entries that use the term" });
+  await expect.element(uses.getByText("阿琳99号")).toBeVisible();
+  await expect.element(uses.getByText("阿琳100号")).not.toBeInTheDocument();
+  await uses.getByRole("button", { name: "Show the other 1" }).click();
+  await expect.element(uses.getByText("阿琳100号")).toBeVisible();
+});
+
 test("a new term saves once it has an original", async () => {
   const server = fakeServer();
   showGlossary();
