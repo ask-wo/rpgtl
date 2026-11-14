@@ -45,6 +45,8 @@ Import matches a file entry to the game's entry of the same id, which comes from
 
 **Manual llama-server.** `pnpm run llama-server --model <ollama model> --experts <n> [--ctx <n>]` checks the model and memory estimate, unloads it from Ollama, then starts Ollama's bundled llama-server with 4 slots of 4096 tokens unless `--ctx` says otherwise, and prints its local endpoint. Ctrl+C or SIGTERM stops it. Its log is `RPGTL_DIR/logs/manual-llama-server.log`.
 
+**An XP game's scripts.** `pnpm run xp-scripts <game folder> <out folder>`, in a checkout, writes each script of an XP game as RPGTL reads it (from the archive first) to `<out>/<index>.rb`, with the script's name on its first line, for reading the game's own code, such as the bug a **fix** is for. It only reads the game; keep the out folder outside the repo.
+
 ## Translators
 
 **Local models.** Runs with `expertLayersInRam` use Ollama's bundled `llama-server`, on Linux only; `RPGTL_OLLAMA_LIB` names its folder if Ollama isn't installed in `/usr/lib/ollama` or `/usr/local/lib/ollama`. A local model translates with the **Sampling** chosen on the page and answers other questions at temperature 0. An answer asked again after it failed its checks would come back the same at temperature 0, so the retry uses Qwen's settings for a Qwen3.6 model, and otherwise the model's own defaults. **Thinking** works in Ollama only: llama-server enforces the answer's JSON shape from the first token, so a model there can't think first.

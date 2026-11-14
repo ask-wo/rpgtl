@@ -26,6 +26,7 @@
     "typecheck": "effect-tsgo tsrs --noEmit && effect-tsgo tsrs --noEmit -p e2e && vp run --filter './apps/*' --filter './packages/*' --fail-if-no-match typecheck",
     "effect-docs": "sh scripts/effect-docs.sh",
     "decode-state": "node apps/server/src/decodeState.ts",
+    "xp-scripts": "node apps/server/src/xpScripts.ts",
     "lint:list": "sh scripts/lint-list.sh"
   },
   "devDependencies": {
