@@ -10,7 +10,6 @@ import { hookScript, type HookConfig } from "@rpgtl/game/scripts";
 import { applyXpTranslations, entryTranslation, translatedByXpFile } from "@rpgtl/domain";
 import * as Result from "effect/Result";
 import * as Context from "effect/Context";
-import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -32,7 +31,7 @@ import * as Settings from "../settings/Settings.ts";
 import * as StateFolder from "../state/StateFolder.ts";
 import { userFolder } from "../state/userFolders.ts";
 import { OnWindows } from "../OnWindows.ts";
-import { runningCommit } from "../runningCommit.ts";
+import { codeVersion } from "../runningCommit.ts";
 import * as Nwjs from "./Nwjs.ts";
 import * as Mkxpz from "../mkxpz/Mkxpz.ts";
 import { mkxpConfig } from "../mkxpz/Mkxpz.ts";
@@ -268,12 +267,7 @@ const make = Effect.gen(function* () {
     return appDir;
   });
 
-  // A checkout with changes has no commit that names the code that wrote the patched files, so
-  // only this process's own launches reuse them.
-  const writer = Option.getOrElse(
-    Option.filter(yield* runningCommit, (commit) => !commit.endsWith("-dirty")),
-    () => SecureRandom.uuidV4Unsafe(),
-  );
+  const writer = yield* codeVersion;
   const decodeWritten = Schema.decodeEffect(
     Schema.fromJsonString(Schema.Record(Schema.String, Schema.String)),
   );
