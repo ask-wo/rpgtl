@@ -423,6 +423,8 @@ const make = Effect.gen(function* () {
   ) {
     const result = yield* Deferred.make<GameLaunch, LaunchError>();
     const running = Effect.gen(function* () {
+      // The game reads its state folder while it plays, so it can't be removed or deleted.
+      yield* games.keep(id);
       const handle = yield* spawner.spawn(command);
       // An unreferenced process outlives the scope that started it.
       yield* Effect.asVoid(handle.unref);

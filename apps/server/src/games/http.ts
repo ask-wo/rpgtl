@@ -2,6 +2,7 @@ import {
   Api,
   FolderUnreadable,
   GameBusy,
+  UndoUnpackFirst,
   GameFileFailed,
   GameFolderTaken,
   GameNotInspected,
@@ -92,6 +93,14 @@ const GamesHandlers = HttpApiBuilder.group(
       }),
       forget: Effect.fn("games.forget")(function* ({ payload }) {
         return yield* games.forget(payload.id).pipe(Effect.catchTags(writeFailed));
+      }),
+      delete: Effect.fn("games.delete")(function* ({ payload }) {
+        return yield* games.delete(payload.id).pipe(
+          Effect.catchTags({
+            ...writeFailed,
+            UnpackedOverError: () => Effect.fail(new UndoUnpackFirst()),
+          }),
+        );
       }),
     });
   }),

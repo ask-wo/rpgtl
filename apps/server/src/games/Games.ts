@@ -1,4 +1,4 @@
-import { Engine, type Game, Games as GameList, type SavedGame } from "@rpgtl/contracts";
+import { Engine, type Game, Games as GameList, gameFiles, type SavedGame } from "@rpgtl/contracts";
 import { type EngineFeatures, engineFeatures, otherVersions } from "@rpgtl/domain";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
@@ -51,6 +51,19 @@ export class GameBusyError extends Schema.TaggedError<GameBusyError>()("GameBusy
   }
 }
 
+/**
+ * The state folder holds the game's own files that Unpack wrote over, which only Undo unpack puts
+ * back.
+ */
+export class UnpackedOverError extends Schema.TaggedError<UnpackedOverError>()(
+  "UnpackedOverError",
+  { id: Schema.String },
+) {
+  override get message() {
+    return `Game ${this.id} keeps files that Undo unpack puts back.`;
+  }
+}
+
 const listFile = "games.json";
 
 /** The games the list shows, without the removed ones. */
@@ -91,6 +104,17 @@ export class Games extends Context.Service<
     ) => Effect.Effect<
       ReadonlyArray<Game>,
       GameNotInspectedError | GameBusyError | StateFolder.StateFileError
+    >;
+    /**
+     * Removes the game from `games.json` and deletes its state folder, so opening its folder again
+     * opens it as a new game. Fails while the game is held, a run of it waits or it plays, and
+     * while its state folder keeps files that Undo unpack puts back.
+     */
+    readonly delete: (
+      id: string,
+    ) => Effect.Effect<
+      ReadonlyArray<Game>,
+      GameNotInspectedError | GameBusyError | UnpackedOverError | StateFolder.StateFileError
     >;
     /**
      * Keeps the game in the list until the scope closes, without holding it, for a run that waits
@@ -195,6 +219,22 @@ const make = Effect.gen(function* () {
     );
     return shown(all);
   });
+  const deleteGame = Effect.fn("Games.delete")(function* (id: string) {
+    yield* get(id);
+    if (HashMap.has(yield* Ref.get(kept), id)) return yield* new GameBusyError({ id });
+    return yield* exclusive(
+      id,
+      Effect.gen(function* () {
+        if ((yield* folder.list(gameFiles(id).unpackedOver)).length > 0)
+          return yield* new UnpackedOverError({ id });
+        // Unlisted first: a folder left half deleted is never opened as a game again, a listed
+        // game without its catalog would be.
+        const all = yield* update((current) => current.filter((game) => game.id !== id));
+        yield* folder.remove(gameFiles(id).folder);
+        return shown(all);
+      }),
+    );
+  });
 
   return Games.of({
     keep,
@@ -205,6 +245,7 @@ const make = Effect.gen(function* () {
     otherVersions: otherVersionsOf,
     save,
     forget,
+    delete: deleteGame,
     hold,
     exclusive,
   });

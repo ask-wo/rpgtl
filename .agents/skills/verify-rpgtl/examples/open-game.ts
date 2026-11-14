@@ -41,7 +41,7 @@ export default async ({ page, api, run, log }: any) => {
 
   await page.goto(address);
   await page.click('[aria-label="Remove Fixture Adventure from the list"]');
-  await page.clickText("Remove");
+  await page.clickText("Remove from list");
   await page.waitUntil(`location.pathname === "/"`);
   if ((await api("games")).length !== 0) throw new Error("the game is still listed");
   if (!existsSync(`${run.state}/games/${id}/catalog.json`))

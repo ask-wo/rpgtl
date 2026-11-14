@@ -268,6 +268,17 @@ export class CloseGameFirst extends Schema.TaggedError<CloseGameFirst>()(
   { httpApiStatus: 400 },
 ) {}
 
+/** Deleting the game would lose its own files that Undo unpack puts back. */
+export class UndoUnpackFirst extends Schema.TaggedError<UndoUnpackFirst>()(
+  "UndoUnpackFirst",
+  {
+    message: fixedMessage(
+      "Undo unpacking the game's archive first, so RPGTL can put the game's own files back.",
+    ),
+  },
+  { httpApiStatus: 400 },
+) {}
+
 /** An XP game's archive isn't packed or unpacked, as the request expected. */
 export class ArchiveChanged extends Schema.TaggedError<ArchiveChanged>()(
   "ArchiveChanged",
@@ -363,6 +374,12 @@ export class GamesApi extends HttpApiGroup.make("games")
       payload: GameId,
       success: Schema.Array(Game),
       error: [GameNotInspected, GameBusy, StateFileFailed],
+    }),
+    /** Removes a game and deletes its translations and other state; its folder is left as it is. */
+    HttpApiEndpoint.post("delete", "/delete", {
+      payload: GameId,
+      success: Schema.Array(Game),
+      error: [GameNotInspected, GameBusy, UndoUnpackFirst, StateFileFailed],
     }),
   )
   .middleware(LocalRequest)
