@@ -18,11 +18,20 @@ import { Badge } from "~/components/ui/badge";
 import { Spinner } from "~/components/ui/spinner";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { cn } from "cn";
-import { ConfirmDialog } from "../app/ConfirmDialog.tsx";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { failureMessage } from "../app/failure.ts";
 import { TranslationNav } from "../translation/TranslationNav.tsx";
 import { queuedRuns } from "./activity.ts";
-import { forget, games, gamesKey } from "./atoms.ts";
+import { deleteGame, forget, games, gamesKey } from "./atoms.ts";
 import { croppedIcon } from "./iconCrop.ts";
 import { MissingFolder } from "./MissingFolder.tsx";
 
@@ -40,14 +49,16 @@ export function GamesNav() {
   const onOverview = useMatch({ from: "/games/$gameId/", shouldThrow: false }) !== undefined;
   const navigate = useNavigate();
   const remove = useAtomSet(forget, { mode: "promiseExit" });
+  const erase = useAtomSet(deleteGame, { mode: "promiseExit" });
   const [removeError, setRemoveError] = useState<string>();
   const [removing, setRemoving] = useState<ListedGame>();
   const [sending, setSending] = useState(false);
 
-  const removeGame = async (id: string) => {
+  const removeGame = async (id: string, how: "forget" | "delete") => {
     setRemoveError(undefined);
     setSending(true);
-    const exit = await remove({ payload: { id }, reactivityKeys: [gamesKey] });
+    const send = how === "forget" ? remove : erase;
+    const exit = await send({ payload: { id }, reactivityKeys: [gamesKey] });
     setSending(false);
     if (Exit.isFailure(exit)) return setRemoveError(failureMessage(exit.cause));
     if (id === gameId) await navigate({ to: "/" });
@@ -133,16 +144,36 @@ export function GamesNav() {
           })}
         </SidebarMenu>
         {removeError && <p className="px-2 pt-2 text-xs text-destructive">{removeError}</p>}
-        <ConfirmDialog
+        <AlertDialog
           open={removing !== undefined}
           onOpenChange={(open) => open || setRemoving(undefined)}
-          title={`Remove ${removing?.title ?? "the game"} from the list?`}
-          keep="Keep it"
-          confirm="Remove"
-          onConfirm={() => removing && removeGame(removing.id)}
         >
-          Its translations are kept; opening it again brings them back.
-        </ConfirmDialog>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove {removing?.title ?? "the game"}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Removing it from the list keeps its translations, and opening it again brings them
+                back. Deleting it also deletes its translations and everything else RPGTL saved for
+                it. The game's own folder stays as it is.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep it</AlertDialogCancel>
+              <AlertDialogAction
+                variant="outline"
+                onClick={() => removing && removeGame(removing.id, "forget")}
+              >
+                Remove from list
+              </AlertDialogAction>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={() => removing && removeGame(removing.id, "delete")}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SidebarGroup>
     </TooltipProvider>
   );

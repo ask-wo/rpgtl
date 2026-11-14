@@ -469,6 +469,35 @@ it.effect(
     }).pipe(Effect.provide(servicesOver({}))),
 );
 
+/** `mvGame` titled `gameTitle`, without an MZ game id. */
+const build = (gameTitle: string) => ({
+  ...mvGame,
+  "www/data/System.json": JSON.stringify({ gameTitle, switches: ["", "门开了"] }),
+});
+
+it.effect(
+  "a deleted game's folder opens as a new game, which asks about a saved game whose title differs only in its last number",
+  () =>
+    Effect.gen(function* () {
+      const catalogs = yield* Catalogs.Catalogs;
+      const games = yield* Games.Games;
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const first = yield* opened(catalogs.inspect(yield* folderWith(build("雨_TEST12"))));
+      const root = yield* folderWith(build("雨_TEST40"));
+      const second = yield* opened(catalogs.inspect(root, "keepBoth"));
+      const state = path.join(yield* StateDir, gameFiles(second.game.id).folder);
+      assert.isTrue(yield* fs.exists(state));
+
+      assert.deepStrictEqual(yield* games.delete(second.game.id), [first.game]);
+      assert.isFalse(yield* fs.exists(state));
+      assert.deepNestedInclude(yield* catalogs.inspect(root), {
+        "otherVersion.game.id": first.game.id,
+        "otherVersion.sure": false,
+      });
+    }).pipe(Effect.provide(servicesOver({}))),
+);
+
 it.effect("while another operation holds a listed game, inspecting gives its saved catalog", () =>
   Effect.gen(function* () {
     const catalogs = yield* Catalogs.Catalogs;

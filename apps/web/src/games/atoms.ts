@@ -8,6 +8,7 @@ export const games = Rpgtl.query("games", "list", { reactivityKeys: [gamesKey, "
 export const inspect = Rpgtl.mutation("games", "inspect");
 export const move = Rpgtl.mutation("games", "move");
 export const forget = Rpgtl.mutation("games", "forget");
+export const deleteGame = Rpgtl.mutation("games", "delete");
 /** The folders inside `path` on this computer, or in the home folder without one. */
 export const folders = (path: string) =>
   Rpgtl.query("games", "folders", { query: path ? { path } : {} });

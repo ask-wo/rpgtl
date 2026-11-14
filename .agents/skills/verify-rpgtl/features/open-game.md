@@ -8,6 +8,7 @@ The user points RPGTL at an unpacked MV/MZ game folder; RPGTL scans its text, ad
 - `open-library` reopens a game from the sidebar's **Games** without rescanning; a game whose folder is gone shows **Choose its new folder…** under its row.
 - `open-address` loads `/games/<game id>` directly, keeping the saved catalog.
 - `open-forget` removes a game from the list with its `×` and keeps its translations.
+- `open-delete` deletes a game with its `×`: its line in `games.json` and its state folder go, and opening its folder again opens it as a new game.
 - `open-pick` chooses a folder in the page's folder browser, which marks folders holding a game.
 - `open-version` opening a folder that holds another version of a saved game (same MZ game id, or encryption key and title, or only the title) asks first: **Replace** keeps the saved game's id and the translations of unchanged lines after a backup, **Keep both** opens it as a new game, **Don't open** opens nothing.
 - `open-overview` the overview: missing images, missing sounds and NW.js media warnings when there are any, and the in-game tools.
@@ -31,10 +32,11 @@ Preconditions:
 - **Index or exe path.** Repeat with `run.game + "/index.html"`. The same game id opens (no second sidebar entry).
 - **Library.** `await page.goto("/")`, then `await page.click(\`[data-game-root="${run.game}"]\`)`: the button carries the game's folder. The overview opens with the same id.
 - **Own address.** `await page.goto("/games/" + id)`. The overview shows without pressing Open.
-- **Forget.** `await page.click('[aria-label="Remove Fixture Adventure from the list"]')` (it shows on hover, but `page.click` reaches it), then `page.clickText("Remove")` in the dialog that asks first. The page goes to `/`, `api("games")` is `[]`, and `$RUN/state/games/<id>/catalog.json` still exists.
+- **Forget.** `await page.click('[aria-label="Remove Fixture Adventure from the list"]')` (it shows on hover, but `page.click` reaches it), then `page.clickText("Remove from list")` in the dialog that asks first. The page goes to `/`, `api("games")` is `[]`, and `$RUN/state/games/<id>/catalog.json` still exists.
+- **Delete.** The same `×`, then `page.clickText("Delete")`. The page goes to `/`, `api("games")` is `[]`, `$RUN/state/games/<id>/` is gone and `games.json` no longer has the game.
 - **Overview.** The fixture asks for `img/characters/Actor1`, which it doesn't ship, so the overview starts with "1 image the game asks for isn't in its folder".
 - **Folder browser.** `await page.clickText("Choose folder…")`, fill `input[name="path"]` and `clickText("Go")`, `clickText("Up")`, click the folder whose button text is `gameGame` (its name and the Game badge) in `[aria-label="Folders"]`, then `clickText("Choose this folder")`. `examples/folder-browser.ts` does this. The MV fixture keeps `data/` directly in the game folder, with no `www/`.
-- **Proof.** `page.shot("opened")` after each entry point, and the `api("games")` result logged. `examples/open-game.ts` does all of this.
+- **Proof.** `page.shot("opened")` after each entry point, and the `api("games")` result logged. `examples/open-game.ts` does all of this except Delete.
 
 ## Gotchas
 

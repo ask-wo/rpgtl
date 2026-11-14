@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
+import { gameFiles } from "@rpgtl/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -66,11 +67,32 @@ it.effect("holding a game refuses a second hold until the first ends, even when 
   }).pipe(Effect.provide(servicesOver({}))),
 );
 
-it.effect("forgetting a game another operation holds leaves the list as it was", () =>
-  Effect.gen(function* () {
-    const games = yield* Games.Games;
-    const error = yield* games.exclusive(game.id, Effect.flip(games.forget(game.id)));
-    assert.strictEqual(error._tag, "GameBusyError");
-    assert.deepStrictEqual(yield* games.list, [game, other]);
-  }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game, other]) }))),
+it.effect(
+  "removing or deleting a game another operation holds, or whose own files Undo unpack still puts back, leaves it as it was",
+  () =>
+    Effect.gen(function* () {
+      const games = yield* Games.Games;
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      for (const change of [games.forget, games.delete]) {
+        const error = yield* games.exclusive(game.id, Effect.flip(change(game.id)));
+        assert.strictEqual(error._tag, "GameBusyError");
+      }
+      const unpacked = yield* Effect.flip(games.delete(game.id));
+      assert.strictEqual(unpacked._tag, "UnpackedOverError");
+      assert.deepStrictEqual(yield* games.list, [game, other]);
+      const kept = path.join(
+        yield* StateDir,
+        gameFiles(game.id).unpackedOver,
+        "Data/Map001.rxdata",
+      );
+      assert.isTrue(yield* fs.exists(kept));
+    }).pipe(
+      Effect.provide(
+        servicesOver({
+          "games.json": JSON.stringify([game, other]),
+          [`${gameFiles(game.id).unpackedOver}/Data/Map001.rxdata`]: "the game's own map",
+        }),
+      ),
+    ),
 );
