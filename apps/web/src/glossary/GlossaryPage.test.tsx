@@ -195,6 +195,21 @@ test("typing saves once it pauses, and a new kind saves at once without the pron
   await expect.element(page.getByText("Set by you.")).toBeVisible();
 });
 
+test("a cleared term offers its English from before, and using it saves that", async () => {
+  const server = fakeServer();
+  server.catalog = {
+    ...saved,
+    glossary: [rain, { ...arlene, translation: {}, previous: "Arlene" }],
+  };
+  showGlossary();
+  server.activity(idle);
+  await expect.element(page.getByText(/Before clearing/)).toBeVisible();
+  await page.getByRole("button", { name: "Use it" }).click();
+  await vi.waitFor(() => expect(server.glossaries).toHaveLength(1));
+  expect(server.glossaries[0]?.[1]).toEqual({ source: "阿琳", translation: "Arlene" });
+  await expect.element(page.getByText(/Before clearing/)).not.toBeInTheDocument();
+});
+
 test("a new term saves once it has an original", async () => {
   const server = fakeServer();
   showGlossary();

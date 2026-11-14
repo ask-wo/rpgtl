@@ -82,7 +82,7 @@ export function speakerEntries(draft: CatalogDraft, prepared: ReadonlyArray<Prep
       isSpeakerNameEntry(item.entry) ? item.entry.source : undefined,
     ]) {
       const trimmed = name?.trim();
-      if (trimmed && !draft.term(trimmed)) names.add(trimmed);
+      if (trimmed && !draft.translatedTerm(trimmed)) names.add(trimmed);
     }
   return [...names].map((name): RunEntry => ({
     id: `speaker:${name}`,

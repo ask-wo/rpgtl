@@ -3,7 +3,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { cleared } from "./catalog.ts";
 import { entriesToClear } from "./shortNames.ts";
-import { entryTranslation, mapInUse, termTranslation, termKind } from "./guesses.ts";
+import { entryTranslation, inUse, mapInUse, termTranslation, termKind } from "./guesses.ts";
 
 /** A glossary that lists the same source twice. */
 export class GlossaryTermRepeated extends Schema.TaggedError<GlossaryTermRepeated>()(
@@ -52,11 +52,15 @@ const withOwn = <A, G>(guess: G | undefined, user: A | undefined) => ({
 export function savedTerm(saved: GlossaryTerm | undefined, edit: TermEdit): GlossaryTerm {
   const translation = edit.translation?.trim();
   const pronoun = withOwn(saved?.pronoun?.guess, edit.pronoun);
+  const english = translation === "" ? {} : withOwn(saved?.translation.guess, translation);
+  const previous =
+    translation === "" && saved ? termTranslation(saved) || saved.previous : saved?.previous;
   return withoutStrayPronoun({
     source: edit.source,
-    translation: translation === "" ? {} : withOwn(saved?.translation.guess, translation),
+    translation: english,
     kind: { guess: saved?.kind.guess ?? { value: "name" }, ...withOwn(undefined, edit.kind) },
     ...((pronoun.guess || pronoun.user) && { pronoun }),
+    ...(previous !== undefined && previous !== inUse(english) && { previous }),
   });
 }
 

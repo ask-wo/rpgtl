@@ -88,6 +88,16 @@ it("a saved term keeps its run's guesses beside the user's values, and without t
   ]);
 });
 
+it("a saved term keeps the English it had before clearing until the user types it again", () => {
+  const emptied = Result.getOrThrow(withGlossary(catalog, [{ source: "阿琳", translation: "" }]));
+  assert.strictEqual(emptied.glossary[0]?.previous, "Arlene");
+  const cleared = { ...catalog, glossary: [{ ...arlene, translation: {}, previous: "Arlene" }] };
+  const typed = (translation: string) =>
+    Result.getOrThrow(withGlossary(cleared, [{ source: "阿琳", translation }])).glossary[0];
+  assert.strictEqual(typed("Irene")?.previous, "Arlene");
+  assert.isUndefined(typed("Arlene")?.previous);
+});
+
 it("a glossary that lists a source twice isn't saved, and the error names it", () => {
   const result = withGlossary(catalog, [
     termEdit(arlene),

@@ -56,7 +56,8 @@
     {
       "source": "苔灯",
       "translation": {},
-      "kind": { "guess": { "value": "name" }, "user": "word" }
+      "kind": { "guess": { "value": "name" }, "user": "word" },
+      "previous": "Moss Lamp"
     }
   ],
   "translate": true,

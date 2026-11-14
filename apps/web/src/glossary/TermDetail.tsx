@@ -115,6 +115,7 @@ export function TermDetail({
 }) {
   const source = term.source.trim();
   const translation = termTranslation(term);
+  const { previous } = term;
   const kind = termKind(term);
   const pronoun = termPronoun(term);
   const texts = termTexts(term, shortNameTranslations(glossary), characterAliases(glossary));
@@ -184,6 +185,15 @@ export function TermDetail({
               label={guessLabel(term.translation.guess, "English")}
               guess={term.translation.guess.value}
               onRestore={() => onChange({ ...term, translation: restored(term.translation) }, 0)}
+            />
+          )}
+          {previous && previous !== translation && (
+            <Restore
+              label={translation ? "Before the last run:" : "Before clearing:"}
+              guess={previous}
+              onRestore={() =>
+                onChange({ ...term, translation: withUser(term.translation, previous) }, 0)
+              }
             />
           )}
         </Field>
