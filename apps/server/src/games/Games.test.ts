@@ -1,7 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { gameFiles } from "@rpgtl/contracts";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -65,6 +67,28 @@ it.effect("holding a game refuses a second hold until the first ends, even when 
     );
     yield* games.exclusive(game.id, Effect.void);
   }).pipe(Effect.provide(servicesOver({}))),
+);
+
+it.effect("short edits wait for each other, but not for another kind of operation", () =>
+  Effect.gen(function* () {
+    const games = yield* Games.Games;
+    const started = yield* Deferred.make<void>();
+    const release = yield* Deferred.make<void>();
+    const first = yield* Effect.forkScoped(
+      games.edit(
+        game.id,
+        Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(release))),
+      ),
+    );
+    yield* Deferred.await(started);
+    const second = yield* Effect.forkScoped(games.edit(game.id, Effect.succeed("saved")));
+    yield* Deferred.succeed(release, undefined);
+    yield* Fiber.join(first);
+    assert.strictEqual(yield* Fiber.join(second), "saved");
+
+    const busy = yield* games.exclusive(game.id, Effect.flip(games.edit(game.id, Effect.void)));
+    assert.strictEqual(busy._tag, "GameBusyError");
+  }).pipe(Effect.scoped, Effect.provide(servicesOver({}))),
 );
 
 it.effect(

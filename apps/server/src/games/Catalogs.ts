@@ -593,7 +593,7 @@ const make = Effect.gen(function* () {
   });
 
   const setTranslate = Effect.fn("Catalogs.setTranslate")(function* (id: string, on: boolean) {
-    return yield* games.exclusive(
+    return yield* games.edit(
       id,
       get(id).pipe(
         Effect.map((catalog): Catalog => ({ ...catalog, translate: on })),
@@ -606,7 +606,7 @@ const make = Effect.gen(function* () {
     id: string,
     on: boolean,
   ) {
-    return yield* games.exclusive(
+    return yield* games.edit(
       id,
       get(id).pipe(
         Effect.map(({ originalScripts: _old, ...catalog }): Catalog => ({
@@ -619,7 +619,7 @@ const make = Effect.gen(function* () {
   });
 
   const setFix = Effect.fn("Catalogs.setFix")(function* (id: string, name: string, on: boolean) {
-    return yield* games.exclusive(
+    return yield* games.edit(
       id,
       get(id).pipe(
         Effect.map(({ disabledFixes = [], ...catalog }): Catalog => {
@@ -636,7 +636,7 @@ const make = Effect.gen(function* () {
     id: string,
     language: SourceLanguage | null,
   ) {
-    return yield* games.exclusive(
+    return yield* games.edit(
       id,
       get(id).pipe(
         Effect.map(({ language: _old, ...catalog }): Catalog => ({
@@ -652,7 +652,7 @@ const make = Effect.gen(function* () {
     id: string,
     glossary: ReadonlyArray<TermEdit>,
   ) {
-    yield* games.exclusive(
+    yield* games.edit(
       id,
       Effect.gen(function* () {
         yield* write(yield* Effect.fromResult(withGlossary(yield* get(id), glossary)));
@@ -664,7 +664,7 @@ const make = Effect.gen(function* () {
     id: string,
     edits: ReadonlyArray<EntryEdit>,
   ) {
-    yield* games.exclusive(
+    yield* games.edit(
       id,
       Effect.gen(function* () {
         yield* write(yield* Effect.fromResult(withEntryEdits(yield* get(id), edits)));
@@ -676,7 +676,7 @@ const make = Effect.gen(function* () {
     id: string,
     options: ImageOptions,
   ) {
-    yield* games.exclusive(
+    yield* games.edit(
       id,
       get(id).pipe(
         Effect.map((catalog) => withImageOptions(catalog, options)),
