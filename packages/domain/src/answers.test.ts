@@ -269,6 +269,19 @@ it("A comma between Korean words is punctuation a pause follows, a point in a nu
   );
 });
 
+it("A bare `|` is sent as a placeholder, so the English keeps each one", () => {
+  const entry: Asked = {
+    location: { _tag: "RubyScriptText", script: 3, name: "Window_Help", literal: 0 },
+    source: "●重い|●両手で持てる",
+  };
+  assert.strictEqual(requestText(entry).text, "●重い{1}●両手で持てる");
+  assert.deepStrictEqual(
+    checkAnswer(entry, "●Heavy{1}●Held in both hands"),
+    accepted("●Heavy|●Held in both hands"),
+  );
+  assert.isTrue(Result.isFailure(checkAnswer(entry, "●Heavy\n●Held in both hands")));
+});
+
 it("A line break joins Chinese lines without a space and Korean lines with one", () => {
   assert.strictEqual(requestText(messageEntry("我们明天\n一起去吧。")).text, "我们明天一起去吧。");
   assert.strictEqual(requestText(messageEntry("내일은\n같이 가자.")).text, "내일은 같이 가자.");

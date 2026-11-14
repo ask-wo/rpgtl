@@ -80,6 +80,11 @@ it("Credits keep their names, and dialogue may apologize", () => {
   assert.deepStrictEqual(line("你好", "I'm sorry, but I can't assist with that."), ["refusal"]);
 });
 
+it("an English that lost or added a bare | of the source is flagged, but not a `\\|` code", () => {
+  assert.deepStrictEqual(line("第一行|第二行", "First row\nSecond row"), ["| unlike the source"]);
+  assert.deepStrictEqual(line("稍候片刻\\|启程吧", "One moment\\| onward we ride"), []);
+});
+
 it("Korean or kana left in the English is flagged, and a Korean line answered with a name alone is unlike it", () => {
   assert.deepStrictEqual(line("오늘은 비가 와요.", "Today 비가 falls."), ["source text left"]);
   assert.deepStrictEqual(line("하루는 오늘 시장에 가서 사과를 샀어요.", "Haru."), [

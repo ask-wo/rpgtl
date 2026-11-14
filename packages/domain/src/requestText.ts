@@ -39,8 +39,9 @@ const keptAside = (codes: string, edge: string) => ({
   trailing: new RegExp(`(?:${edge})*$`, "i"),
   inside: new RegExp(codes, "g"),
 });
-// A source's own `{2}` would read as a placeholder in the answer, so it is sent as one.
-const sourcePlaceholder = String.raw`\{\d+\}`;
+// A source's own `{2}` would read as a placeholder in the answer, so it is sent as one. So is a
+// bare `|`, at which games split a text into lines or into a Japanese and an English half.
+const sourcePlaceholder = String.raw`\{\d+\}|\|`;
 const plainPatterns = keptAside(`${codeOrBackslash.source}|${sourcePlaceholder}`, edgePart);
 const tagPatterns = keptAside(
   `${tagPattern.source}|${codeOrBackslash.source}|${sourcePlaceholder}`,
