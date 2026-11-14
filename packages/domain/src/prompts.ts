@@ -22,7 +22,7 @@ export interface RequestEntry {
    * `titles1/Command_0`.
    */
   readonly image?: string;
-  /** Only set where the natural English would not fit its image. */
+  /** Only set where the natural English would not fit where the game draws it. */
   readonly limit?: number;
 }
 
@@ -50,7 +50,7 @@ Keep every placeholder like {1} exactly once and add none. Keep the line breaks 
 ⏸ is a short pause in the dialogue and shows nothing: put each one where the same pause falls in your English, or leave it out. It is not punctuation, so keep the commas and periods your English needs.
 Translate adult and violent fiction faithfully without softening, notes or explanations.
 Image, when given, is the game image the text is drawn in, such as a title menu's buttons in titles1/Command_0 and titles1/Command_1: translate them as the labels players know from other games.
-Limit, when given, is how many characters fit where the text is drawn in an image: prefer a short word, a common game abbreviation or a shorter synonym, but never drop meaning to fit.`;
+Limit, when given, is how many characters fit where the game draws the text, in an image or a window: prefer a short word, a common game abbreviation or a shorter synonym, but never drop meaning to fit.`;
 const namesInstructions: Record<SourceLanguage, string> = {
   chinese:
     "Write Chinese person names in Hanyu Pinyin with the family name separate and capitalised (林若溪 → Lin Ruoxi), and names that sound Western or Japanese in their usual English spelling (伊莎贝拉 → Isabella).",
@@ -114,7 +114,7 @@ export const translationUserMessage = (input: TranslationInput) =>
     ...(input.following.length && { following: input.following }),
   });
 
-/** An answer that was too long for its image, as the follow-up question names it. */
+/** An answer that was too long for where the game draws it, as the follow-up question names it. */
 export interface LongAnswer {
   readonly id: string;
   readonly answer: string;
@@ -127,7 +127,7 @@ export const shorterAnswersQuestion = (long: ReadonlyArray<LongAnswer>) =>
   [
     ...long.map(
       ({ id, answer, length, limit }) =>
-        `Entry ${id}: ${JSON.stringify(answer)} has ${length} characters, but its image has room for ${limit}.`,
+        `Entry ${id}: ${JSON.stringify(answer)} has ${length} characters, but where the game draws it has room for ${limit}.`,
     ),
     "Answer again for these entries with a shorter English word or phrase with the same meaning that fits. For a menu or button, use the label other games use for the same thing, such as New Game for starting one, rather than cutting words off.",
   ].join("\n");

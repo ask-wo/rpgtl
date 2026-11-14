@@ -23,7 +23,7 @@ import {
   sharedNames,
   speakerEntries,
   textGroups,
-  tooLongForImage,
+  tooLongForRoom,
   TranslationAnswer,
   translationSystemPrompt,
   translationUserMessage,
@@ -436,7 +436,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
           if (
             answer !== undefined &&
             limit !== undefined &&
-            checked.success.flag?.includes(tooLongForImage)
+            checked.success.flag?.includes(tooLongForRoom)
           )
             long.push({
               item,

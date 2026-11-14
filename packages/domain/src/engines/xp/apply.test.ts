@@ -116,6 +116,37 @@ it("puts a space where a translated script string is joined with `+` to a value 
   );
 });
 
+it("puts a script string's translation into the game's English for it too", () => {
+  const code = [
+    `if $game_switches[9]`,
+    `  draw_text(0, 0, 96, 32, "Strd", 0)`,
+    `  draw_text(100, 0, 60, 32, @len.to_s + "Barrow", 2)`,
+    `else`,
+    `  draw_text(0, 0, 80, 32, "歩幅", 0)`,
+    `  draw_text(80, 0, 60, 32, @len.to_s + "帆布", 2)`,
+    `end`,
+    `@tip = $game_switches[9] ? '????' : "荷車"`,
+  ].join("\n");
+  const scripts = xpFile(xpScripts({ Window_Pace: code, Main: "begin_game" }));
+  const english = { 歩幅: "Gaitlen", 帆布: "sailcloth", 荷車: "Handcart's" };
+  const entries = translated(entriesOf("Scripts.rxdata", scripts), english);
+  const result = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", scripts, entries));
+  const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", result ?? new Uint8Array()));
+  assert.strictEqual(
+    file._tag === "Scripts" ? file.data[0]?.code : undefined,
+    [
+      `if $game_switches[9]`,
+      `  draw_text(0, 0, 96, 32, "Gaitlen", 0)`,
+      `  draw_text(100, 0, 60, 32, @len.to_s + " sailcloth", 2)`,
+      `else`,
+      `  draw_text(0, 0, 80, 32, "Gaitlen", 0)`,
+      `  draw_text(80, 0, 60, 32, @len.to_s + " sailcloth", 2)`,
+      `end`,
+      `@tip = $game_switches[9] ? 'Handcart\\'s' : "Handcart's"`,
+    ].join("\n"),
+  );
+});
+
 const scriptsOf = (bytes: Uint8Array | undefined) => {
   const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", bytes ?? new Uint8Array()));
   return file._tag === "Scripts" ? file.data.map((script) => script.name) : undefined;

@@ -39,7 +39,7 @@ export const Guessed = <Value extends Schema.Top, const Fields extends Schema.St
 export const EntryTranslation = Guessed(Schema.String, {
   /** Why the run's answer is worth a look. */
   flag: Schema.optionalKey(Schema.String),
-  /** The run's first answer, when the guess is a shorter second one that fits its image. */
+  /** The run's first answer, when the guess is a shorter second one that fits where the game draws it. */
   long: Schema.optionalKey(Schema.String),
 });
 export type EntryTranslation = typeof EntryTranslation.Type;
@@ -56,6 +56,11 @@ export const Entry = Schema.Struct({
   translation: EntryTranslation,
   /** Speaker identified by a named dialogue picture in the event list. */
   speaker: Schema.optionalKey(Schema.String),
+  /**
+   * The game's own English for a script string, which its English mode shows instead. Applying
+   * puts the translation there too, and its length bounds the room the translation has.
+   */
+  gameEnglish: Schema.optionalKey(Schema.String),
   /**
    * Keeps the original: an image block's pixels, including any decorative lettering, or a script
    * string's text. A run doesn't translate the entry.

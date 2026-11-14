@@ -175,6 +175,49 @@ it.effect(
     }),
 );
 
+const englishModeScript = [
+  `def refresh`,
+  `  if $game_switches[9]`,
+  `    draw_text(0, 0, 96, 32, "Strd", 0)`,
+  `    draw_text(100, 0, 60, 32, @len.to_s + "Barrow", 2)`,
+  `  else`,
+  `    draw_text(0, 0, 80, 32, "歩幅", 0)`,
+  `    draw_text(80, 0, 60, 32, @len.to_s + "帆布", 2)`,
+  `  end`,
+  `  @title = $game_switches[9] ? "Wagon" : "荷車"`,
+  `  if $game_switches[9]`,
+  `    @hint = "Rowboat"`,
+  `  else`,
+  `    @hint = "寄り道"`,
+  `    @extra = "粉挽き"`,
+  `  end`,
+  `  @tip = $game_switches[9] ? "????" : "粉挽き"`,
+  `  @sail = $game_system.bellows_on ? "ON" : "帆を畳む"`,
+  `end`,
+].join("\n");
+
+it.effect(
+  "gives a script string the game's English from the other side of an `if` or `? :` on a switch that differs only in strings and numbers",
+  () =>
+    Effect.gen(function* () {
+      const entries = yield* entriesOf({
+        "Scripts.rxdata": xpScripts({ Window_Pace: englishModeScript }),
+      });
+      assert.deepStrictEqual(
+        entries.map(({ source, gameEnglish }) => [source, gameEnglish]),
+        [
+          ["歩幅", "Strd"],
+          ["帆布", "Barrow"],
+          ["荷車", "Wagon"],
+          ["寄り道", undefined],
+          ["粉挽き", undefined],
+          ["粉挽き", "????"],
+          ["帆を畳む", undefined],
+        ],
+      );
+    }),
+);
+
 it.effect("refuses an archive that ends in the middle of a file", () =>
   Effect.gen(function* () {
     const archive = xpArchive({ "Items.rxdata": [] }).slice(0, -2);

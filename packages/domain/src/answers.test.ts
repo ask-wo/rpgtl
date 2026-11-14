@@ -31,11 +31,14 @@ it("An answer longer than its image's room is flagged, together with other flags
   );
   assert.deepStrictEqual(
     checkAnswer(imageEntry("鉴赏"), "Gallery", { limit: 6 }),
-    accepted("Gallery", "longer than the image has room for"),
+    accepted("Gallery", "longer than where the game draws it has room for"),
   );
   assert.deepStrictEqual(
     checkAnswer(pluginEntry("第一行\n第二行"), "One line", { limit: 5 }),
-    accepted("One line", "line breaks differ from the source; longer than the image has room for"),
+    accepted(
+      "One line",
+      "line breaks differ from the source; longer than where the game draws it has room for",
+    ),
   );
 });
 

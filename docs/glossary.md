@@ -52,7 +52,7 @@ The words the code and these docs are built from. Use them in code, tests, docs 
 | Image reading | A run that reads a game's images with the **image reader** (`apps/image-reader`), and with the **fallback reader** (the page's **Backup reader**), a vision model, where it isn't sure. |
 | Erased background | A copy of an image with its text filled in, which the English is drawn on. The state folder keeps the whole copy, but a translation file carries only the tiles where it differs from the game's image (`erasedPatches`). |
 | Lettering | Drawing an image text entry's English into its erased background, by the game, the page and, for an XP game, the server alike (`lettering.ts`). |
-| Limit, room | The limit is how many characters the translator is asked to keep an image text entry within. The room is the space its English may be drawn in, which sets its size. |
+| Limit, room | The limit is how many characters the translator is asked to keep an image text entry, or a script text entry with a **game's English**, within. The room is the space its English may be drawn in, which sets its size. |
 
 ## Playing
 
@@ -65,6 +65,7 @@ The words the code and these docs are built from. Use them in code, tests, docs 
 | Unpack | Writing the files of an XP game's archive into its folder and renaming the archive to `Game.rgssad.original` (`XpPatch`), so `Game.exe` loads loose files such as a **patch**'s. The one change RPGTL makes in a game folder, and only when the player asks; RPGTL still reads the game's text from the renamed archive. |
 | Translation switch | A game's **Translate this game** switch. Off, the game shows its original text; it doesn't start or stop a run. |
 | Script text | The strings in an XP game's Ruby scripts (`Scripts.rxdata`) that hold Chinese, Japanese or Korean, which the game draws itself, such as its title menu. Not RPGTL's **game scripts**. |
+| Game's English | The English an XP game itself has for a **script text** entry, which its own English mode shows instead (`gameEnglish`). RPGTL puts the entry's translation there too. |
 | Keep original | An entry the game shows as it is and runs don't translate: an image text's original artwork, or a string of **script text**. |
 | Game scripts | The scripts RPGTL adds to a played game (`packages/game`): the **runtime** (fitting English into windows, the F8 panel) and the **map view** (F7). |
 | Activity | Everything running for a game (its runs, image reading, the program it plays in) as the one stream its page follows (`Activity`). |
