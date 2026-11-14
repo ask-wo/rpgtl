@@ -100,6 +100,27 @@ export function englishBranches(code: string, literals: ReadonlyArray<RubyLitera
   return pairs;
 }
 
+/**
+ * A text with its one `|` between source and English, which its English mode shows instead, as
+ * the source alone and that English. Games with an English mode write choices and place names so,
+ * and show a text without `|` in both modes, so the translation alone takes the whole text's place.
+ */
+export function bilingualText(text: string) {
+  const [source = "", english, ...rest] = text.split("|");
+  if (english === undefined || rest.length > 0 || !hasSource(source) || hasSource(english))
+    return undefined;
+  // Games also split lines at `|`, and a second line may hold only numbers or signs.
+  if (!/[A-Za-z]|^\?+$/.test(english)) return undefined;
+  return { source, english };
+}
+
+/**
+ * Whether a text in the game still is an entry's source: its source side, or the whole text, which
+ * a catalog read before the game's texts were split holds until the game is read again.
+ */
+export const holdsSource = (text: string, source: string) =>
+  text === source || bilingualText(text)?.source === source;
+
 const wide = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}　-〿！-｠]/u;
 
 /**

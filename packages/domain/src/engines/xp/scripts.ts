@@ -5,7 +5,7 @@ import * as Result from "effect/Result";
 import { sourceText } from "../mvmz/extract.ts";
 import { GameFile, GameFileInvalid } from "../mvmz/gameFile.ts";
 import { GameDataChanged } from "../mvmz/apply.ts";
-import { englishBranches } from "./englishBranches.ts";
+import { englishBranches, holdsSource } from "./englishBranches.ts";
 import { type RubyLiteral, rubyLiterals } from "./rubyLiterals.ts";
 import { xpImageScript } from "./images.ts";
 import { textFittingScript } from "./textFitting.ts";
@@ -289,7 +289,8 @@ export function withTexts(code: string, sourceTexts: ReadonlyMap<number, Literal
     const replacement = texts.get(index);
     if (!replacement) continue;
     const quoted = code.slice(literal.start, literal.end);
-    if (literalText(quoted) !== replacement.source) return undefined;
+    const current = literalText(quoted);
+    if (current === undefined || !holdsSource(current, replacement.source)) return undefined;
     const text = withJoinSpaces(code, literals, index, replacement.text, texts);
     changed += code.slice(from, literal.start) + rubyLiteral(text, quoted);
     from = literal.end;

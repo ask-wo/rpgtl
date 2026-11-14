@@ -1,6 +1,7 @@
 import type { Entry, EventList, EventListRef, GameRecord, Location, Table } from "@rpgtl/contracts";
 import * as Predicate from "effect/Predicate";
 import { GameFile } from "../mvmz/gameFile.ts";
+import { bilingualText } from "./englishBranches.ts";
 import { newXpEntry } from "./location.ts";
 import { literalText, rubyText, scriptsText } from "./scripts.ts";
 
@@ -232,9 +233,13 @@ export function xpGameEntries(dataFiles: ReadonlyArray<GameFile>): Entry[] {
   const speakers = speakerVariables(dataFiles.flatMap(eventLists).map(({ list }) => list));
   return dataFiles
     .flatMap((file) => fileText(file, speakers))
-    .map(({ location, text, speaker, english }) => ({
-      ...newXpEntry(location, text),
-      ...(speaker !== undefined && { speaker }),
-      ...(english !== undefined && { gameEnglish: english }),
-    }));
+    .map(({ location, text, speaker, english }) => {
+      const bilingual = location._tag === "Message" ? undefined : bilingualText(text);
+      const gameEnglish = bilingual?.english || english;
+      return {
+        ...newXpEntry(location, bilingual?.source ?? text),
+        ...(speaker !== undefined && { speaker }),
+        ...(gameEnglish !== undefined && { gameEnglish }),
+      };
+    });
 }

@@ -147,6 +147,44 @@ it("puts a script string's translation into the game's English for it too", () =
   );
 });
 
+it("puts the translation alone in place of a text that holds its source and the game's English around a `|`, but keeps a second line, and applies a saved whole text", () => {
+  const map = xpFile(
+    xpMap({
+      1: [
+        command(102, ["粉挽き|Quernish", "薬湯|(+50)"], 2),
+        command(355, `@place = "水車小屋|Lanecut"`),
+      ],
+    }),
+  );
+  const entries = entriesOf("Map001.rxdata", map);
+  assert.deepStrictEqual(
+    entries.map(({ source, gameEnglish }) => [source, gameEnglish]),
+    [
+      ["粉挽き", "Quernish"],
+      ["薬湯|(+50)", undefined],
+      ["水車小屋", "Lanecut"],
+    ],
+  );
+  // A catalog read before such texts were split holds the whole text, and still applies.
+  const saved = entries.map((entry) =>
+    entry.source === "粉挽き" ? { ...entry, source: "粉挽き|Quernish" } : entry,
+  );
+  const english = {
+    "粉挽き|Quernish": "Turn the quern",
+    "薬湯|(+50)": "Herbal bath|(+50)",
+    水車小屋: "Waterwheel shed",
+  };
+  const result = Result.getOrThrow(
+    applyXpTranslations("Map001.rxdata", map, translated(saved, english)),
+  );
+  const file = Result.getOrThrow(decodeXpFile("Map001.rxdata", result ?? new Uint8Array()));
+  const list = file._tag === "Map" ? file.data.events[1]?.pages[0]?.list : undefined;
+  assert.deepStrictEqual(
+    list?.map(({ code, parameters }) => [code, ...parameters]),
+    [[102, ["Turn the quern", "Herbal bath|(+50)"], 2], [355, `@place = "Waterwheel shed"`], [0]],
+  );
+});
+
 const scriptsOf = (bytes: Uint8Array | undefined) => {
   const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", bytes ?? new Uint8Array()));
   return file._tag === "Scripts" ? file.data.map((script) => script.name) : undefined;
