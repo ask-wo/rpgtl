@@ -7,6 +7,7 @@ import { isScriptText } from "../../location.ts";
 import { GameDataChanged } from "../mvmz/apply.ts";
 import { GameFileInvalid } from "../mvmz/gameFile.ts";
 import { scriptsFile } from "./gameFile.ts";
+import { holdsSource } from "./englishBranches.ts";
 import { xpFileOf } from "./location.ts";
 import {
   applyScriptTexts,
@@ -202,7 +203,8 @@ const commandsOf = (data: unknown, list: EventListRef) =>
 function setText(data: unknown, location: Location, source: string, text: string): boolean {
   const set = (holder: unknown, key: string | number) => {
     const current = typeof key === "number" ? asList(holder)?.[key] : ivar(holder, key);
-    if (textOf(current) !== source) return false;
+    const shown = textOf(current);
+    if (shown === undefined || !holdsSource(shown, source)) return false;
     if (typeof key === "number") Reflect.set(asList(holder) ?? [], key, stringLike(current, text));
     else Reflect.set(holder ?? {}, Symbol.for(`@${key}`), stringLike(current, text));
     return true;

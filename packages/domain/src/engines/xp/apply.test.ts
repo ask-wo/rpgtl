@@ -85,6 +85,106 @@ it("puts translations into an XP game's scripts, keeping their `#{}` code and th
   ]);
 });
 
+it("puts a space where a translated script string is joined with `+` to a value or a string, between letters or digits", () => {
+  const code = [
+    `text = "炎の力が" + @rate.to_s + "%上がる"`,
+    `text = kind + "器量+" + bonus.to_s`,
+    `text = "微風" + "小径" + "\\n" + "HP" + "癒やし歌"`,
+    `text += "雷鳴鼓"`,
+  ].join("\n");
+  const scripts = xpFile(xpScripts({ Window_Bonus: code, Main: "begin_game" }));
+  const english = {
+    炎の力が: "Raises fire power by",
+    "%上がる": "% more",
+    "器量+": "GRC+",
+    微風: "Zephyr",
+    小径: "Quillwind",
+    癒やし歌: "Rumblor",
+    雷鳴鼓: "Zephyrine",
+  };
+  const entries = translated(entriesOf("Scripts.rxdata", scripts), english);
+  const result = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", scripts, entries));
+  const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", result ?? new Uint8Array()));
+  assert.strictEqual(
+    file._tag === "Scripts" ? file.data[0]?.code : undefined,
+    [
+      `text = "Raises fire power by " + @rate.to_s + "% more"`,
+      `text = kind + " GRC+" + bonus.to_s`,
+      `text = "Zephyr " + "Quillwind" + "\\n" + "HP" + " Rumblor"`,
+      `text += "Zephyrine"`,
+    ].join("\n"),
+  );
+});
+
+it("puts a script string's translation into the game's English for it too", () => {
+  const code = [
+    `if $game_switches[9]`,
+    `  draw_text(0, 0, 96, 32, "Strd", 0)`,
+    `  draw_text(100, 0, 60, 32, @len.to_s + "Barrow", 2)`,
+    `else`,
+    `  draw_text(0, 0, 80, 32, "歩幅", 0)`,
+    `  draw_text(80, 0, 60, 32, @len.to_s + "帆布", 2)`,
+    `end`,
+    `@tip = $game_switches[9] ? '????' : "荷車"`,
+  ].join("\n");
+  const scripts = xpFile(xpScripts({ Window_Pace: code, Main: "begin_game" }));
+  const english = { 歩幅: "Gaitlen", 帆布: "sailcloth", 荷車: "Handcart's" };
+  const entries = translated(entriesOf("Scripts.rxdata", scripts), english);
+  const result = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", scripts, entries));
+  const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", result ?? new Uint8Array()));
+  assert.strictEqual(
+    file._tag === "Scripts" ? file.data[0]?.code : undefined,
+    [
+      `if $game_switches[9]`,
+      `  draw_text(0, 0, 96, 32, "Gaitlen", 0)`,
+      `  draw_text(100, 0, 60, 32, @len.to_s + " sailcloth", 2)`,
+      `else`,
+      `  draw_text(0, 0, 80, 32, "Gaitlen", 0)`,
+      `  draw_text(80, 0, 60, 32, @len.to_s + " sailcloth", 2)`,
+      `end`,
+      `@tip = $game_switches[9] ? 'Handcart\\'s' : "Handcart's"`,
+    ].join("\n"),
+  );
+});
+
+it("puts the translation alone in place of a text that holds its source and the game's English around a `|`, but keeps a second line, and applies a saved whole text", () => {
+  const map = xpFile(
+    xpMap({
+      1: [
+        command(102, ["粉挽き|Quernish", "薬湯|(+50)"], 2),
+        command(355, `@place = "水車小屋|Lanecut"`),
+      ],
+    }),
+  );
+  const entries = entriesOf("Map001.rxdata", map);
+  assert.deepStrictEqual(
+    entries.map(({ source, gameEnglish }) => [source, gameEnglish]),
+    [
+      ["粉挽き", "Quernish"],
+      ["薬湯|(+50)", undefined],
+      ["水車小屋", "Lanecut"],
+    ],
+  );
+  // A catalog read before such texts were split holds the whole text, and still applies.
+  const saved = entries.map((entry) =>
+    entry.source === "粉挽き" ? { ...entry, source: "粉挽き|Quernish" } : entry,
+  );
+  const english = {
+    "粉挽き|Quernish": "Turn the quern",
+    "薬湯|(+50)": "Herbal bath|(+50)",
+    水車小屋: "Waterwheel shed",
+  };
+  const result = Result.getOrThrow(
+    applyXpTranslations("Map001.rxdata", map, translated(saved, english)),
+  );
+  const file = Result.getOrThrow(decodeXpFile("Map001.rxdata", result ?? new Uint8Array()));
+  const list = file._tag === "Map" ? file.data.events[1]?.pages[0]?.list : undefined;
+  assert.deepStrictEqual(
+    list?.map(({ code, parameters }) => [code, ...parameters]),
+    [[102, ["Turn the quern", "Herbal bath|(+50)"], 2], [355, `@place = "Waterwheel shed"`], [0]],
+  );
+});
+
 const scriptsOf = (bytes: Uint8Array | undefined) => {
   const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", bytes ?? new Uint8Array()));
   return file._tag === "Scripts" ? file.data.map((script) => script.name) : undefined;

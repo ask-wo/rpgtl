@@ -29,7 +29,7 @@ export const AnswerContext = Schema.Struct({
   /** Glossary terms whose translations may keep Chinese, Japanese or Korean writing. */
   glossary: Schema.optionalKey(Schema.Array(SourceAndTranslation)),
   speaker: Schema.optionalKey(SourceAndTranslation),
-  /** How many characters the text has room for in its image. */
+  /** How many characters the text has room for where the game draws it. */
   limit: Schema.optionalKey(Schema.Int),
 });
 export type AnswerContext = typeof AnswerContext.Type;

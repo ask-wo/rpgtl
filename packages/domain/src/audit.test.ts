@@ -89,6 +89,7 @@ it("The audit lists capitalised glossary words, differing translations and each 
     "number added on a last line": ["entry15"],
     refusal: [],
     "length unlike the source": ["entry20"],
+    "| unlike the source": [],
     // The check leaves out terms the model hasn't sorted, which may be names.
     "glossary name missing": ["entry16"],
     "pronoun unlike the source": ["entry18"],

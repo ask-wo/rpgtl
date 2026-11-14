@@ -19,8 +19,8 @@ const suggestibleReasons: ReadonlyArray<RejectReason> = [
 /** Whether an answer rejected for this reason is worth showing the user to fix by hand. */
 export const isSuggestible = (reason: RejectReason) => suggestibleReasons.includes(reason);
 
-/** The flag an answer gets when it is longer than its image has room for. */
-export const tooLongForImage = "longer than the image has room for";
+/** The flag an answer gets when it is longer than where the game draws it has room for. */
+export const tooLongForRoom = "longer than where the game draws it has room for";
 
 /** How many characters the translation shows, with codes left out and spaces collapsed. */
 export const shownLength = (translation: string) =>
@@ -136,7 +136,7 @@ export function checkAnswer(
       ...(lineCount(kept) === lineCount(request.text)
         ? []
         : ["line breaks differ from the source"]),
-      ...(limit !== undefined && shownLength(translation) > limit ? [tooLongForImage] : []),
+      ...(limit !== undefined && shownLength(translation) > limit ? [tooLongForRoom] : []),
     ];
     return Result.succeed(flags.length ? { translation, flag: flags.join("; ") } : { translation });
   });

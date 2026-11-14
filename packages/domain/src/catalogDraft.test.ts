@@ -31,6 +31,24 @@ it("a label's room counts as tight against the English its kana or Hangul usuall
   assert.strictEqual(draft.tightLimit(draft.prepare(label)), 6);
 });
 
+const scriptString = (id: string, source: string, gameEnglish: string): Entry => ({
+  ...line(id, 0, source),
+  location: { _tag: "RubyScriptText", script: 0, name: "Window_Sail", literal: Number(id) },
+  gameEnglish,
+});
+
+it("a script string has room for 5/3 of the wider of its source and the game's English, which a `????` doesn't give", () => {
+  const draft = draftOf(
+    scriptString("0", "帆柱の綱", "Mstb"),
+    scriptString("1", "帆柱", "\\C[2]Mast lines"),
+    scriptString("2", "帆柱", "????"),
+  );
+  assert.deepStrictEqual(
+    draft.entries.map((entry) => draft.limit(entry)),
+    [Math.ceil((5 / 3) * 4 * 1.8), Math.ceil((5 / 3) * 10), undefined],
+  );
+});
+
 it("a rejected answer stays as a suggestion until the entry is translated", () => {
   const draft = draftOf(line("a", 0, "你好"));
   const [entry] = draft.entries;

@@ -12,7 +12,7 @@ Every tool that finds problems in a game's translations goes through `pnpm run a
 
 | Problem | Caught by |
 | --- | --- |
-| Placeholders (control codes) missing, extra or repeated | rejected: `placeholder missing`, `placeholder extra`, `placeholder repeated` |
+| Placeholders (control codes, a bare `\|`) missing, extra or repeated | rejected: `placeholder missing`, `placeholder extra`, `placeholder repeated`; in existing text, a bare `\|`: check `\| unlike the source` |
 | Chinese, Japanese or Korean sent back unchanged, or left in the answer | rejected: `unchanged`, `source text left`; in existing text: check `source text left` (credits names a line keeps, a single character the source quotes and the English quotes too, as in 「ァ」と「ア」, and the circle mark 〇 are allowed). |
 | The answer holds the answers to other entries | rejected: `other entries included`; in existing text, often check `length unlike the source` |
 | The answers moved up one entry, after the model merged two lines | rejected: `answers out of order` |

@@ -77,7 +77,7 @@ it("text images are the text folders without the engine's icon sheets, the game'
   assert.strictEqual(images[0]?.file, "img/pictures/nested/Background.png_");
 });
 
-it("an XP game's text images are its pictures, titles, game overs and folders of its own", () => {
+it("an XP game's text images are its pictures, titles, game overs, windowskins and folders of its own", () => {
   const images = xpTextImages([
     "Graphics/Pictures/Sign.png",
     "Graphics/Battlers/Slime.png",
@@ -98,6 +98,7 @@ it("an XP game's text images are its pictures, titles, game overs and folders of
     { image: "Graphics/Pictures/Sign", file: "Graphics/Pictures/Sign.png" },
     { image: "Graphics/Titles/Cover", file: "Graphics/Titles/Cover.jpg" },
     { image: "Graphics/Gameovers/End", file: "Graphics/Gameovers/End.png" },
+    { image: "Graphics/Windowskins/Frame", file: "Graphics/Windowskins/Frame.png" },
     { image: "Graphics/Menus/Banner", file: "Graphics/Menus/Banner.png" },
   ]);
 });

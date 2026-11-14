@@ -7,6 +7,7 @@ export const CheckName = Schema.Literals([
   "number added on a last line",
   "refusal",
   "length unlike the source",
+  "| unlike the source",
   "glossary name missing",
   "pronoun unlike the source",
 ]);

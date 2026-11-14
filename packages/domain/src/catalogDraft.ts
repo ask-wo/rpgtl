@@ -14,6 +14,7 @@ import { sourceScript } from "./checks.ts";
 import { speakerTagName, speakerTagPattern } from "./controlCodes.ts";
 import { entryTranslation, termTranslation, termKind, withGuess } from "./guesses.ts";
 import { keepsTags, withoutTags } from "./engines/xp/databaseTags.ts";
+import { gameEnglishLimit } from "./engines/xp/englishBranches.ts";
 import { gameLanguage } from "./language.ts";
 import { isImageText, isMessage, isScriptText, type Placed } from "./location.ts";
 import { isActorName, isSpeakerNameEntry } from "./nameEntries.ts";
@@ -59,7 +60,7 @@ const isOriginName = (entry: Pick<Entry, "id"> & Placed) =>
 /** How an accepted answer is kept, beyond its translation. */
 export interface Accepted {
   readonly flag?: string | undefined;
-  /** The first answer, when the translation is a shorter second one for its image. */
+  /** The first answer, when the translation is a shorter second one that fits where the game draws it. */
   readonly long?: string | undefined;
   /** Adds the entry's source and English to the glossary, as the glossary pass does. */
   readonly seedGlossary?: boolean;
@@ -228,9 +229,9 @@ export class CatalogDraft {
     return term ? termTranslation(term) : name;
   }
 
-  /** How many characters the entry has room for in its image. */
-  limit(entry: Pick<Entry, "id">): number | undefined {
-    return this.#limits.get(entry.id);
+  /** How many characters the entry has room for where the game draws it, when that is known. */
+  limit(entry: Pick<Entry, "id" | "source" | "gameEnglish">): number | undefined {
+    return this.#limits.get(entry.id) ?? gameEnglishLimit(entry);
   }
 
   /**

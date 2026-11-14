@@ -78,6 +78,9 @@ const repeatsSpeaker = (translation: string) => {
 // Far longer than the source, or fewer letters than the source's weight in characters (for example
 // only the speaker's name), means the answer belongs to another entry or lost part of it. A Chinese
 // character weighs one; kana and Hangul, which spell sounds, weigh half (ありがとう → Thanks).
+// A `\|` is a control code that waits in MV and MZ messages.
+const bars = (text: string) => text.match(/(?<!\\)\|/g)?.length ?? 0;
+
 function lengthUnlike(source: string, translation: string) {
   const sourceText = plainText(source);
   const text = plainText(translation);
@@ -205,6 +208,7 @@ export function translationChecks(
       add("source text left");
     if (endsWithStrayNumber(source, translation)) add("number added on a last line");
     if (refusalPattern.test(translation)) add("refusal");
+    if (bars(source) !== bars(translation)) add("| unlike the source");
     if (isNameEntry(entry) || isSpeakerNameEntry(entry)) return findings;
     if (repeatsSpeaker(translation)) add("speaker name repeated");
     if (lengthUnlike(source, translation)) add("length unlike the source");

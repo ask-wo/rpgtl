@@ -31,11 +31,14 @@ it("An answer longer than its image's room is flagged, together with other flags
   );
   assert.deepStrictEqual(
     checkAnswer(imageEntry("鉴赏"), "Gallery", { limit: 6 }),
-    accepted("Gallery", "longer than the image has room for"),
+    accepted("Gallery", "longer than where the game draws it has room for"),
   );
   assert.deepStrictEqual(
     checkAnswer(pluginEntry("第一行\n第二行"), "One line", { limit: 5 }),
-    accepted("One line", "line breaks differ from the source; longer than the image has room for"),
+    accepted(
+      "One line",
+      "line breaks differ from the source; longer than where the game draws it has room for",
+    ),
   );
 });
 
@@ -267,6 +270,19 @@ it("A comma between Korean words is punctuation a pause follows, a point in a nu
     checkAnswer(messageEntry("빵,\\!우유,\\!사과 0.5\\!개"), "Bread, milk, apple 0.5 piece"),
     accepted("Bread,\\! milk,\\! apple 0.5 \\!piece"),
   );
+});
+
+it("A bare `|` is sent as a placeholder, so the English keeps each one", () => {
+  const entry: Asked = {
+    location: { _tag: "RubyScriptText", script: 3, name: "Window_Help", literal: 0 },
+    source: "●重い|●両手で持てる",
+  };
+  assert.strictEqual(requestText(entry).text, "●重い{1}●両手で持てる");
+  assert.deepStrictEqual(
+    checkAnswer(entry, "●Heavy{1}●Held in both hands"),
+    accepted("●Heavy|●Held in both hands"),
+  );
+  assert.isTrue(Result.isFailure(checkAnswer(entry, "●Heavy\n●Held in both hands")));
 });
 
 it("A line break joins Chinese lines without a space and Korean lines with one", () => {

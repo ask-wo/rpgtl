@@ -1,6 +1,7 @@
 import type { Entry, EventList, EventListRef, GameRecord, Location, Table } from "@rpgtl/contracts";
 import * as Predicate from "effect/Predicate";
 import { GameFile } from "../mvmz/gameFile.ts";
+import { bilingualText } from "./englishBranches.ts";
 import { newXpEntry } from "./location.ts";
 import { literalText, rubyText, scriptsText } from "./scripts.ts";
 
@@ -8,6 +9,7 @@ interface Found {
   readonly location: Location;
   readonly text: string;
   readonly speaker?: string;
+  readonly english?: string;
 }
 
 const hasText = (value: unknown): value is string => Predicate.isString(value) && !!value.trim();
@@ -76,11 +78,12 @@ function listText(
         .slice(index, end)
         .map(({ parameters: [line] }) => (Predicate.isString(line) ? line : ""))
         .join("\n");
-      for (const { literal, text } of rubyText(script))
+      for (const { literal, text, english } of rubyText(script))
         if (text.trim())
           found.push({
             location: { _tag: "ScriptText", list: ref, index, parameter: 0, literal },
             text,
+            ...(english !== undefined && { english }),
           });
       index = end - 1;
     } else {
@@ -230,8 +233,13 @@ export function xpGameEntries(dataFiles: ReadonlyArray<GameFile>): Entry[] {
   const speakers = speakerVariables(dataFiles.flatMap(eventLists).map(({ list }) => list));
   return dataFiles
     .flatMap((file) => fileText(file, speakers))
-    .map(({ location, text, speaker }) => ({
-      ...newXpEntry(location, text),
-      ...(speaker !== undefined && { speaker }),
-    }));
+    .map(({ location, text, speaker, english }) => {
+      const bilingual = location._tag === "Message" ? undefined : bilingualText(text);
+      const gameEnglish = bilingual?.english || english;
+      return {
+        ...newXpEntry(location, bilingual?.source ?? text),
+        ...(speaker !== undefined && { speaker }),
+        ...(gameEnglish !== undefined && { gameEnglish }),
+      };
+    });
 }
