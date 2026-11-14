@@ -585,6 +585,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
       draft,
       draft.entries.map((entry) => draft.prepare(entry)),
     );
+    yield* report.speakers(speakers);
     yield* translateGroups(pass, speakers.length ? [speakers] : [], true);
     yield* sortTerms(pass);
     yield* findPronouns(pass);

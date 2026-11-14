@@ -127,6 +127,10 @@ export class CatalogDraft {
     return this.#entries.filter((entry) => this.#failed.has(entry.id)).map((e) => e.id);
   }
 
+  hasFailed(id: string) {
+    return this.#failed.has(id);
+  }
+
   term(source: string): DraftTerm | undefined {
     return this.#terms.get(source.trim());
   }

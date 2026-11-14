@@ -15,6 +15,10 @@ export class RunReport extends Context.Service<
     readonly warn: (message: string) => Effect.Effect<void>;
     readonly request: (line: Omit<RequestLine, "type" | "at">) => Effect.Effect<void>;
     readonly ask: (line: Omit<AskLine, "type" | "at">) => Effect.Effect<void>;
+    /** The speakers the glossary pass translates, to count with the names. */
+    readonly speakers: (
+      entries: ReadonlyArray<{ readonly id: string; readonly source: string }>,
+    ) => Effect.Effect<void, StateFolder.StateFileError>;
     /** The run's draft changed: entries were translated or given up on. */
     readonly progress: Effect.Effect<void, StateFolder.StateFileError>;
   }

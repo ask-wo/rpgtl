@@ -111,6 +111,7 @@ const make = Effect.gen(function* () {
     const report = RunReport.of({
       step: Effect.fn("RunReport.step")(function* () {}),
       textPass: Effect.void,
+      speakers: () => Effect.void,
       warn: Effect.fn("RunReport.warn")(function* (message: string) {
         const at = yield* now;
         yield* Ref.update(lines, (all): ReadonlyArray<RunLogLine> =>

@@ -94,6 +94,7 @@ const translated = (entries: Catalog["entries"], batchSize = 40) => {
       warn: () => Effect.void,
       request: (request) => Effect.sync(() => requests.push(request)),
       ask: () => Effect.void,
+      speakers: () => Effect.void,
       progress: Effect.void,
     }),
   );
