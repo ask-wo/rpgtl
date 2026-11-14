@@ -123,7 +123,9 @@ export function textImages(game: {
   }));
 }
 
-const xpTextFolders = ["pictures", "titles", "gameovers"];
+// Besides window frames, games keep menu art of their own in Windowskins, such as a chart with
+// its labels, for `RPG::Cache.windowskin` to load.
+const xpTextFolders = ["pictures", "titles", "gameovers", "windowskins"];
 const xpSpriteFolders = new Set([
   "animations",
   "autotiles",
@@ -135,7 +137,6 @@ const xpSpriteFolders = new Set([
   "panoramas",
   "tilesets",
   "transitions",
-  "windowskins",
 ]);
 const xpImage = /^graphics\/[^/]+\/.+\.(png|jpe?g)$/i;
 // The tiles RPGTL adds, which a player who installed an export has copied into the game.
