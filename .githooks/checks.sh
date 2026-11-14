@@ -49,7 +49,7 @@ fi
 if [ "$code" = 0 ]; then grep -E 'Test Files|Tests |Skipping tests' "$output"; else show "$output"; fi
 # The last line says what failed, since a caller often reads only the end of the output.
 if [ "$static" != 0 ] || [ "$code" != 0 ]; then
-  echo "FAILED:$([ "$static" = 0 ] || echo " static checks")$([ "$code" = 0 ] || echo " tests")"
+  echo "FAILED:$([ "$static" = 0 ] || echo " static checks ($output.static)")$([ "$code" = 0 ] || echo " tests ($output)")"
   exit 1
 fi
 
