@@ -99,8 +99,8 @@ export function EntryRow({
             </Button>
           </Note>
         )}
-        {value && previous && fromLastRun && value !== previous && (
-          <Note label="Before the last run:" text={previous}>
+        {previous && value !== previous && (!value || fromLastRun) && (
+          <Note label={value ? "Before the last run:" : "Before clearing:"} text={previous}>
             <Button
               variant="link"
               size="xs"
