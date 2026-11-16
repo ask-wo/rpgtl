@@ -58,10 +58,10 @@ const runLines = (run: NonNullable<AuditReport["run"]>, file: string) => {
     `  ${summary.requests} requests answered ${summary.answers} entries; ${summary.asks} questions about terms and pronouns${summary.failedAsks ? `, ${summary.failedAsks} failed` : ""}`,
     ...summary.warnings.map((warning) => `  Warning: ${warning}`),
     "",
-    `Guesses of the run you corrected: ${corrections.count} of ${corrections.of}`,
+    `Translations of the run you corrected: ${corrections.count} of ${corrections.of}`,
     ...corrections.examples.flatMap((correction) => [
       `  ${correctionLabels[correction.of]} ${correction.of === "translation" ? `${correction.id} ` : ""}${oneLine(correction.source)}`,
-      `    run: ${oneLine(correction.guess)}`,
+      `    run: ${oneLine(correction.modelTranslation)}`,
       `    you: ${oneLine(correction.user)}`,
     ]),
     "",
@@ -99,12 +99,6 @@ const reportLines = (report: AuditReport, logFile: (file: string) => string) => 
   for (const term of report.terms)
     lines.push(`  ${term.source} → ${term.english}: ${term.missing.join(", ")}`);
   if (!report.terms.length) lines.push("  None.");
-
-  lines.push("", `Sources with different translations: ${report.differing.count}`);
-  for (const example of report.differing.examples) {
-    lines.push(`  ${oneLine(example.source)}${example.speaker ? ` (${example.speaker})` : ""}`);
-    for (const translation of example.translations) lines.push(`    ${oneLine(translation)}`);
-  }
 
   for (const group of report.findings) {
     lines.push("", `${group.check.charAt(0).toUpperCase()}${group.check.slice(1)}: ${group.count}`);

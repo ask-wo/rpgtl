@@ -1,4 +1,4 @@
-import type { Catalog, Game, LetteringFont } from "@rpgtl/contracts";
+import type { Game, GameSettings, LetteringFont } from "@rpgtl/contracts";
 import { letteringFace } from "@rpgtl/game/lettering-fonts";
 import { useEffect, useState } from "react";
 import {
@@ -16,19 +16,19 @@ import { ChoiceField } from "../translation/ChoiceField.tsx";
 import type { Choice } from "../translation/choices.ts";
 import { gameFont } from "./assets.ts";
 import type { ShownImages } from "./InGameImage.tsx";
-import { entryTranslation, isImageText } from "@rpgtl/domain";
+import { entryTexts, isImageText, translationInUse } from "@rpgtl/domain";
 
 /** How this game draws the English in its images. */
 export interface Lettering {
-  readonly imageBold: Catalog["imageBold"];
-  readonly imageFont: Catalog["imageFont"];
+  readonly letteringWeight: GameSettings["letteringWeight"];
+  readonly letteringFont: GameSettings["letteringFont"];
 }
 
-type Weight = NonNullable<Catalog["imageBold"]> | "original";
+type Weight = NonNullable<GameSettings["letteringWeight"]> | "original";
 const weights: ReadonlyArray<Choice<Weight>> = [
   { value: "original", label: "Original weight" },
-  { value: "always", label: "Always bold" },
-  { value: "never", label: "Never bold" },
+  { value: "bold", label: "Always bold" },
+  { value: "regular", label: "Never bold" },
 ];
 type Font = LetteringFont | "game";
 const fonts: ReadonlyArray<Choice<Font>> = [
@@ -63,7 +63,8 @@ export function LetteringRow({
     setWasLocked(locked);
     if (locked) setAsking(false);
   }
-  const lettering = { imageBold: shown.imageBold, imageFont: shown.imageFont };
+  const { letteringWeight, letteringFont } = shown.settings;
+  const lettering = { letteringWeight, letteringFont };
   return (
     <div className="flex flex-wrap items-center gap-3 border-b px-6 py-2">
       <span className="text-sm text-muted-foreground">
@@ -79,10 +80,13 @@ export function LetteringRow({
             id="lettering-weight"
             label="English lettering weight"
             labelHidden
-            value={shown.imageBold ?? "original"}
+            value={letteringWeight ?? "original"}
             choices={weights}
             onChoose={(weight) =>
-              onLettering({ ...lettering, imageBold: weight === "original" ? undefined : weight })
+              onLettering({
+                ...lettering,
+                letteringWeight: weight === "original" ? undefined : weight,
+              })
             }
           />
         </div>
@@ -91,10 +95,10 @@ export function LetteringRow({
             id="lettering-font"
             label="English lettering font"
             labelHidden
-            value={shown.imageFont ?? "game"}
+            value={letteringFont ?? "game"}
             choices={game.engine === "XP" ? fonts.filter((font) => font.value !== "game") : fonts}
             onChoose={(font) =>
-              onLettering({ ...lettering, imageFont: font === "game" ? undefined : font })
+              onLettering({ ...lettering, letteringFont: font === "game" ? undefined : font })
             }
           />
         </div>
@@ -126,7 +130,7 @@ export function LetteringRow({
 
 /** A few of the game's own short image translations, as the chosen lettering draws them. */
 function FontPreview({ game, shown }: { readonly game: Game; readonly shown: ShownImages }) {
-  const font = shown.imageFont;
+  const font = shown.settings.letteringFont;
   const [face, setFace] = useState<string>();
   useEffect(() => {
     let current = true;
@@ -138,9 +142,9 @@ function FontPreview({ game, shown }: { readonly game: Game; readonly shown: Sho
   }, [game, font]);
   const words = [
     ...new Set(
-      shown.entries
-        .filter((entry) => isImageText(entry) && !entry.keepOriginal)
-        .map((entry) => entryTranslation(entry).trim())
+      entryTexts(shown)
+        .filter((entry) => isImageText(entry) && !entry.isLeftUntranslated)
+        .map((entry) => translationInUse(entry).trim())
         .filter((text) => text && text.length <= 14 && !text.includes("\n")),
     ),
   ].slice(0, 4);
@@ -151,8 +155,8 @@ function FontPreview({ game, shown }: { readonly game: Game; readonly shown: Sho
       style={{ fontFamily: face }}
       aria-label="Lettering preview"
     >
-      {shown.imageBold !== "always" && <span>{sample}</span>}
-      {shown.imageBold !== "never" && <b>{sample}</b>}
+      {shown.settings.letteringWeight !== "bold" && <span>{sample}</span>}
+      {shown.settings.letteringWeight !== "regular" && <b>{sample}</b>}
     </p>
   );
 }

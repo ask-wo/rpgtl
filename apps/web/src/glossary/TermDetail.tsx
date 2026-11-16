@@ -1,18 +1,17 @@
-import type { Entry, GlossaryTerm, Pronoun, PronounValue, TermKind } from "@rpgtl/contracts";
+import type { GlossaryTerm, PronounValue, TermKind, Text } from "@rpgtl/contracts";
 import {
   characterAliases,
   doubted,
-  entriesToClear,
-  entryTranslation,
-  restored,
+  type EntryText,
   shortNameTranslations,
-  termTranslation,
   termKind,
   termPronoun,
   termTexts,
+  textsToClear,
+  translationInUse,
   withoutStrayPronoun,
-  withUser,
 } from "@rpgtl/domain";
+import * as Struct from "effect/Struct";
 import { Button } from "~/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
@@ -39,25 +38,30 @@ const typingPause = 600;
 /** The entries of the term's own that the page lists; the count covers all of them. */
 const listed = 100;
 
-/** Who sorted the term, and the guess to go back to when the user chose another kind. */
-const kindOrigin = ({ kind }: GlossaryTerm) =>
-  kind.user !== undefined
+/** Who sorted the term. */
+const kindOrigin = ({ userKind, modelKind }: GlossaryTerm) =>
+  userKind !== undefined
     ? "Set by you."
-    : kind.guess.run !== undefined
+    : modelKind !== undefined
       ? "Sorted by the model."
       : "Not checked yet.";
 
 /** Where the pronoun came from; a model's answer the text's clues argue against waits for you. */
-const pronounFrom = (pronoun: Pronoun | undefined) => {
-  if (!pronoun) return "Not checked yet.";
-  if (pronoun.user !== undefined) return "Set by you.";
-  const { guess } = pronoun;
-  if (!guess) return "Not checked yet.";
-  const clues = `${guess.she ?? 0} clues for she, ${guess.he ?? 0} for he`;
-  if (guess.run === undefined) return `From the text: ${clues}.`;
-  return doubted(pronoun)
-    ? `From the model, but the text has ${clues}. Translations don't use it until you confirm it.`
-    : "From the model.";
+const pronounFrom = (term: GlossaryTerm) => {
+  if (term.userPronoun !== undefined) return "Set by you.";
+  const clues = `${term.sheClues ?? 0} clues for she, ${term.heClues ?? 0} for he`;
+  if (term.modelPronoun !== undefined)
+    return doubted(term)
+      ? `From the model, but the text has ${clues}. Translations don't use it until you confirm it.`
+      : "From the model.";
+  if (term.rulesPronoun !== undefined) return `From the text: ${clues}.`;
+  return "Not checked yet.";
+};
+
+/** The term with the English the user typed; English equal to the run's isn't kept as theirs. */
+const withTypedEnglish = (term: GlossaryTerm, typed: string): GlossaryTerm => {
+  const rest = Struct.omit(term, ["userTranslation"]);
+  return typed === term.modelTranslation ? rest : { ...rest, userTranslation: typed };
 };
 
 /** The guess a user value replaced, with a button that goes back to it. */
@@ -80,8 +84,8 @@ function Restore({
   );
 }
 
-const guessLabel = (guess: { readonly run?: string }, what: string) =>
-  guess.run === undefined ? `RPGTL's ${what}:` : `The run's ${what}:`;
+const guessLabel = (byModel: boolean, what: string) =>
+  byModel ? `The run's ${what}:` : `RPGTL's ${what}:`;
 
 /** The short forms of a name that "Used in" counts, as ", counting its short form 美咲". */
 const counting = (shortForms: ReadonlyArray<string>) =>
@@ -96,6 +100,7 @@ export function TermDetail({
   term,
   glossary,
   entries,
+  texts: savedTexts,
   lastRun,
   missing,
   locked,
@@ -106,8 +111,10 @@ export function TermDetail({
 }: {
   readonly term: GlossaryTerm;
   readonly glossary: ReadonlyArray<GlossaryTerm>;
-  readonly entries: ReadonlyArray<Entry>;
-  readonly lastRun: string | undefined;
+  readonly entries: ReadonlyArray<EntryText>;
+  readonly texts: ReadonlyArray<Text>;
+  /** The operation id of the last run that gave a text its English. */
+  readonly lastRun: number | undefined;
   /** The names inside the term whose English its English leaves out, as `source → English`. */
   readonly missing: ReadonlyArray<string>;
   readonly locked: boolean;
@@ -120,14 +127,16 @@ export function TermDetail({
   readonly onClearMismatches: () => void;
 }) {
   const source = term.source.trim();
-  const translation = termTranslation(term);
-  const { previous } = term;
+  const translation = translationInUse(term);
+  const { previousTranslation: previous, modelTranslation: model } = term;
   const kind = termKind(term);
+  const kindGuess = term.modelKind ?? term.rulesKind;
+  const pronounGuess = term.modelPronoun ?? term.rulesPronoun;
   const pronoun = termPronoun(term);
   const texts = termTexts(term, shortNameTranslations(glossary), characterAliases(glossary));
   const uses = entries.filter((entry) => texts.some((text) => entry.source.includes(text)));
   const [showAll, setShowAll] = useState(false);
-  const translated = entriesToClear({ entries, glossary }, term, false).length;
+  const translated = textsToClear({ texts: savedTexts, glossary }, term, false).length;
   return (
     <div
       inert={locked}
@@ -179,19 +188,14 @@ export function TermDetail({
           <Input
             id="term-translation"
             value={translation}
-            onChange={(event) =>
-              onChange(
-                { ...term, translation: withUser(term.translation, event.target.value) },
-                typingPause,
-              )
-            }
+            onChange={(event) => onChange(withTypedEnglish(term, event.target.value), typingPause)}
             onBlur={onDone}
           />
-          {term.translation.guess && term.translation.user !== undefined && (
+          {model !== undefined && term.userTranslation !== undefined && (
             <Restore
-              label={guessLabel(term.translation.guess, "English")}
-              guess={term.translation.guess.value}
-              onRestore={() => onChange({ ...term, translation: restored(term.translation) }, 0)}
+              label={guessLabel(true, "English")}
+              guess={model}
+              onRestore={() => onChange(Struct.omit(term, ["userTranslation"]), 0)}
             />
           )}
           {previous && previous !== translation && (
@@ -199,14 +203,12 @@ export function TermDetail({
               label={
                 !translation
                   ? "Before clearing:"
-                  : lastRun !== undefined && term.translation.guess?.run === lastRun
+                  : lastRun !== undefined && term.modelOperationId === lastRun
                     ? "Before the last run:"
                     : "Before:"
               }
               guess={previous}
-              onRestore={() =>
-                onChange({ ...term, translation: withUser(term.translation, previous) }, 0)
-              }
+              onRestore={() => onChange(withTypedEnglish(term, previous), 0)}
             />
           )}
           {missing.length > 0 && (
@@ -221,18 +223,14 @@ export function TermDetail({
             label="Kind"
             value={kind}
             choices={kinds}
-            onChoose={(chosen) =>
-              onChange(withoutStrayPronoun({ ...term, kind: { ...term.kind, user: chosen } }), 0)
-            }
+            onChoose={(chosen) => onChange(withoutStrayPronoun({ ...term, userKind: chosen }), 0)}
           />
           <FieldDescription>{kindOrigin(term)}</FieldDescription>
-          {term.kind.user !== undefined && term.kind.user !== term.kind.guess.value && (
+          {term.userKind !== undefined && term.userKind !== kindGuess && (
             <Restore
-              label={guessLabel(term.kind.guess, "kind")}
-              guess={term.kind.guess.value}
-              onRestore={() =>
-                onChange(withoutStrayPronoun({ ...term, kind: { guess: term.kind.guess } }), 0)
-              }
+              label={guessLabel(term.modelKind !== undefined, "kind")}
+              guess={kindGuess}
+              onRestore={() => onChange(withoutStrayPronoun(Struct.omit(term, ["userKind"])), 0)}
             />
           )}
         </div>
@@ -243,37 +241,29 @@ export function TermDetail({
               label="Pronoun"
               value={pronoun ?? "unknown"}
               choices={pronouns}
-              onChoose={(value) =>
-                onChange({ ...term, pronoun: { ...term.pronoun, user: value } }, 0)
-              }
+              onChoose={(value) => onChange({ ...term, userPronoun: value }, 0)}
             />
-            <FieldDescription>{pronounFrom(term.pronoun)}</FieldDescription>
-            {term.pronoun?.guess && doubted(term.pronoun) && (
+            <FieldDescription>{pronounFrom(term)}</FieldDescription>
+            {term.modelPronoun !== undefined && doubted(term) && (
               <Button
                 variant="outline"
                 size="sm"
                 className="self-start"
                 onClick={() =>
-                  term.pronoun?.guess &&
-                  onChange(
-                    { ...term, pronoun: { ...term.pronoun, user: term.pronoun.guess.value } },
-                    0,
-                  )
+                  term.modelPronoun !== undefined &&
+                  onChange({ ...term, userPronoun: term.modelPronoun }, 0)
                 }
               >
-                Confirm {term.pronoun.guess.value}
+                Confirm {term.modelPronoun}
               </Button>
             )}
-            {term.pronoun?.guess &&
-              term.pronoun.user !== undefined &&
-              term.pronoun.user !== term.pronoun.guess.value && (
+            {pronounGuess !== undefined &&
+              term.userPronoun !== undefined &&
+              term.userPronoun !== pronounGuess && (
                 <Restore
-                  label={guessLabel(term.pronoun.guess, "pronoun")}
-                  guess={term.pronoun.guess.value}
-                  onRestore={() =>
-                    term.pronoun?.guess &&
-                    onChange({ ...term, pronoun: { guess: term.pronoun.guess } }, 0)
-                  }
+                  label={guessLabel(term.modelPronoun !== undefined, "pronoun")}
+                  guess={pronounGuess}
+                  onRestore={() => onChange(Struct.omit(term, ["userPronoun"]), 0)}
                 />
               )}
           </div>
@@ -291,8 +281,8 @@ export function TermDetail({
             className="grid grid-cols-2 gap-4 border-b py-1.5 [contain-intrinsic-size:auto_2rem] [content-visibility:auto]"
           >
             <span>{oneLine(entry.source)}</span>
-            <span className={entryTranslation(entry) ? undefined : "text-muted-foreground italic"}>
-              {entryTranslation(entry) ? oneLine(entryTranslation(entry)) : "Not translated"}
+            <span className={translationInUse(entry) ? undefined : "text-muted-foreground italic"}>
+              {translationInUse(entry) ? oneLine(translationInUse(entry)) : "Not translated"}
             </span>
           </div>
         ))}

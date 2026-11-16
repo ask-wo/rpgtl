@@ -17,3 +17,4 @@ export * from "./comparison.ts";
 export * from "./settings.ts";
 export * from "./servedData.ts";
 export * from "./stateFolder.ts";
+export * from "./gameDatabase.ts";

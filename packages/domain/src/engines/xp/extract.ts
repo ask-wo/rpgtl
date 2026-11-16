@@ -1,4 +1,5 @@
-import type { Entry, EventList, EventListRef, GameRecord, Location, Table } from "@rpgtl/contracts";
+import type { EventList, EventListRef, GameRecord, Location, Table } from "@rpgtl/contracts";
+import type { ReadEntry } from "../../catalog.ts";
 import * as Predicate from "effect/Predicate";
 import { GameFile } from "../mvmz/gameFile.ts";
 import { bilingualText } from "./englishBranches.ts";
@@ -229,17 +230,17 @@ const fileText = (file: GameFile, speakers: ReadonlySet<string>): ReadonlyArray<
 ];
 
 /** An XP game's catalog entries: the text of its data files, in the order given. */
-export function xpGameEntries(dataFiles: ReadonlyArray<GameFile>): Entry[] {
+export function xpGameEntries(dataFiles: ReadonlyArray<GameFile>): ReadEntry[] {
   const speakers = speakerVariables(dataFiles.flatMap(eventLists).map(({ list }) => list));
   return dataFiles
     .flatMap((file) => fileText(file, speakers))
     .map(({ location, text, speaker, english }) => {
       const bilingual = location._tag === "Message" ? undefined : bilingualText(text);
-      const gameEnglish = bilingual?.english || english;
+      const builtinTranslation = bilingual?.english || english;
       return {
         ...newXpEntry(location, bilingual?.source ?? text),
         ...(speaker !== undefined && { speaker }),
-        ...(gameEnglish !== undefined && { gameEnglish }),
+        ...(builtinTranslation !== undefined && { builtinTranslation }),
       };
     });
 }

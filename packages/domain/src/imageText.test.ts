@@ -1,12 +1,14 @@
 import { assert, it } from "@effect/vitest";
-import type { Catalog, ImageLine, ImageResult, PreparedBlock } from "@rpgtl/contracts";
+import type { ImageLine, ImageResult, PreparedBlock } from "@rpgtl/contracts";
 import {
-  entryTranslation,
+  entryTexts,
+  translationInUse,
   imageEntries,
   imageLimits,
   imageTextHints,
   withImageEntries,
 } from "./index.ts";
+import { testCatalog } from "./testUtils/catalog.ts";
 
 type Box = readonly [number, number, number, number];
 
@@ -120,11 +122,18 @@ it("image text hints draw only translated blocks of images not kept original", (
   };
   const entries = imageEntries(results).map((entry) => ({
     ...entry,
-    translation: { user: entry.source === "开始" ? "• Start" : "Quit" },
+    userTranslation: entry.source === "开始" ? "• Start" : "Quit",
   }));
   const hints = imageTextHints(
     results,
-    { entries, imageBold: "never", imageFont: "serif", unchangedImages: ["img/pictures/B"] },
+    testCatalog({
+      entries,
+      settings: {
+        letteringWeight: "regular",
+        letteringFont: "serif",
+        untranslatedImages: ["img/pictures/B"],
+      },
+    }),
     (file) => `/erased/${file}`,
   );
   assert.deepStrictEqual(Object.keys(hints), ["img/pictures/A"]);
@@ -136,9 +145,9 @@ it("image text hints draw only translated blocks of images not kept original", (
     hint?.blocks.map((block) => [block.text, block.bold]),
     [["Start", false]],
   );
-  const kept = entries.map((entry) => ({ ...entry, keepOriginal: entry.source === "开始" }));
+  const kept = entries.map((entry) => ({ ...entry, isLeftUntranslated: entry.source === "开始" }));
   assert.deepStrictEqual(
-    imageTextHints(results, { entries: kept }, (file) => file),
+    imageTextHints(results, testCatalog({ entries: kept }), (file) => file),
     {},
   );
 });
@@ -163,12 +172,12 @@ it("image text keeps kana and Hangul lines whole, and only a short label before 
   );
 });
 
-const buttonResult = (file: string): ImageResult => ({
+const buttonResult = (file: string, text = "开始"): ImageResult => ({
   file,
   sha256: "",
   width: 130,
   height: 30,
-  lines: [readerLine("开始", [6, 0, 121, 30])],
+  lines: [readerLine(text, [6, 0, 121, 30])],
   erased: `${file}.png`,
   blocks: [preparedBlock(0, [6, 0, 121, 30], [6, 0, 121, 30])],
 });
@@ -178,7 +187,7 @@ it("image text hints give each image of a series the blocks of the others", () =
     version: 1 as const,
     images: {
       "img/titles2/Command_0": buttonResult("c0"),
-      "img/titles2/Command_1": buttonResult("c1"),
+      "img/titles2/Command_1": buttonResult("c1", "读取"),
       "img/titles2/Command_2": buttonResult("c2"),
       "img/pictures/Command_3": buttonResult("p3"),
       "img/titles2/Commands": buttonResult("cs"),
@@ -186,9 +195,9 @@ it("image text hints give each image of a series the blocks of the others", () =
   };
   const entries = imageEntries(results).map((entry) => ({
     ...entry,
-    translation: { user: entry.location.image.endsWith("1") ? "Load Game" : "Start" },
+    userTranslation: entry.source === "读取" ? "Load Game" : "Start",
   }));
-  const hints = imageTextHints(results, { entries }, (file) => file);
+  const hints = imageTextHints(results, testCatalog({ entries }), (file) => file);
   assert.deepStrictEqual(
     hints["img/titles2/Command_0"]?.series?.map((blocks) => blocks.map((block) => block.text)),
     [["Load Game"], ["Start"]],
@@ -262,25 +271,24 @@ it("an image read again keeps the work on its texts whose lines or text changed"
     readerLine("退出", [10, 100, 50, 120]),
     readerLine("设置", [10, 150, 50, 170]),
   ]);
-  const catalog: Catalog = {
-    version: 1,
-    game: { id: "0123456789abcdef0123", title: "雨", engine: "MV" },
-    translate: true,
+  const catalog = testCatalog({
     entries: [
-      ...imageEntries(before).map((entry) => ({
-        ...entry,
-        translation: { user: { 开始游戏: "Start", 退出: "Quit", 设置: "" }[entry.source] ?? "" },
-        ...(entry.source === "设置" && { keepOriginal: true }),
-      })),
+      ...imageEntries(before).map((entry) => {
+        const userTranslation = { 开始游戏: "Start", 退出: "Quit" }[entry.source];
+        return {
+          ...entry,
+          ...(userTranslation !== undefined && { userTranslation }),
+          ...(entry.source === "设置" && { isLeftUntranslated: true }),
+        };
+      }),
       {
         id: "m",
         location: { _tag: "EventName", map: 1, event: 1 },
         source: "退出",
-        translation: { user: "Leave" },
+        userTranslation: "Leave",
       },
     ],
-    glossary: [],
-  };
+  });
   // Read again, a stray line comes first, so every line's index and id changes, and 开始游戏 is
   // read as 开始游戏吧 now.
   const after = notice([
@@ -289,13 +297,14 @@ it("an image read again keeps the work on its texts whose lines or text changed"
     readerLine("退出", [10, 100, 50, 120]),
     readerLine("设置", [10, 150, 50, 170]),
   ]);
-  const entries = withImageEntries(catalog, after, before).entries;
+  const rebuilt = withImageEntries(catalog, after, before);
+  const entries = entryTexts(rebuilt);
   assert.deepStrictEqual(
     entries.map((entry) => [
       entry.source,
-      entryTranslation(entry),
-      entry.keepOriginal ?? false,
-      entry.translation.guess?.flag ?? "",
+      translationInUse(entry),
+      entry.isLeftUntranslated ?? false,
+      entry.flagReason ?? "",
     ]),
     [
       ["退出", "Leave", false, ""],
@@ -318,21 +327,12 @@ it("an image read again keeps a corrected text while it reads as before", () => 
   ]);
   const [quit, start] = imageEntries(before);
   if (!quit || !start) throw new Error("two entries expected");
-  const catalog: Catalog = {
-    version: 1,
-    game: { id: "0123456789abcdef0123", title: "雨", engine: "MV" },
-    translate: true,
+  const catalog = testCatalog({
     entries: [
-      { ...quit, source: "退出", readerText: "退山", translation: { user: "Quit" } },
-      {
-        ...start,
-        source: "开始",
-        readerText: "开使",
-        translation: { guess: { value: "Start", run: "r" } },
-      },
+      { ...quit, source: "退出", userTranslation: "Quit" },
+      { ...start, source: "开始", modelTranslation: "Start", modelOperationId: 1 },
     ],
-    glossary: [],
-  };
+  });
   assert.deepStrictEqual(withImageEntries(catalog, before, before).entries, catalog.entries);
 
   // Read again, a stray line comes first, so every id changes; 退山 reads as before, and 开使 is
@@ -342,18 +342,13 @@ it("an image read again keeps a corrected text while it reads as before", () => 
     readerLine("退山", [10, 10, 90, 30]),
     readerLine("开始", [10, 100, 50, 120]),
   ]);
-  const entries = withImageEntries(catalog, after, before).entries;
+  const entries = entryTexts(withImageEntries(catalog, after, before));
   assert.deepStrictEqual(
-    Object.fromEntries(
-      entries.map((entry) => [
-        entry.source,
-        [entry.readerText, entryTranslation(entry), entry.translation.guess?.flag],
-      ]),
-    ),
-    {
-      退出: ["退山", "Quit", undefined],
-      开始: [undefined, "Start", undefined],
-      菜单: [undefined, "", undefined],
-    },
+    entries.map((entry) => [entry.source, translationInUse(entry), entry.flagReason]),
+    [
+      ["退出", "Quit", undefined],
+      ["菜单", "", undefined],
+      ["开始", "Start", undefined],
+    ],
   );
 });

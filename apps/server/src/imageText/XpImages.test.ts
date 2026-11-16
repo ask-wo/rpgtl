@@ -7,10 +7,9 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import { PNG } from "pngjs";
-import * as Catalogs from "../games/Catalogs.ts";
 import * as StateFolder from "../state/StateFolder.ts";
 import { greyPng } from "../testUtils/png.ts";
-import { servicesWith } from "../testUtils/state.ts";
+import { servicesWith, typed } from "../testUtils/state.ts";
 import { translatedSign } from "../testUtils/xpImages.ts";
 import * as XpImages from "./XpImages.ts";
 
@@ -24,7 +23,6 @@ it.live(
   () =>
     Effect.gen(function* () {
       const xpImages = yield* XpImages.XpImages;
-      const catalogs = yield* Catalogs.Catalogs;
       const folder = yield* StateFolder.StateFolder;
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -50,11 +48,7 @@ it.live(
       assert.lengthOf(yield* folder.list(cached), 2);
       assert.deepStrictEqual(yield* xpImages.drawn(game), drawn);
 
-      const catalog = yield* catalogs.get(game.id);
-      yield* catalogs.save({
-        ...catalog,
-        entries: catalog.entries.map((entry) => ({ ...entry, translation: { user: "Way out" } })),
-      });
+      yield* typed(game.id, () => "Way out");
       const [redrawn] = yield* xpImages.drawn(game);
       assert.notStrictEqual(redrawn?.tiles, first?.tiles);
       assert.sameMembers(

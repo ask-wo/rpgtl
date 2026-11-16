@@ -1,4 +1,5 @@
-import type { Catalog, Entry, Location } from "@rpgtl/contracts";
+import type { Catalog, Location } from "@rpgtl/contracts";
+import { testCatalog, type TestEntry, testTerm } from "@rpgtl/domain/testUtils/catalog";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { page } from "vite-plus/test/browser";
 import { beforeAll, expect, test } from "vite-plus/test";
@@ -8,11 +9,11 @@ import { game, idle } from "../testUtils/game.ts";
 
 beforeAll(() => page.viewport(1280, 800));
 
-const entry = (id: string, location: Location, translation: string): Entry => ({
+const entry = (id: string, location: Location, translation: string): TestEntry => ({
   id,
   location,
   source: `原文${id}`,
-  translation: translation ? { user: translation } : {},
+  ...(translation && { userTranslation: translation }),
 });
 const text = (id: string, translation: string) =>
   entry(id, { _tag: "SystemText", keys: [id] }, translation);
@@ -50,13 +51,13 @@ const showNav = (saved: Catalog) => {
   return page.getByRole("list", { name: "Translation" });
 };
 
-const catalog = (entries: Catalog["entries"]): Catalog => ({
-  version: 1,
-  game: { id: game.id, title: game.title, engine: "MV" },
-  entries,
-  glossary: [{ source: "雨", translation: { user: "Rain" }, kind: { guess: { value: "name" } } }],
-  translate: true,
-});
+const catalog = (entries: ReadonlyArray<TestEntry>): Catalog =>
+  testCatalog({
+    game: { id: game.id, title: game.title, engine: "MV" },
+    entries,
+    glossary: [testTerm("雨", { userTranslation: "Rain", rulesKind: "name" })],
+    settings: { isTranslationOn: true },
+  });
 
 test("the sidebar shows how many entries have English, or only the total once all do", async () => {
   const nav = showNav(

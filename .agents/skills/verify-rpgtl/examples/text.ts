@@ -1,8 +1,7 @@
-// The Text page: typed English saves itself without a backup and reaches the game's data, an edit
+// The Text page: typed English saves itself as one edit and reaches the game's data, an edit
 // without its control codes is refused and not written, the tree, search and filters narrow the
 // list and stay over a reload, and Flagged shows a check's note.
-import { copyFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
-import { entryTranslation } from "../../../../packages/domain/src/guesses.ts";
+import { keepDatabase, savedCatalog } from "./saved.ts";
 
 const until = async (what: string, check: () => boolean) => {
   for (let tries = 0; tries < 50; tries++) {
@@ -20,13 +19,10 @@ export default async ({ page, api, run, log }: any) => {
   await page.clickText("Open");
   await page.waitUntil(`document.querySelector("h1")?.textContent === "Fixture Adventure"`);
   const id = (await page.eval("location.pathname")).slice("/games/".length);
-  const saved = () => JSON.parse(readFileSync(`${run.state}/games/${id}/catalog.json`, "utf8"));
+  const saved = () => savedCatalog(run.state, id);
   const translation = (source: string) =>
-    entryTranslation(saved().entries.find((each: any) => each.source === source));
-  const backups = () =>
-    existsSync(`${run.state}/games/${id}/backups`)
-      ? readdirSync(`${run.state}/games/${id}/backups`).length
-      : 0;
+    saved().entries.find((each: any) => each.source === source)?.english;
+  const edits = () => saved().operations.filter((kind: string) => kind === "edit").length;
 
   await page.click('label[for="translate-game"]');
   await page.waitFor('a[href$="/text"]');
@@ -34,17 +30,17 @@ export default async ({ page, api, run, log }: any) => {
   await page.waitFor(box(sword));
   await page.shot("text");
 
-  const before = backups();
+  const before = edits();
   await page.fill(box(sword), "This sword is heavy, so be careful.");
   await until(
     "the typed English's save",
     () => translation(sword) === "This sword is heavy, so be careful.",
   );
   await page.waitUntil(`document.body.textContent.includes("All changes saved")`);
-  if (backups() !== before) throw new Error("saving an edit made a backup");
+  if (edits() !== before + 1) throw new Error("saving the typed English wasn't one edit");
   const served = await (await fetch(`${run.url}/game/${id}/data/CommonEvents.json`)).text();
   if (!served.includes("This sword is heavy")) throw new Error("the game isn't served the edit");
-  log("typed English saved without a backup and served in CommonEvents.json");
+  log("typed English saved as one edit and served in CommonEvents.json");
   await page.shot("saved");
 
   await page.fill(box("Recover \\V[1] HP."), "Recover HP.");
@@ -107,5 +103,5 @@ export default async ({ page, api, run, log }: any) => {
   );
   log(`checks: ${JSON.stringify(await api(`checks?id=${id}`))}`);
   await page.shot("flagged");
-  copyFileSync(`${run.state}/games/${id}/catalog.json`, `${run.evidence}/catalog.json`);
+  keepDatabase(run.state, id, run.evidence);
 };

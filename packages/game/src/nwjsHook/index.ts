@@ -1,5 +1,6 @@
-import { Catalog, ImageReadResults, Playtime, Plugins } from "@rpgtl/contracts";
+import { Entry, GameSettings, ImageReadResults, Playtime, Plugins, Text } from "@rpgtl/contracts";
 import {
+  entryTexts,
   applyPluginTranslations,
   applyTranslations,
   withSystemImages,
@@ -8,7 +9,7 @@ import {
   imageTextHints,
   addPlaytime,
 } from "@rpgtl/domain";
-import { Result, Schema, Struct } from "effect";
+import { Result, Schema } from "effect";
 import type { HookConfig } from "../scripts.ts";
 import { matchCase } from "./casePath.ts";
 import { logStart } from "./startLog.ts";
@@ -17,6 +18,7 @@ declare const rpgtl: HookConfig;
 
 const nodeRequire = (globalThis as unknown as { require: NodeRequire }).require;
 const fs = nodeRequire("fs") as typeof import("node:fs");
+const sqlite = nodeRequire("node:sqlite") as typeof import("node:sqlite");
 const path = nodeRequire("path") as typeof import("node:path");
 const nodeUrl = nodeRequire("url") as typeof import("node:url");
 
@@ -25,25 +27,69 @@ const nodeUrl = nodeRequire("url") as typeof import("node:url");
 const nodeProcess = (globalThis as unknown as { process: NodeJS.Process }).process;
 nodeProcess.mainModule!.filename = path.join(path.dirname(rpgtl.data), "index.html");
 nodeProcess.chdir(rpgtl.root);
-// Only the fields the hook reads, so a big catalog's glossary and runs aren't decoded too.
+// Only the parts the hook reads, so a big game's glossary and history aren't read too.
 const decodeCatalog = Schema.decodeUnknownSync(
-  Schema.fromJsonString(
-    Schema.Struct(
-      Struct.pick(Catalog.fields, [
-        "entries",
-        "translate",
-        "imageBold",
-        "imageFont",
-        "unchangedImages",
-      ]),
-    ),
-  ),
+  Schema.Struct({
+    entries: Schema.Array(Entry),
+    texts: Schema.Array(Text),
+    settings: GameSettings,
+  }),
 );
+type Row = Record<string, string | number | null>;
+const present = (row: Row) => Object.entries(row).filter(([, value]) => value !== null);
+
+/** The entries, texts and settings in the game's database, as the server saved them. */
+function readDatabase(file: string) {
+  // A WAL checkpoint or recovery can hold the database for a moment: wait rather than play
+  // untranslated, and read in one transaction so the selects all see the same write.
+  const database = new sqlite.DatabaseSync(file, { readOnly: true, timeout: 2000 });
+  try {
+    const rows = (query: string) => database.prepare(query).all() as unknown as Row[];
+    database.exec("begin");
+    return decodeCatalog({
+      entries: rows(
+        `select id, text_id, location, builtin_translation, is_left_untranslated
+         from entries order by position`,
+      ).map((row) => ({
+        id: row.id,
+        textId: row.text_id,
+        location: JSON.parse(String(row.location)),
+        ...(row.builtin_translation !== null && { builtinTranslation: row.builtin_translation }),
+        ...(row.is_left_untranslated === 1 && { isLeftUntranslated: true }),
+      })),
+      texts: rows(
+        `select id, source, speaker, is_in_image, model_translation, user_translation from texts`,
+      ).map((row) => {
+        const { is_in_image, model_translation, user_translation, ...rest } = row;
+        return {
+          ...Object.fromEntries(present(rest)),
+          isInImage: is_in_image === 1,
+          ...(model_translation !== null && { modelTranslation: model_translation }),
+          ...(user_translation !== null && { userTranslation: user_translation }),
+        };
+      }),
+      settings: Object.fromEntries(
+        rows("select name, value from settings").map(({ name, value }) => [
+          name,
+          JSON.parse(String(value)),
+        ]),
+      ),
+    });
+  } finally {
+    database.close();
+  }
+}
 const decodeImages = Schema.decodeUnknownSync(Schema.fromJsonString(ImageReadResults));
 const decodePlaytime = Schema.decodeUnknownSync(Schema.fromJsonString(Playtime));
 // The game window reads the catalog once, so data files loaded later don't mix old and new
 // English. F5 reads it again.
-let loaded: { catalog: ReturnType<typeof decodeCatalog> | undefined } | undefined;
+let loaded:
+  | {
+      catalog:
+        | (ReturnType<typeof decodeCatalog> & { readonly entries: ReturnType<typeof entryTexts> })
+        | undefined;
+    }
+  | undefined;
 let catalogError: string | undefined;
 const files = new Set<string>();
 let host: HTMLDivElement | undefined;
@@ -54,7 +100,7 @@ const catalogHeading = "RPGTL: translations could not be loaded";
 const changedText = (names: string) =>
   `The text in ${names} no longer matches RPGTL's saved translations, probably because the game was updated or its files were edited. RPGTL shows the original text for these files so the game still runs.\n\nTo fix it, open RPGTL, open this game's folder again with Choose folder… or Open (translations of unchanged text are kept), then translate the new text and reload the game window with F5.`;
 const catalogText = (error: string) =>
-  `RPGTL's translation file for this game (${rpgtl.catalog}) could not be read: ${error}. The whole game is shown untranslated.\n\nTo fix it, import a backup from the backups folder in RPGTL, then reload the game window with F5.`;
+  `RPGTL's translations for this game (${rpgtl.database}) could not be read: ${error}. The whole game is shown untranslated.`;
 
 function log(heading: string, text: string) {
   try {
@@ -163,15 +209,16 @@ function showNotice() {
   host.hidden = false;
 }
 
-// The catalog's entries, image choices and translation switch, or undefined when there is none or
-// it can't be read.
+// The catalog's entries with their texts, and its settings, or undefined when the game was never
+// read or its database can't be read.
 function readCatalog() {
   if (loaded) return loaded.catalog;
   loaded = { catalog: undefined };
+  if (!fs.existsSync(rpgtl.database)) return undefined;
   try {
-    loaded.catalog = decodeCatalog(fs.readFileSync(rpgtl.catalog, "utf8"));
+    const saved = readDatabase(rpgtl.database);
+    loaded.catalog = { ...saved, entries: entryTexts(saved) };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     catalogError = error instanceof Error ? error.message : String(error);
     log(catalogHeading, catalogText(catalogError));
     showNotice();
@@ -220,7 +267,7 @@ function listImages() {
 function translated(file: string, original: string) {
   const catalog = readCatalog();
   if (!catalog) return original;
-  if (!catalog.translate) return original;
+  if (!catalog.settings.isTranslationOn) return original;
   try {
     const result = Result.flatMap(decodeGameFile(file, original), (data) =>
       applyTranslations(file, data, catalog.entries),
@@ -257,7 +304,7 @@ Object.defineProperty(window, "$plugins", {
   set(value: unknown) {
     plugins = value;
     const catalog = readCatalog();
-    if (!catalog?.translate || !Array.isArray(value)) return;
+    if (!catalog?.settings.isTranslationOn || !Array.isArray(value)) return;
     const entries = catalog.entries;
     const result = Result.flatMap(decodePluginList(value), (list) =>
       applyPluginTranslations(list, entries),

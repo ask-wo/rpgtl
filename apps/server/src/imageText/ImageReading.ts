@@ -35,6 +35,8 @@ import {
   readVersion,
   withImageEntries,
   isImageText,
+  cleared,
+  withTexts,
 } from "@rpgtl/domain";
 import * as AiError from "effect/ai/AiError";
 import * as Arr from "effect/Array";
@@ -361,11 +363,12 @@ const make = Effect.gen(function* () {
         .join();
       if (entryIds === writtenEntries)
         return yield* imageTexts.save(id, readResults(read.images, runs));
-      const next = withImageEntries(yield* catalogs.get(id), read, before);
       yield* imageTexts.save(id, readResults(read.images, runs));
-      yield* catalogs.write(next);
+      const { catalog } = yield* catalogs.update(id, "image_reading", (stored) =>
+        Result.succeed({ catalog: withImageEntries(stored, read, before) }),
+      );
       writtenEntries = entryIds;
-      const entries = next.entries.filter(isImageText).length;
+      const entries = catalog.entries.filter(isImageText).length;
       yield* update((now) => ({ ...now, entries }));
     }).pipe(Effect.uninterruptible);
 
@@ -461,9 +464,6 @@ const make = Effect.gen(function* () {
         yield* update((now) => ({ ...now, done: now.done + 1 }));
     });
 
-    // The run starts from a backup of the catalog as it was.
-    const catalog = yield* catalogs.get(id);
-    yield* catalogs.save(catalog);
     yield* save;
     for (const image of pending)
       yield* finish(image, (bytes) =>
@@ -743,12 +743,22 @@ const make = Effect.gen(function* () {
     return yield* games.exclusive(
       id,
       Effect.gen(function* () {
-        const current = yield* catalogs.get(id);
-        const next = {
-          ...current,
-          entries: current.entries.filter((entry) => !isImageText(entry)),
-        };
-        yield* Effect.uninterruptible(Effect.andThen(catalogs.save(next), imageTexts.clear(id)));
+        const { catalog: next } = yield* Effect.uninterruptible(
+          Effect.tap(
+            catalogs.update(id, "clear", (current) =>
+              Result.succeed({
+                catalog: withTexts(
+                  {
+                    ...current,
+                    entries: current.entries.filter((entry) => !isImageText(entry)),
+                  },
+                  (text) => (text.isInImage ? cleared(text) : text),
+                ),
+              }),
+            ),
+            () => imageTexts.clear(id),
+          ),
+        );
         yield* SubscriptionRef.update(statuses, (runs) => {
           const rest = new Map(runs);
           rest.delete(id);

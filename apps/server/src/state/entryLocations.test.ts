@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Result from "effect/Result";
-import { locationFrom } from "./entryLocations.ts";
+import { entryLocations, locationFrom } from "./entryLocations.ts";
 import * as StateFolder from "./StateFolder.ts";
 
 const list = (code: number, parameters: ReadonlyArray<unknown>) => ({ code, parameters });
@@ -68,7 +68,7 @@ it.effect("upgrading format 1's catalog gives format 2's", () =>
     const catalog = "games/4d6f73734c616e746572/catalog.json";
     const dir = yield* fs.makeTempDirectoryScoped();
     yield* fs.copy(path.join(formats, "1", "state"), dir);
-    yield* Effect.provide(Effect.asVoid(StateFolder.StateFolder), StateFolder.layerAt(dir));
+    yield* entryLocations(yield* StateFolder.make(dir));
     const read = (file: string) => Effect.map(fs.readFileString(file), JSON.parse);
     assert.deepStrictEqual(
       yield* read(path.join(dir, catalog)),

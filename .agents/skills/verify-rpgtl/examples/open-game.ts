@@ -44,7 +44,7 @@ export default async ({ page, api, run, log }: any) => {
   await page.clickText("Remove from list");
   await page.waitUntil(`location.pathname === "/"`);
   if ((await api("games")).length !== 0) throw new Error("the game is still listed");
-  if (!existsSync(`${run.state}/games/${id}/catalog.json`))
+  if (!existsSync(`${run.state}/games/${id}/game.db`))
     throw new Error("removing the game deleted its catalog");
   log("removed from the list, catalog kept");
   await page.shot("removed");

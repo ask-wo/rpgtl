@@ -2,15 +2,14 @@ import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcess
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
-  type Catalog,
   Comparison,
   type ComparisonSetup,
-  type Entry,
   gameFiles,
   Samples,
   defaultChoices,
 } from "@rpgtl/contracts";
-import { pickSamples, entryTranslation } from "@rpgtl/domain";
+import { entryTexts, pickSamples, translationInUse } from "@rpgtl/domain";
+import type { TestEntry } from "@rpgtl/domain/testUtils/catalog";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -20,31 +19,27 @@ import * as Stream from "effect/Stream";
 import * as FreeMemory from "../localModels/FreeMemory.ts";
 import * as AgentModels from "../translation/AgentModels.ts";
 import * as LlamaServer from "../localModels/LlamaServer.ts";
+import * as Catalogs from "../games/Catalogs.ts";
 import * as StateFolder from "../state/StateFolder.ts";
 import { httpClientAnswering } from "../testUtils/ollama.ts";
-import { game, servicesWith } from "../testUtils/state.ts";
+import { game, servicesWith, storedCatalog } from "../testUtils/state.ts";
 import * as Ollama from "../localModels/Ollama.ts";
 import * as Comparisons from "./Comparisons.ts";
 
-const line = (id: string, index: number, source: string): Entry => ({
+const line = (id: string, index: number, source: string): TestEntry => ({
   id,
   location: { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index },
   source,
-  translation: {},
 });
 
-const catalog: Catalog = {
-  version: 1,
-  game: { id: game.id, title: game.title, engine: "MV" },
-  translate: true,
+const stored = storedCatalog(game, {
   entries: [
     line("hello", 0, "你好"),
     line("bye", 1, "再见"),
     // Translated already, and not in the saved sample.
-    { ...line("rain", 2, "下雨了"), translation: { user: "It's raining" } },
+    { ...line("rain", 2, "下雨了"), userTranslation: "It's raining" },
   ],
-  glossary: [],
-};
+});
 
 const english: Record<string, string> = { 你好: "Hello", 再见: "Bye" };
 
@@ -82,10 +77,9 @@ const services = () =>
     Layer.provideMerge(fakeOllama),
     Layer.provide(NodeChildProcessSpawner.layer),
     Layer.provideMerge(
-      servicesWith({
-        "games.json": JSON.stringify([game]),
-        [gameFiles(game.id).catalog]: JSON.stringify(catalog),
-      }),
+      Layer.effectDiscard(stored).pipe(
+        Layer.provideMerge(servicesWith({ "games.json": JSON.stringify([game]) })),
+      ),
     ),
     Layer.provideMerge(NodeServices.layer),
   );
@@ -139,7 +133,7 @@ it.effect("each setup runs on the saved sample as a run would, and the report sh
     assert.strictEqual(end.translated, 0);
     assert.isString(end.error);
     // The game's own translations stay as they are.
-    assert.deepStrictEqual(saved.value.sample.entries.map(entryTranslation), ["", ""]);
+    assert.deepStrictEqual(entryTexts(saved.value.sample).map(translationInUse), ["", ""]);
   }).pipe(
     Effect.provideService(FreeMemory.NvidiaSmi, "/nowhere/nvidia-smi"),
     Effect.provide(services()),
@@ -151,6 +145,7 @@ it.effect("a game without saved samples gets new ones, saved for the next compar
     const comparisons = yield* Comparisons.Comparisons;
     yield* Stream.runDrain(yield* comparisons.compare(game.id, []));
     const saved = yield* (yield* StateFolder.StateFolder).read(gameFiles(game.id).samples, Samples);
+    const catalog = yield* (yield* Catalogs.Catalogs).get(game.id);
     assert.deepStrictEqual(Option.getOrUndefined(saved), pickSamples(catalog));
   }).pipe(Effect.provide(services())),
 );

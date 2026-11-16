@@ -1,25 +1,40 @@
-import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/sql/SqlClient";
+import * as String from "effect/String";
+import type { GlossaryTerm, Text } from "./catalog.ts";
 
-/** The columns of each table whose every change `changes` records, as runs and the player write them. */
+/** The columns of `texts` that runs and the user write; `changes` records each of their changes. */
+export const textColumns = [
+  "modelTranslation",
+  "unshortenedTranslation",
+  "flagReason",
+  "rejectedTranslation",
+  "rejectionReason",
+  "userTranslation",
+] as const satisfies ReadonlyArray<keyof Text>;
+
+/** The columns of `glossary` that runs and the user write. */
+export const termColumns = [
+  "source",
+  "modelTranslation",
+  "userTranslation",
+  "rulesKind",
+  "modelKind",
+  "userKind",
+  "rulesPronoun",
+  "sheClues",
+  "heClues",
+  "modelPronoun",
+  "userPronoun",
+] as const satisfies ReadonlyArray<keyof GlossaryTerm>;
+
+/** The columns of `glossary` whose changes `changes` doesn't record. */
+const untrackedTermColumns: ReadonlySet<string> = new Set(["source", "sheClues", "heClues"]);
+
 const trackedColumns = {
-  texts: [
-    "inferred_translation",
-    "unshortened_translation",
-    "flag_reason",
-    "rejected_translation",
-    "rejection_reason",
-    "player_translation",
-  ],
-  terms: [
-    "inferred_translation",
-    "inferred_kind",
-    "inferred_pronoun",
-    "player_translation",
-    "player_kind",
-    "player_pronoun",
-  ],
-} as const;
+  texts: textColumns.map(String.camelToSnake),
+  glossary: termColumns
+    .filter((column) => !untrackedTermColumns.has(column))
+    .map(String.camelToSnake),
+};
 
 const kinds = (column: string, values: ReadonlyArray<string>) =>
   `check (${column} in (${values.map((value) => `'${value}'`).join(", ")}))`;
@@ -29,7 +44,7 @@ const pronouns = ["she", "he", "unknown"];
 const tables = `
 create table operations (
   id integer primary key,
-  kind text not null ${kinds("kind", ["upgrade", "inspection", "rules", "run", "image_reading", "import", "edit", "clear", "undo"])},
+  kind text not null ${kinds("kind", ["upgrade", "inspection", "run", "image_reading", "import", "edit", "clear", "undo"])},
   started_at text not null,
   models text
 ) strict;
@@ -40,16 +55,16 @@ create table settings (
 ) strict;
 
 create table texts (
-  id integer primary key,
+  id integer primary key autoincrement,
   source text not null,
   speaker text,
   is_in_image integer not null check (is_in_image in (0, 1)),
-  inferred_translation text,
+  model_translation text,
   unshortened_translation text,
   flag_reason text,
   rejected_translation text,
   rejection_reason text,
-  player_translation text,
+  user_translation text,
   last_operation_id integer not null references operations (id)
 ) strict;
 create unique index texts_key on texts (source, ifnull(speaker, ''), is_in_image);
@@ -58,6 +73,7 @@ create index texts_last_operation on texts (last_operation_id);
 create table entries (
   id text primary key,
   text_id integer not null references texts (id),
+  position integer not null,
   place text not null,
   location text not null,
   builtin_translation text,
@@ -66,20 +82,22 @@ create table entries (
 create index entries_text on entries (text_id);
 create index entries_place on entries (place);
 
-create table terms (
-  id integer primary key,
+create table glossary (
+  id integer primary key autoincrement,
   source text not null unique,
-  inferred_translation text,
-  inferred_kind text not null ${kinds("inferred_kind", termKinds)},
-  inferred_pronoun text ${kinds("inferred_pronoun", pronouns)},
+  model_translation text,
+  user_translation text,
+  rules_kind text not null ${kinds("rules_kind", termKinds)},
+  model_kind text ${kinds("model_kind", termKinds)},
+  user_kind text ${kinds("user_kind", termKinds)},
+  rules_pronoun text ${kinds("rules_pronoun", pronouns)},
   she_clues integer,
   he_clues integer,
-  player_translation text,
-  player_kind text ${kinds("player_kind", termKinds)},
-  player_pronoun text ${kinds("player_pronoun", pronouns)},
+  model_pronoun text ${kinds("model_pronoun", pronouns)},
+  user_pronoun text ${kinds("user_pronoun", pronouns)},
   last_operation_id integer not null references operations (id)
 ) strict;
-create index terms_last_operation on terms (last_operation_id);
+create index glossary_last_operation on glossary (last_operation_id);
 
 create table changes (
   id integer primary key,
@@ -98,7 +116,7 @@ const rowJson = (table: keyof typeof trackedColumns, row: "old" | "new") =>
   `json_object(${(
     {
       texts: ["source", "speaker", "is_in_image", ...trackedColumns.texts],
-      terms: ["source", ...trackedColumns.terms, "she_clues", "he_clues"],
+      glossary: ["source", ...trackedColumns.glossary, "she_clues", "he_clues"],
     } satisfies Record<keyof typeof trackedColumns, ReadonlyArray<string>>
   )[table]
     .map((column) => `'${column}', ${row}.${column}`)
@@ -107,7 +125,7 @@ const rowJson = (table: keyof typeof trackedColumns, row: "old" | "new") =>
 // A trigger, unlike each write path, can't forget to record a change. A new text without any
 // translation, as reading the game makes thousands of, isn't one. A delete can only name the row's
 // `last_operation_id`, so deleting a row sets it to the deleting operation first.
-const triggers = (["texts", "terms"] as const).flatMap((table) => {
+const triggers = (["texts", "glossary"] as const).flatMap((table) => {
   const columns = trackedColumns[table];
   const anyValue = columns.map((column) => `new.${column} is not null`).join(" or ");
   return [
@@ -133,11 +151,11 @@ const triggers = (["texts", "terms"] as const).flatMap((table) => {
   ];
 });
 
-/** The steps that bring a game's database to its current tables, by `<number>_<name>`. */
-export const migrations = {
-  "1_tables": Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    for (const statement of [...tables.split(";").filter((s) => s.trim()), ...triggers])
-      yield* sql.unsafe(statement);
-  }),
+/**
+ * The SQL statements that bring a game's database, `games/<game id>/game.db` in the state folder,
+ * to its current tables, by migration name `<number>_<name>`. The server writes the database and
+ * the NW.js hook reads it.
+ */
+export const gameDatabaseMigrations: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "1_tables": [...tables.split(";").filter((statement) => statement.trim()), ...triggers],
 };

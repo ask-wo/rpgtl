@@ -1,28 +1,39 @@
-import type { Catalog, LetteringFont } from "@rpgtl/contracts";
+import type { Catalog, GameSettings, LetteringFont } from "@rpgtl/contracts";
 
 /**
  * A game's choices for its images, as the Images page edits them. An absent field stays as saved;
- * null or an empty list removes it.
+ * null removes it.
  */
 export interface ImageOptions {
-  readonly imageBold?: "always" | "never" | null;
-  readonly imageFont?: LetteringFont | null;
-  readonly unchangedImages?: ReadonlyArray<string>;
+  readonly letteringWeight?: NonNullable<GameSettings["letteringWeight"]> | null;
+  readonly letteringFont?: LetteringFont | null;
+  readonly untranslatedImages?: ReadonlyArray<string>;
 }
 
 /** The catalog with the user's image choices. */
 export function withImageOptions(catalog: Catalog, options: ImageOptions): Catalog {
-  const { imageBold: _bold, imageFont: _font, unchangedImages: _kept, ...rest } = catalog;
-  const imageBold = options.imageBold === undefined ? catalog.imageBold : options.imageBold;
-  const imageFont = options.imageFont === undefined ? catalog.imageFont : options.imageFont;
-  const unchangedImages = options.unchangedImages
-    ? [...new Set(options.unchangedImages)]
-    : catalog.unchangedImages;
+  const {
+    letteringWeight: _weight,
+    letteringFont: _font,
+    untranslatedImages: _kept,
+    ...rest
+  } = catalog.settings;
+  const letteringWeight =
+    options.letteringWeight === undefined
+      ? catalog.settings.letteringWeight
+      : options.letteringWeight;
+  const letteringFont =
+    options.letteringFont === undefined ? catalog.settings.letteringFont : options.letteringFont;
+  const untranslatedImages = options.untranslatedImages
+    ? [...new Set(options.untranslatedImages)]
+    : catalog.settings.untranslatedImages;
   return {
-    ...rest,
-    translate: catalog.translate,
-    ...(imageBold && { imageBold }),
-    ...(imageFont && { imageFont }),
-    ...(unchangedImages && unchangedImages.length > 0 && { unchangedImages }),
+    ...catalog,
+    settings: {
+      ...rest,
+      untranslatedImages,
+      ...(letteringWeight && { letteringWeight }),
+      ...(letteringFont && { letteringFont }),
+    },
   };
 }

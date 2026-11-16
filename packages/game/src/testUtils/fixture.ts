@@ -1,10 +1,16 @@
 import { expect } from "vite-plus/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { applyTranslations, erasedName, GameFile, imageBlocks } from "@rpgtl/domain";
+import {
+  applyTranslations,
+  type EntryText,
+  erasedName,
+  GameFile,
+  imageBlocks,
+} from "@rpgtl/domain";
 import * as Result from "effect/Result";
 import { buildScript } from "../build.ts";
-import { type Engine, type Entry, gameFiles } from "@rpgtl/contracts";
+import { type Engine, gameFiles } from "@rpgtl/contracts";
 import { png } from "./png.ts";
 
 // Stand-ins for the engine globals that the runtime touches.
@@ -734,10 +740,13 @@ export async function writeImageReads(
   await writeFile(path.join(stateDir, files.imageResults), JSON.stringify({ version: 1, images }));
 }
 
-/** System.json as RPGTL serves it with the translations of `entries`, for the runtime to read. */
-export function appliedSystem(entries: Entry[]): Record<string, any> {
+/** System.json as RPGTL serves it with the user's English of `entries`, for the runtime to read. */
+export function appliedSystem(
+  entries: ReadonlyArray<Pick<EntryText, "id" | "location" | "source" | "userTranslation">>,
+): Record<string, any> {
+  const texts = entries.map((entry, index) => ({ ...entry, textId: index + 1, isInImage: false }));
   const applied = Result.getOrThrow(
-    applyTranslations("System.json", GameFile.System({ data: {} }), entries),
+    applyTranslations("System.json", GameFile.System({ data: {} }), texts),
   );
   return GameFile.$is("System")(applied) ? applied.data : {};
 }

@@ -67,7 +67,7 @@ The pages under the game in the sidebar let you fix the result:
 - **Text**: every line with its translation. Edit any line; filter for untranslated or failed ones.
 - **Images**: text found in the game's images, with its English drawn in.
 
-**Export** and **Import…** on the overview move a translation to another computer or another version of the game, or let you edit it as JSON. **Import…** shows what the file would change before it changes anything. RPGTL backs up the translation before every change, and **Clear all…** and **Import…** can be undone by importing a backup.
+**Export** and **Import…** on the overview move a translation to another computer or another version of the game, or let you edit it as JSON. **Import…** shows what the file would change before it changes anything.
 
 ## Image text
 
@@ -81,7 +81,7 @@ Where the reader got a character wrong, the pencil next to a text in the image's
 
 ## Where things are kept
 
-Translations, image text, backups and logs are kept per game in `~/.local/share/rpgtl` (Windows: `%LOCALAPPDATA%\rpgtl\data`; from a checkout: `.rpgtl/`). Set `RPGTL_DIR` to use another folder, and `PORT` for another port.
+Translations, image text and logs are kept per game in `~/.local/share/rpgtl` (Windows: `%LOCALAPPDATA%\rpgtl\data`; from a checkout: `.rpgtl/`). Set `RPGTL_DIR` to use another folder, and `PORT` for another port.
 
 ## License
 

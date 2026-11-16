@@ -2,11 +2,11 @@ import { test, expect, afterEach } from "vite-plus/test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { buildScript } from "../build.ts";
 import { hookScript } from "../scripts.ts";
-import { type Catalog as SavedFile, gameFiles } from "@rpgtl/contracts";
-import type { Types } from "effect";
-import { fixtureCatalog } from "../testUtils/catalog.ts";
+import { gameFiles } from "@rpgtl/contracts";
+import { FixtureDatabase, fixtureEntries } from "../testUtils/catalog.ts";
 import { imageEntries } from "@rpgtl/domain";
 import {
   fixture,
@@ -36,29 +36,19 @@ const builtScripts = () =>
     "map-view.js": mapView,
   })));
 
-type Catalog = Types.DeepMutable<SavedFile>;
-
-/** A saved catalog, as the hook reads it from the state folder. */
-interface SavedCatalog {
-  read(): Promise<Catalog>;
-  save(catalog: Catalog): Promise<void>;
-}
-
-async function importTranslations(saved: SavedCatalog, name = "Héros") {
-  const catalog = await saved.read();
-  for (const entry of catalog.entries) {
-    const { location } = entry;
-    if (location._tag === "RecordField" && location.table === "actors" && entry.source === "Hero")
-      entry.translation = { user: name };
+function importTranslations(database: FixtureDatabase, name = "Héros") {
+  database.translate(({ location, source }) => {
+    if (location._tag === "RecordField" && location.table === "actors" && source === "Hero")
+      return name;
     if (
       location._tag === "RecordField" &&
       location.table === "items" &&
       location.field === "description"
     )
-      entry.translation = { user: "Restore \\V[1] HP." };
-    if (location._tag === "PluginSetting") entry.translation = { user: "Credits" };
-  }
-  await saved.save(catalog);
+      return "Restore \\V[1] HP.";
+    if (location._tag === "PluginSetting") return "Credits";
+    return undefined;
+  });
 }
 
 async function editItems(webRoot: string) {
@@ -238,19 +228,15 @@ async function launchedHook() {
   const stateDir = path.join(dir, "state");
   const root = path.join(dir, "game");
   await fixture(root, "MV", false);
-  const created = await fixtureCatalog(root, "MV");
-  const id = created.game.id;
-  const catalogFile = path.join(stateDir, gameFiles(id).catalog);
-  const saved: SavedCatalog = {
-    read: async () => JSON.parse(await readFile(catalogFile, "utf8")),
-    save: (catalog) => json(catalogFile, catalog),
-  };
+  const id = "fixture";
+  const databaseFile = path.join(stateDir, gameFiles(id).database);
+  const database = new FixtureDatabase(databaseFile);
+  database.add(await fixtureEntries(root));
   await mkdir(path.join(stateDir, gameFiles(id).logs), { recursive: true });
-  await json(catalogFile, created);
   const log = path.join(stateDir, gameFiles(id).logs, "nwjs.log");
   await writeFile(log, "");
   const config = {
-    catalog: catalogFile,
+    database: databaseFile,
     data: path.join(root, "data"),
     erased: path.join(stateDir, gameFiles(id).erasedImages),
     images: path.join(stateDir, gameFiles(id).imageResults),
@@ -264,7 +250,7 @@ async function launchedHook() {
   );
   return {
     stateDir,
-    saved,
+    database,
     id,
     root,
     log,
@@ -319,8 +305,8 @@ test("Hook logs how far the game's start got", async () => {
 });
 
 test("Hook translates and falls back per file", async () => {
-  const { saved, root, page, log, reload } = await launchedHook();
-  await importTranslations(saved);
+  const { database, root, page, log, reload } = await launchedHook();
+  importTranslations(database);
   const items = await editItems(root);
   expect((await page.load("Actors.json"))[1].name).toBe("Héros");
   expect(await page.load("Items.json")).toEqual(items);
@@ -329,7 +315,7 @@ test("Hook translates and falls back per file", async () => {
     JSON.parse(await readFile(path.join(root, "data", "Map001.json"), "utf8")),
   );
   expect(page.request("js/main.js").url).toBe("js/main.js");
-  await importTranslations(saved, "Champion");
+  importTranslations(database, "Champion");
   expect((await page.load("Actors.json"))[1].name, "until F5").toBe("Héros");
   expect((await (await reload()).load("Actors.json"))[1].name).toBe("Champion");
   const lines = (await readFile(log, "utf8"))
@@ -346,9 +332,9 @@ test("Hook translates and falls back per file", async () => {
 });
 
 test("Hook leaves the game's text alone while its translation switch is off", async () => {
-  const { saved, root, page, reload } = await launchedHook();
-  await importTranslations(saved);
-  await saved.save({ ...(await saved.read()), translate: false });
+  const { database, root, page, reload } = await launchedHook();
+  importTranslations(database);
+  database.set("isTranslationOn", false);
   expect((await page.load("Actors.json"))[1].name).toBe("Hero");
   expect(await page.load("Map001.json")).toEqual(
     JSON.parse(await readFile(path.join(root, "data", "Map001.json"), "utf8")),
@@ -356,7 +342,7 @@ test("Hook leaves the game's text alone while its translation switch is off", as
   page.window.$plugins = structuredClone(plugins);
   expect(page.window.$plugins).toEqual(plugins);
   expect(page.elements).toHaveLength(0);
-  await saved.save({ ...(await saved.read()), translate: true });
+  database.set("isTranslationOn", true);
   expect((await (await reload()).load("Actors.json"))[1].name).toBe("Héros");
 });
 
@@ -385,20 +371,18 @@ test("Hook finds files whose letter case differs from the disk", async () => {
 });
 
 test("Hook loads images named after translated text", async () => {
-  const { saved, page, root } = await launchedHook();
-  const catalog = await saved.read();
-  catalog.entries.find((entry) => entry.source === "致谢")!.translation = { user: "Credits" };
+  const { database, page, root } = await launchedHook();
+  database.translate((entry) => (entry.source === "致谢" ? "Credits" : undefined));
   await mkdir(path.join(root, "img", "menus"), { recursive: true });
   await writeFile(path.join(root, "img", "menus", "Com_致谢.png"), "");
-  await saved.save(catalog);
   expect((await page.load("System.json")).rpgtlImages).toEqual({
     "img/menus/Com_Credits": { file: "Com_致谢" },
   });
 });
 
 test("Hook translates plugin parameters as js/plugins.js sets them", async () => {
-  const { saved, page } = await launchedHook();
-  await importTranslations(saved);
+  const { database, page } = await launchedHook();
+  importTranslations(database);
   page.window.$plugins = structuredClone(plugins);
   expect(page.window.$plugins).toEqual([
     {
@@ -416,13 +400,22 @@ test("Hook translates plugin parameters as js/plugins.js sets them", async () =>
 });
 
 test.each([
-  ["Unreadable", "{"],
-  ["Wrongly shaped", JSON.stringify({ version: 1, entries: {}, translate: true })],
-])("%s catalog runs the whole game untranslated", async (_, text) => {
-  const { stateDir, saved, id, root, page, log } = await launchedHook();
-  await importTranslations(saved);
-  const file = path.join(stateDir, gameFiles(id).catalog);
-  await writeFile(file, text);
+  ["An unreadable", (file: string) => writeFile(file, "{")],
+  [
+    "A wrongly shaped",
+    async (file: string) => {
+      const spoilt = new FixtureDatabase(file);
+      const database = new DatabaseSync(spoilt.file);
+      database.exec(`update settings set value = '"yes"' where name = 'isTranslationOn'`);
+      database.close();
+    },
+  ],
+])("%s database runs the whole game untranslated", async (_, spoil) => {
+  const { stateDir, database, id, root, page, log } = await launchedHook();
+  importTranslations(database);
+  const file = path.join(stateDir, gameFiles(id).database);
+  await rm(file);
+  await spoil(file);
   for (const name of ["Actors.json", "Items.json"])
     expect(await page.load(name)).toEqual(
       JSON.parse(await readFile(path.join(root, "data", name), "utf8")),
@@ -440,9 +433,9 @@ test.each([
   expect(page.elements[0].shadowRoot.textContent).toContain(file);
 });
 
-test("Missing catalog stays silent", async () => {
+test("A game without a database stays silent", async () => {
   const { stateDir, id, root, page, log } = await launchedHook();
-  await rm(path.join(stateDir, gameFiles(id).catalog));
+  await rm(path.join(stateDir, gameFiles(id).database));
   expect(await page.load("Actors.json")).toEqual(
     JSON.parse(await readFile(path.join(root, "data", "Actors.json"), "utf8")),
   );
@@ -451,7 +444,7 @@ test("Missing catalog stays silent", async () => {
 });
 
 test("Hook hands the translated image blocks to the game, with their erased images as files", async () => {
-  const { stateDir, saved, id, root, page, log, reload } = await launchedHook();
+  const { stateDir, database, id, root, page, log, reload } = await launchedHook();
   const system = JSON.parse(await readFile(path.join(root, "data/System.json"), "utf8"));
   await json(path.join(root, "data/System.json"), { ...system, encryptionKey: imageFixtureKey });
   const image = "img/widget-ui/panels/actions/Notice";
@@ -471,24 +464,24 @@ test("Hook hands the translated image blocks to the game, with their erased imag
   const results = JSON.parse(
     await readFile(path.join(stateDir, gameFiles(id).imageResults), "utf8"),
   );
-  const catalog = await saved.read();
-  catalog.entries.push(...imageEntries(results));
-  await saved.save(catalog);
+  database.add(imageEntries(results));
   expect((await (await reload()).load("System.json")).rpgtlImageText).toBeUndefined();
 
-  for (const entry of catalog.entries)
-    if (entry.location._tag === "ImageLines" && entry.location.image === image)
-      entry.translation = { user: entry.source === "退出" ? "Quit" : "Begin" };
-  await saved.save(catalog);
+  database.translate(({ location, source }) =>
+    location._tag === "ImageLines" && location.image === image
+      ? source === "退出"
+        ? "Quit"
+        : "Begin"
+      : undefined,
+  );
   const hints = (await (await reload()).load("System.json")).rpgtlImageText[image];
   expect(hints.blocks.map((block: any) => block.text)).toEqual(["Begin", "Quit"]);
   const [name] = hints.erased.split("/").slice(-1);
   expect(hints.erased).toBe(`file://${stateDir}/${gameFiles(id).erasedImages}/${name}`);
   expect(results.images[image].erased).toBe(name);
 
-  catalog.entries.find((entry) => entry.source === "退出")!.translation = { user: "Leave" };
-  catalog.imageBold = "always";
-  await saved.save(catalog);
+  database.translate((entry) => (entry.source === "退出" ? "Leave" : undefined));
+  database.set("letteringWeight", "bold");
   const edited = (await (await reload()).load("System.json")).rpgtlImageText[image];
   expect(edited.blocks.map((block: any) => [block.text, block.bold])).toEqual([
     ["Begin", true],
@@ -496,12 +489,10 @@ test("Hook hands the translated image blocks to the game, with their erased imag
   ]);
 
   // A whole image kept original in the game.
-  catalog.unchangedImages = [image];
-  await saved.save(catalog);
+  database.set("untranslatedImages", [image]);
   expect((await (await reload()).load("System.json")).rpgtlImageText).toBeUndefined();
   // Read results of the wrong shape draw nothing, and the log says why.
-  catalog.unchangedImages = [];
-  await saved.save(catalog);
+  database.set("untranslatedImages", []);
   const imagesFile = path.join(stateDir, gameFiles(id).imageResults);
   await writeFile(imagesFile, JSON.stringify({ ...results, images: { [image]: { lines: 1 } } }));
   expect((await (await reload()).load("System.json")).rpgtlImageText).toBeUndefined();

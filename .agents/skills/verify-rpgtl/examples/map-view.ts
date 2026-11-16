@@ -1,7 +1,6 @@
 import { spriteColor } from "../../../../packages/game/src/testUtils/fixture.ts";
-import { readFile, writeFile } from "node:fs/promises";
-import { entryTranslation } from "../../../../packages/domain/src/guesses.ts";
-import path from "node:path";
+import { writeFile } from "node:fs/promises";
+import { savedCatalog as readSaved } from "./saved.ts";
 
 // Run with verify-rpgtl/scripts/drive.ts against an MV or MZ fixture only.
 async function measureDraw(game: any, log: (line: string) => void) {
@@ -160,12 +159,11 @@ export default async ({ page, openPage, run, log }: any) => {
   for (const [source, translation] of names)
     await page.fill(page.labelled(`English for ${source}`, "textarea"), translation!);
   await page.shot("names-edited");
-  const saved = async () =>
-    JSON.parse(await readFile(path.join(run.state, "games", id, "catalog.json"), "utf8"));
+  const saved = async () => readSaved(run.state, id);
   const allSaved = (catalog: any) =>
     names.every(([source, translation]) =>
       catalog.entries.some(
-        (entry: any) => entry.source === source && entryTranslation(entry) === translation,
+        (entry: any) => entry.source === source && entry.english === translation,
       ),
     );
   let savedCatalog = await saved();

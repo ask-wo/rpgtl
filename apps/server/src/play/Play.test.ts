@@ -1,18 +1,19 @@
 import { gameFiles } from "@rpgtl/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import type { Catalog, ImageReadResults } from "@rpgtl/contracts";
-import { imageEntries } from "@rpgtl/domain";
+import type { ImageReadResults } from "@rpgtl/contracts";
+import { withImageEntries } from "@rpgtl/domain";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Result from "effect/Result";
 import * as Catalogs from "../games/Catalogs.ts";
 import * as ImageTexts from "../imageText/ImageTexts.ts";
 import * as Settings from "../settings/Settings.ts";
 import { folderWith, mvGame } from "../testUtils/gameFolder.ts";
-import { opened, servicesWith } from "../testUtils/state.ts";
+import { opened, servicesWith, typed } from "../testUtils/state.ts";
 import * as Play from "./Play.ts";
 
 const services = Play.layer.pipe(
@@ -24,23 +25,12 @@ const services = Play.layer.pipe(
 const translations: Record<string, string> = { 你好: "Hello", 标题: "Title", 门开了: "Door open" };
 
 /** Inspects `files` as a game, saves the translations above into its catalog and turns it on. */
-const translatedGame = Effect.fnUntraced(function* (
-  files: Record<string, string>,
-  change: (catalog: Catalog) => Catalog = (catalog) => catalog,
-) {
+const translatedGame = Effect.fnUntraced(function* (files: Record<string, string>) {
   const catalogs = yield* Catalogs.Catalogs;
   const dir = yield* folderWith(files);
-  const { game, catalog } = yield* opened(catalogs.inspect(dir));
-  yield* catalogs.save(
-    change({
-      ...catalog,
-      translate: true,
-      entries: catalog.entries.map((entry) => ({
-        ...entry,
-        translation: { user: translations[entry.source] ?? "" },
-      })),
-    }),
-  );
+  const { game } = yield* opened(catalogs.inspect(dir));
+  yield* typed(game.id, (entry) => translations[entry.source]);
+  yield* catalogs.setTranslate(game.id, true);
   return game;
 });
 
@@ -221,14 +211,10 @@ it.effect(
         },
       };
       yield* imageTexts.save(game.id, results);
-      const catalog = yield* catalogs.get(game.id);
-      yield* catalogs.save({
-        ...catalog,
-        entries: [
-          ...catalog.entries,
-          ...imageEntries(results).map((entry) => ({ ...entry, translation: { user: "Title" } })),
-        ],
-      });
+      yield* catalogs.update(game.id, "image_reading", (catalog) =>
+        Result.succeed({ catalog: withImageEntries(catalog, results) }),
+      );
+      yield* typed(game.id, (entry) => (entry.isInImage ? "Title" : undefined));
 
       const system = JSON.parse(contents(yield* play.file(game.id, "data/System.json")));
       const hint = system.rpgtlImageText["img/pictures/Title"];

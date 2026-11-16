@@ -5,7 +5,7 @@ import {
   fileOf,
   nonTextParameters,
   pathOf,
-  reuseKeys,
+  textKey,
 } from "../../index.ts";
 import { extractFrom } from "../../testUtils/gameFiles.ts";
 
@@ -206,8 +206,10 @@ it("dialogue pictures identify speakers until replaced or erased, and separate r
   const [first, second] = entries;
   assert.isDefined(first);
   assert.isDefined(second);
-  const key = reuseKeys(entries);
-  assert.notStrictEqual(key(first), key(second));
+  assert.notStrictEqual(
+    textKey({ ...first, isInImage: false }),
+    textKey({ ...second, isInImage: false }),
+  );
   assert.deepStrictEqual(
     collectClues(entries, ["藤原·美咲", "二阶堂·千秋"], "chinese").get("藤原·美咲"),
     {

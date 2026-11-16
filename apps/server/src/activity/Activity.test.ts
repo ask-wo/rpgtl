@@ -1,7 +1,6 @@
-import { gameFiles, runEnded } from "@rpgtl/contracts";
+import { runEnded } from "@rpgtl/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import type { Catalog } from "@rpgtl/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -9,15 +8,19 @@ import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import * as SessionToken from "../auth/SessionToken.ts";
 import { httpClientAnswering } from "../testUtils/ollama.ts";
-import { game, noPrograms, playServices, runServices, servicesWith } from "../testUtils/state.ts";
+import {
+  game,
+  noPrograms,
+  playServices,
+  runServices,
+  servicesWith,
+  storedCatalog,
+} from "../testUtils/state.ts";
 import * as Ollama from "../localModels/Ollama.ts";
 import * as Runs from "../translation/Runs.ts";
 import * as Activity from "./Activity.ts";
 
-const catalog: Catalog = {
-  version: 1,
-  game: { id: game.id, title: game.title, engine: "MV" },
-  translate: true,
+const stored = storedCatalog(game, {
   entries: [
     {
       id: "hello",
@@ -27,20 +30,17 @@ const catalog: Catalog = {
         index: 0,
       },
       source: "你好",
-      translation: {},
     },
   ],
-  glossary: [],
-};
+});
 
 const services = Activity.layer.pipe(
   Layer.provideMerge(Layer.mergeAll(runServices, playServices)),
   Layer.provideMerge(
     Layer.mergeAll(
-      servicesWith({
-        "games.json": JSON.stringify([game]),
-        [gameFiles(game.id).catalog]: JSON.stringify(catalog),
-      }),
+      Layer.effectDiscard(stored).pipe(
+        Layer.provideMerge(servicesWith({ "games.json": JSON.stringify([game]) })),
+      ),
       noPrograms,
       Layer.succeed(SessionToken.SessionToken, "test-token"),
     ),

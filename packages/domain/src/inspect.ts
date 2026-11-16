@@ -1,7 +1,7 @@
-import type { Catalog, Entry, Game, MissingFile } from "@rpgtl/contracts";
+import type { Catalog, Entry, MissingFile, Text } from "@rpgtl/contracts";
 import * as Predicate from "effect/Predicate";
-import { guessRuns } from "./catalog.ts";
-import { entryTranslation } from "./guesses.ts";
+import { type ReadEntry, textsById } from "./catalog.ts";
+import { showTextSpeakers } from "./reuse.ts";
 import { canKeepOriginal, isImageText } from "./location.ts";
 
 /** Audio and video that NW.js can't play, for files given as paths below the web root. */
@@ -175,64 +175,36 @@ export function assetNames(files: ReadonlyArray<string>) {
   return names;
 }
 
-/**
- * The catalog of a game as inspected now: the entries found, with the translations, choices and
- * settings the saved catalog has for them, if there is one.
- */
-/**
- * Each Chinese of `leftover` lines with the line that gives its English, for lines whose id is
- * gone. An entry's id includes its place, so a line that only moved, as when another version adds
- * a command before it, finds its English this way. Chinese the leftovers give different English
- * is left out.
- */
-export function englishByText<T extends Pick<Entry, "source" | "translation">>(
-  leftover: ReadonlyArray<T>,
-) {
-  const bySource = new Map<string, T | undefined>();
-  for (const line of leftover) {
-    const translation = entryTranslation(line);
-    if (!translation) continue;
-    const seen = bySource.get(line.source);
-    if (!bySource.has(line.source)) bySource.set(line.source, line);
-    else if (!seen || entryTranslation(seen) !== translation) bySource.set(line.source, undefined);
-  }
-  return bySource;
-}
+/** An entry as reading the game gives it, with what makes up its text's key. */
+export type InspectedEntry = ReadEntry &
+  Pick<Text, "isInImage"> &
+  Partial<Pick<Entry, "isLeftUntranslated">>;
 
-export function inspectedCatalog(
-  game: Pick<Game, "id" | "title" | "engine">,
-  entries: ReadonlyArray<Entry>,
-  previous: Catalog | undefined,
-): Catalog {
+/**
+ * The entries of a game as read now, each with its text's key, the speaker included, and the user's choices that
+ * `previous`, the saved catalog, has for it. An image text the user corrected keeps the
+ * correction while it reads the same. Translations belong to texts, so a line that only moved, as
+ * when another version adds a command before it, keeps its English by its text.
+ */
+export function inspectedEntries(
+  read: ReadonlyArray<ReadEntry>,
+  previous: Pick<Catalog, "entries" | "texts"> | undefined,
+): InspectedEntry[] {
   const saved = new Map(previous?.entries.map((entry) => [entry.id, entry]));
-  const ids = new Set(entries.map((entry) => entry.id));
-  // Image lines come from their read results, which keep their English themselves.
-  const moved = englishByText(
-    previous?.entries.filter((entry) => !ids.has(entry.id) && !isImageText(entry)) ?? [],
-  );
-  const kept = entries.map((entry) => {
-    const old = saved.get(entry.id) ?? (isImageText(entry) ? undefined : moved.get(entry.source));
+  const texts = previous ? textsById(previous) : new Map<number, Text>();
+  const speakerOf = showTextSpeakers(read);
+  return read.map((entry) => {
+    const old = saved.get(entry.id);
+    const image = isImageText(entry);
+    const corrected = image && old ? texts.get(old.textId)?.source : undefined;
+    const { speaker: _, ...rest } = entry;
+    const speaker = image ? undefined : speakerOf(entry);
     return {
-      ...entry,
-      ...(old?.readerText !== undefined && { source: old.source, readerText: old.readerText }),
-      translation: old?.translation ?? {},
-      ...(old?.keepOriginal && canKeepOriginal(entry) && { keepOriginal: true }),
-      ...(old?.previous && { previous: old.previous }),
+      ...rest,
+      ...(speaker !== undefined && { speaker }),
+      ...(corrected !== undefined && { source: corrected }),
+      isInImage: image,
+      ...(old?.isLeftUntranslated && canKeepOriginal(entry) && { isLeftUntranslated: true }),
     };
   });
-  return {
-    version: 1,
-    game: { id: game.id, title: game.title, engine: game.engine },
-    entries: kept,
-    glossary: previous?.glossary ?? [],
-    translate: previous?.translate ?? false,
-    ...(previous?.originalScripts && { originalScripts: true }),
-    ...(previous?.language && { language: previous.language }),
-    ...(previous?.imageBold && { imageBold: previous.imageBold }),
-    ...(previous?.imageFont && { imageFont: previous.imageFont }),
-    ...(previous?.unchangedImages?.length && { unchangedImages: previous.unchangedImages }),
-    ...(previous?.disabledFixes?.length && { disabledFixes: previous.disabledFixes }),
-    ...(previous?.lastRun && { lastRun: previous.lastRun }),
-    ...guessRuns({ entries: kept, glossary: previous?.glossary ?? [] }, previous?.runs),
-  };
 }

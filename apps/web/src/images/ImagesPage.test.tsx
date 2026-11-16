@@ -1,7 +1,7 @@
 import { isImageText } from "@rpgtl/domain";
+import { testCatalog, type TestEntry } from "@rpgtl/domain/testUtils/catalog";
 import type {
   Catalog,
-  Entry,
   GameActivity,
   ImageReaderSetupStatus,
   ImageReadResults,
@@ -16,41 +16,56 @@ import { ImagesPage } from "./ImagesPage.tsx";
 
 beforeAll(() => page.viewport(1280, 800));
 
-const text = (id: string, image: string, line: number, source: string, translation: string) =>
-  ({
-    id,
-    location: { _tag: "ImageLines", image, lines: [line] },
-    source,
-    translation: translation ? { guess: { value: translation, run: "r" } } : {},
-  }) satisfies Entry;
+const text = (
+  id: string,
+  image: string,
+  line: number,
+  source: string,
+  translation: string,
+): TestEntry => ({
+  id,
+  location: { _tag: "ImageLines", image, lines: [line] },
+  source,
+  ...(translation && { modelTranslation: translation }),
+});
 
-const saved: Catalog = {
-  version: 1,
-  game: { id: game.id, title: game.title, engine: "MV" },
-  entries: [
-    text("a", "img/pictures/Title", 0, "开始", "Start"),
-    text("b", "img/pictures/Title", 1, "继续", ""),
-    {
-      ...text("c", "img/system/Menu", 0, "物品", "Items"),
-      translation: { guess: { value: "Items", run: "r", long: "Inventory" } },
-    },
-    { ...text("m", "", 0, "你好", "Hello"), location: { _tag: "MapName", map: 1 } },
-  ],
-  glossary: [],
-  translate: true,
-};
+const entries: ReadonlyArray<TestEntry> = [
+  text("a", "img/pictures/Title", 0, "开始", "Start"),
+  text("b", "img/pictures/Title", 1, "继续", ""),
+  { ...text("c", "img/system/Menu", 0, "物品", "Items"), unshortenedTranslation: "Inventory" },
+  { ...text("m", "", 0, "你好", "Hello"), location: { _tag: "MapName", map: 1 } },
+];
+const catalogOf = (shown: ReadonlyArray<TestEntry>): Catalog =>
+  testCatalog({
+    game: { id: game.id, title: game.title, engine: "MV" },
+    entries: shown,
+    settings: { isTranslationOn: true },
+  });
+const saved = catalogOf(entries);
 
-const read = (file: string): ImageResult => ({
+const read = (file: string, lines: ImageResult["lines"] = []): ImageResult => ({
   file,
   sha256: "0".repeat(64),
-  width: 16,
-  height: 16,
-  lines: [],
+  width: 200,
+  height: 100,
+  lines,
+});
+const line = (words: string, top: number) => ({
+  text: words,
+  score: 0.99,
+  polygon: [
+    [10, top],
+    [60, top],
+    [60, top + 20],
+    [10, top + 20],
+  ] as const,
+  box: [10, top, 60, top + 20] as const,
+  reader: "paddle" as const,
 });
 const results: ImageReadResults = {
   version: 1,
   images: {
-    "img/pictures/Title": read("img/pictures/Title.png"),
+    "img/pictures/Title": read("img/pictures/Title.png", [line("开始", 10), line("继续", 60)]),
     "img/system/Menu": read("img/system/Menu.png"),
     "img/pictures/Empty": read("img/pictures/Empty.png"),
   },
@@ -158,10 +173,13 @@ test("the editor saves each text's English and artwork, and the whole image kept
     expect(
       server.posts.toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
     ).toEqual([
-      { path: "/api/entries", body: { id: game.id, entries: [{ id: "a", keepOriginal: true }] } },
       {
         path: "/api/entries",
-        body: { id: game.id, entries: [{ id: "b", translation: "Continue" }] },
+        body: { id: game.id, entries: [{ id: "a", isLeftUntranslated: true }] },
+      },
+      {
+        path: "/api/entries",
+        body: { id: game.id, entries: [{ id: "b", userTranslation: "Continue" }] },
       },
     ]),
   );
@@ -169,7 +187,7 @@ test("the editor saves each text's English and artwork, and the whole image kept
   await vi.waitFor(() =>
     expect(server.posts.at(-1)).toEqual({
       path: "/api/catalog/images",
-      body: { id: game.id, unchangedImages: ["img/pictures/Title"] },
+      body: { id: game.id, untranslatedImages: ["img/pictures/Title"] },
     }),
   );
   // The saves don't read every image's read results again.
@@ -200,25 +218,22 @@ test("a misread text can be corrected, which clears the run's English, and the t
     .toHaveValue("");
   await vi.waitFor(() =>
     expect(server.posts).toEqual([
-      { path: "/api/entries", body: { id: game.id, entries: [{ id: "a", text: "开始游戏" }] } },
+      { path: "/api/entries", body: { id: game.id, entries: [{ id: "a", source: "开始游戏" }] } },
     ]),
   );
 
-  server.catalog = {
-    ...saved,
-    entries: saved.entries.map((entry) =>
-      entry.id === "a"
-        ? { ...entry, source: "开始游戏", readerText: "开始", translation: {} }
-        : entry,
+  server.catalog = catalogOf(
+    entries.map((entry) =>
+      entry.id === "a" ? { id: entry.id, location: entry.location, source: "开始游戏" } : entry,
     ),
-  };
+  );
   server.feed.changed();
   await expect.element(editor.getByText("You corrected it.", { exact: false })).toBeVisible();
   await editor.getByRole("button", { name: "Use it" }).click();
   await vi.waitFor(() =>
     expect(server.posts.at(-1)).toEqual({
       path: "/api/entries",
-      body: { id: game.id, entries: [{ id: "a", text: "开始" }] },
+      body: { id: game.id, entries: [{ id: "a", source: "开始" }] },
     }),
   );
 });
@@ -298,7 +313,10 @@ test("the lettering saves as it is chosen, and Clear image text asks first", asy
   await page.getByRole("option", { name: "Always bold" }).click();
   await vi.waitFor(() =>
     expect(server.posts).toEqual([
-      { path: "/api/catalog/images", body: { id: game.id, imageBold: "always", imageFont: null } },
+      {
+        path: "/api/catalog/images",
+        body: { id: game.id, letteringWeight: "bold", letteringFont: null },
+      },
     ]),
   );
 

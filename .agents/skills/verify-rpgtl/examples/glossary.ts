@@ -1,8 +1,8 @@
 // The Glossary page: a changed term saves itself and renames the entries that are exactly it, a
-// new term saves once it has an original, clearing a term's mismatches backs up first, a kind
-// saves at once, the page keeps its terms over a reload, and Remove glossary… asks first.
-import { copyFileSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { entryTranslation, termTranslation } from "../../../../packages/domain/src/guesses.ts";
+// new term saves once it has an original, clearing a term's mismatches keeps their English as
+// previous, a kind saves at once, the page keeps its terms over a reload, and Remove glossary… asks first.
+import { writeFileSync } from "node:fs";
+import { keepDatabase, savedCatalog, translationFile } from "./saved.ts";
 
 const until = async (what: string, check: () => boolean) => {
   for (let tries = 0; tries < 50; tries++) {
@@ -31,7 +31,7 @@ export default async ({ page, api, run, log }: any) => {
         ) as HTMLElement
       ).click(),
     );
-    await page.waitUntil(`document.body.textContent.includes("Imported, after backing up")`);
+    await page.waitUntil(`document.body.textContent.includes("Imported the translations.")`);
     await page.waitUntil(`!document.querySelector('[data-slot="alert-dialog-overlay"]')`);
     return preview;
   };
@@ -39,25 +39,22 @@ export default async ({ page, api, run, log }: any) => {
   await page.clickText("Open");
   await page.waitUntil(`document.querySelector("h1")?.textContent === "Fixture Adventure"`);
   const id = (await page.eval("location.pathname")).slice("/games/".length);
-  const saved = () => JSON.parse(readFileSync(`${run.state}/games/${id}/catalog.json`, "utf8"));
-  const backups = () => readdirSync(`${run.state}/games/${id}/backups`).length;
+  const saved = () => savedCatalog(run.state, id);
+  const clears = () => saved().operations.filter((kind: string) => kind === "clear").length;
 
   await page.click('label[for="translate-game"]');
   await page.waitUntil(`document.body.textContent.includes("text entries translated")`);
   const catalog = await api(`catalog?id=${id}`);
-  const file = {
-    ...catalog,
-    entries: catalog.entries.map((entry: any) =>
-      entry.source === "向导"
-        ? { ...entry, translation: { user: "Guide" } }
-        : entry.source.startsWith("你好，旅行者")
-          ? { ...entry, translation: { user: "Hello, traveller. Welcome to the woods." } }
-          : entry,
-    ),
-    glossary: [
-      { source: "向导", translation: { user: "Guide" }, kind: { guess: { value: "character" } } },
-    ],
-  };
+  const file = translationFile(
+    catalog,
+    (source) =>
+      source === "向导"
+        ? "Guide"
+        : source.startsWith("你好，旅行者")
+          ? "Hello, traveller. Welcome to the woods."
+          : undefined,
+    [{ source: "向导", english: "Guide", kind: "character" }],
+  );
   const importFile = `${run.dir}/import.json`;
   writeFileSync(importFile, JSON.stringify(file));
   await importThrough(importFile);
@@ -70,15 +67,12 @@ export default async ({ page, api, run, log }: any) => {
   await page.shot("glossary");
 
   await page.fill("#term-translation", "Leader");
-  await until(
-    "the renamed term's save",
-    () => termTranslation(saved().glossary[0] ?? { translation: {} }) === "Leader",
-  );
+  await until("the renamed term's save", () => saved().glossary[0]?.english === "Leader");
   const speakers = saved().entries.filter((entry: any) => entry.source === "向导");
-  if (speakers.some((entry: any) => entryTranslation(entry) !== "Leader"))
+  if (speakers.some((entry: any) => entry.english !== "Leader"))
     throw new Error("the speaker entries didn't follow the renamed term");
   await page.waitUntil(`document.body.textContent.includes("All changes saved")`);
-  log(`renamed: ${speakers.length} speaker entries read Leader; backups ${backups()}`);
+  log(`renamed: ${speakers.length} speaker entries read Leader`);
   await page.shot("renamed");
 
   await page.clickText("Add term");
@@ -87,25 +81,25 @@ export default async ({ page, api, run, log }: any) => {
   await page.fill("#term-translation", "Forest");
   await page.click('[aria-label="Filter terms"]');
   await until("the new term's save", () =>
-    saved().glossary.some(
-      (term: any) => term.source === "森林" && termTranslation(term) === "Forest",
-    ),
+    saved().glossary.some((term: any) => term.source === "森林" && term.english === "Forest"),
   );
   log(`added: ${JSON.stringify(saved().glossary)}`);
 
-  const before = backups();
+  const before = clears();
   await page.clickText("Clear wrong text");
   await page.waitUntil(
     `document.body.textContent.includes("Cleared 1 translation of 森林 that didn't use Forest.")`,
   );
   const welcome = saved().entries.find((entry: any) => entry.source.startsWith("你好，旅行者"));
-  if (
-    entryTranslation(welcome) !== "" ||
-    welcome.previous !== "Hello, traveller. Welcome to the woods."
-  )
-    throw new Error(`the mismatch wasn't cleared: ${JSON.stringify(welcome)}`);
-  if (backups() !== before + 1) throw new Error("clearing made no backup");
-  log("cleared the line that says woods, kept as previous; one more backup");
+  const previous = (await api(`catalog?id=${id}`)).texts.find(
+    (text: any) => text.source === welcome.source,
+  )?.previousTranslation;
+  if (welcome.english !== "" || previous !== "Hello, traveller. Welcome to the woods.")
+    throw new Error(
+      `the mismatch wasn't cleared: ${JSON.stringify(welcome)}, previous ${previous}`,
+    );
+  if (clears() !== before + 1) throw new Error("clearing wasn't one clear operation");
+  log("cleared the line that says woods, kept as previous; one clear operation");
   await page.shot("cleared");
 
   await page.click("#term-kind");
@@ -118,7 +112,7 @@ export default async ({ page, api, run, log }: any) => {
     ).click(),
   );
   await until("the kind's save", () =>
-    saved().glossary.some((term: any) => term.source === "森林" && term.kind.user === "word"),
+    saved().glossary.some((term: any) => term.source === "森林" && term.userKind === "word"),
   );
   log(`kind: ${JSON.stringify(saved().glossary.find((term: any) => term.source === "森林"))}`);
 
@@ -129,10 +123,11 @@ export default async ({ page, api, run, log }: any) => {
   await page.clickText("Remove glossary…");
   await page.waitUntil(`document.body.textContent.includes("Remove the glossary?")`);
   await page.shot("remove-all-asks");
+  await page.click('label[for="keep-custom-terms"]');
   await page.clickText("Remove glossary");
   await until("Remove all's save", () => saved().glossary.length === 0);
   await page.waitUntil(`document.body.textContent.includes("No glossary terms yet.")`);
   log("removed all terms");
   await page.shot("removed");
-  copyFileSync(`${run.state}/games/${id}/catalog.json`, `${run.evidence}/catalog.json`);
+  keepDatabase(run.state, id, run.evidence);
 };

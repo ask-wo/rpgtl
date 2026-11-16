@@ -10,11 +10,11 @@ import {
 } from "@rpgtl/contracts";
 import {
   CatalogDraft,
+  entryTexts,
   isNameEntry,
   retrySampling,
   runTranslates,
-  withRunMarks,
-  entryTranslation,
+  translationInUse,
 } from "@rpgtl/domain";
 import * as AiError from "effect/ai/AiError";
 import * as Arr from "effect/Array";
@@ -226,8 +226,7 @@ const make = Effect.gen(function* () {
     missing,
     names,
     log,
-    started,
-    models,
+    operationId,
   }: {
     readonly catalog: Catalog;
     readonly kind: RunKind;
@@ -237,22 +236,20 @@ const make = Effect.gen(function* () {
     /** Of `missing`, the names. */
     readonly names: ReadonlySet<string>;
     readonly log: RunLogs.RunLogWriter;
-    /** When the run started, as its log and the entries it translates say. */
-    readonly started: string;
-    readonly models: RunModels;
+    /** The run's operation, which its changes are written under. */
+    readonly operationId: number;
   }) {
     const id = catalog.game.id;
-    const draft = new CatalogDraft(catalog, yield* catalogs.imageLimits(id), started);
+    const draft = new CatalogDraft(catalog, yield* catalogs.imageLimits(id));
     const saves = yield* Semaphore.make(1);
     const speakers = new Map<string, string>();
-    // Saves the draft as it is when the save starts, so an earlier save never overwrites a later;
-    // the status counts what the file holds, so Stop can't come between the two.
+    // Writes the changes made when the save starts, so an earlier save never overwrites a later;
+    // the status counts what the database holds, so Stop can't come between the two.
     const save = saves.withPermits(1)(
       Effect.uninterruptible(
         Effect.gen(function* () {
-          const marked = withRunMarks(draft.catalog, { started, models });
-          yield* catalogs.write(marked);
-          const translated = marked.entries.filter((entry) => entryTranslation(entry));
+          yield* catalogs.writeRun(id, operationId, draft.takeChanges());
+          const translated = draft.entries.filter((entry) => translationInUse(entry));
           const done = translated.filter((entry) => missing.has(entry.id)).length;
           const failed = draft.failed;
           yield* SubscriptionRef.update(current, (now) => ({
@@ -345,19 +342,20 @@ const make = Effect.gen(function* () {
   const begin = Effect.fn("Runs.begin")(function* (id: string, kind: RunKind) {
     yield* games.hold(id);
     const catalog = yield* catalogs.get(id);
-    const translates = runTranslates(catalog);
+    const translates = runTranslates(catalog.settings);
+    const entries = entryTexts(catalog);
     const missing = new Set(
-      catalog.entries
+      entries
         .filter(
           (entry) =>
-            !entryTranslation(entry) &&
+            !translationInUse(entry) &&
             translates(entry) &&
             (kind === "translate" || isNameEntry(entry)),
         )
         .map((entry) => entry.id),
     );
     const names = new Set(
-      catalog.entries
+      entries
         .filter((entry) => missing.has(entry.id) && isNameEntry(entry))
         .map((entry) => entry.id),
     );
@@ -368,7 +366,7 @@ const make = Effect.gen(function* () {
       done: 0,
       pass: "names",
       names: { total: names.size, done: 0, failed: 0 },
-      translated: catalog.entries.filter((entry) => entryTranslation(entry)).length,
+      translated: entries.filter((entry) => translationInUse(entry)).length,
       failed: [],
       left: missing.size,
       warnings: [],
@@ -395,9 +393,8 @@ const make = Effect.gen(function* () {
         PlatformError: (cause) => Effect.fail(new TranslatorUnavailableError({ cause })),
       }),
     );
-    // The run starts from a backup of the catalog as it was.
-    yield* catalogs.save(catalog);
     const models = runModels(settings, translator.text.model, translator.names.model);
+    const operationId = yield* catalogs.startRun(id, models);
     const log = yield* runLogs.open(id, {
       ...models,
       ...(settings.translator === "ollama" &&
@@ -409,7 +406,7 @@ const make = Effect.gen(function* () {
       entries: missing.size,
     });
     yield* Ref.set(opened, Option.some(log));
-    yield* run({ catalog, kind, translator, current, missing, names, log, started, models });
+    yield* run({ catalog, kind, translator, current, missing, names, log, operationId });
   });
 
   const start = Effect.fn("Runs.start")(function* (id: string, kind: RunKind) {

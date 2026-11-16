@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import { gameFont, imageAssets } from "./assets.ts";
 
 /** What decides how an image looks in the game, saved or as typed on the page. */
-export type ShownImages = Pick<Catalog, "entries" | "imageBold" | "imageFont" | "unchangedImages">;
+export type ShownImages = Pick<Catalog, "entries" | "texts" | "settings">;
 
 const decodeHint = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.NullOr(ImageTextHint)));
 

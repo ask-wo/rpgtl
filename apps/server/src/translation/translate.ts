@@ -27,8 +27,7 @@ import {
   TranslationAnswer,
   translationSystemPrompt,
   translationUserMessage,
-  entryTranslation,
-  termTranslation,
+  translationInUse,
 } from "@rpgtl/domain";
 import * as AiError from "effect/ai/AiError";
 import * as Arr from "effect/Array";
@@ -136,7 +135,7 @@ const loggedEntry = ({ entry }: Prepared) => ({
   id: entry.id,
   ...(entry.location && { location: entry.location }),
   source: entry.source,
-  translation: entryTranslation(entry),
+  translation: translationInUse(entry),
 });
 
 /** A reply to a translation request: its text and what the translator counted, when it did. */
@@ -298,13 +297,13 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
     const translateGroup = Effect.fn("translate.group")(function* (group: ReadonlyArray<RunEntry>) {
       const prepared = group.map((entry) => draft.prepare(entry));
       for (const item of prepared) {
-        if (entryTranslation(item.entry)) {
+        if (translationInUse(item.entry)) {
           // A name that is already translated still belongs in the glossary.
           if (names) draft.seedTerm(item.entry);
           continue;
         }
         const term = draft.term(item.entry.source);
-        const exact = term && termTranslation(term);
+        const exact = term && translationInUse(term);
         if (exact) draft.accept(item, exact, { seedGlossary: names });
         else if (!/[\p{L}\p{N}]/u.test(item.text.replace(/\{\d+\}/g, "")))
           draft.accept(item, item.entry.source, { seedGlossary: names });
@@ -385,7 +384,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
         LanguageModel.LanguageModel | RunReport
       > {
         // Copies of repeated text filled since the batch was made are not sent.
-        const batch = all.filter((item) => !entryTranslation(item.entry));
+        const batch = all.filter((item) => !translationInUse(item.entry));
         if (!batch.length) return;
         const request = batchRequest(draft, prepared, batch, translator.contextLines);
         const keys = request.entries.map((entry) => entry.id);
@@ -420,7 +419,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
         const long: Array<Parameters<typeof shorten>[0][number]> = [];
         for (const [index, item] of batch.entries()) {
           // An earlier copy in this batch may have filled it already.
-          if (entryTranslation(item.entry)) continue;
+          if (translationInUse(item.entry)) continue;
           const answer = answers?.[index];
           const reason =
             (reply.refused === undefined ? verdict.rejected : "refused") ??
@@ -489,7 +488,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
       });
 
       // Batches within a group go in order, since later ones use earlier translations as context.
-      const missing = prepared.filter((item) => !entryTranslation(item.entry));
+      const missing = prepared.filter((item) => !translationInUse(item.entry));
       for (const batch of Arr.chunksOf(missing, translator.batchSize)) yield* translateBatch(batch);
     });
 

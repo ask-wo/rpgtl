@@ -1,20 +1,11 @@
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import { assert, it } from "@effect/vitest";
-import {
-  Catalog,
-  FolderListing,
-  GameActivity,
-  ProgramStatus,
-  Playtime,
-  gameFiles,
-} from "@rpgtl/contracts";
+import { Catalog, FolderListing, GameActivity, ProgramStatus, Playtime } from "@rpgtl/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -25,6 +16,7 @@ import * as HttpRouter from "effect/http/HttpRouter";
 import * as Activity from "./activity/Activity.ts";
 import * as XpPatch from "./xpPatch/XpPatch.ts";
 import * as FolderBrowser from "./games/FolderBrowser.ts";
+import * as Catalogs from "./games/Catalogs.ts";
 import * as Games from "./games/Games.ts";
 import * as RunKinds from "./runs/RunKinds.ts";
 import * as Http from "./http.ts";
@@ -40,40 +32,39 @@ import {
   runServices,
   servicesWith,
   StateDir,
+  storedCatalog,
 } from "./testUtils/state.ts";
 import { ollamaAnswering } from "./testUtils/ollama.ts";
-import { inUse } from "@rpgtl/domain";
+import { testTerm } from "@rpgtl/domain/testUtils/catalog";
 
-const catalog: Catalog = {
-  version: 1,
-  game: { id: game.id, title: game.title, engine: "MV" },
-  translate: true,
+const messageAt = (index: number) =>
+  ({
+    _tag: "Message",
+    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+    index,
+  }) as const;
+
+/** The game's catalog as the tests store it, before any request changes it. */
+const stored = storedCatalog(game, {
   entries: [
     {
       id: "a",
-      location: {
-        _tag: "Message",
-        list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
-        index: 0,
-      },
+      location: messageAt(0),
       source: "你好",
-      translation: { guess: { value: "Hello 你", run: "r", flag: "Check this." } },
+      modelTranslation: "Hello 你",
+      flagReason: "Check this.",
     },
     {
       id: "b",
-      location: {
-        _tag: "Message",
-        list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
-        index: 2,
-      },
+      location: messageAt(2),
       source: "再见",
-      translation: {},
-      suggestion: { text: "Bye bye bye", reason: "too long" },
+      rejectedTranslation: "Bye bye bye",
+      rejectionReason: "too long",
     },
   ],
-  glossary: [{ source: "雨", translation: { user: "Rain" }, kind: { guess: { value: "name" } } }],
-  lastRun: "2026-10-30T10:00:00.000Z",
-};
+  glossary: [testTerm("雨", { userTranslation: "Rain", rulesKind: "name" })],
+  settings: { isTranslationOn: true },
+});
 
 const token = "test-token";
 
@@ -115,10 +106,16 @@ const serving = (files: Record<string, string>) =>
     Layer.provideMerge(NodeHttpServer.layerTest),
   );
 
-const saved = {
-  "games.json": JSON.stringify([game, other]),
-  [gameFiles(game.id).catalog]: JSON.stringify(catalog),
-};
+/** The game's catalog as it is saved now, as the API sends it. */
+const savedJson = Effect.flatMap(Catalogs.Catalogs, (catalogs) => catalogs.get(game.id)).pipe(
+  Effect.map((saved) => JSON.parse(JSON.stringify(Schema.encodeSync(Catalog)(saved)))),
+);
+
+const listed = { "games.json": JSON.stringify([game, other]) };
+/** The routes over a state folder listing both games, with the first one's catalog stored. */
+const withStored = Layer.effectDiscard(Effect.asVoid(stored)).pipe(
+  Layer.provideMerge(serving(listed)),
+);
 
 const messageOf = (response: HttpClientResponse.HttpClientResponse) =>
   HttpClientResponse.schemaBodyJson(Schema.Struct({ message: Schema.String }))(response).pipe(
@@ -152,63 +149,36 @@ it.effect("lists the games and gives a game's catalog and what the checks found 
       { ...game, folderMissing: true },
       { ...other, folderMissing: true },
     ]);
-    assert.deepStrictEqual(yield* (yield* get(`/api/catalog?id=${game.id}`)).json, catalog);
+    assert.deepStrictEqual(
+      yield* (yield* get(`/api/catalog?id=${game.id}`)).json,
+      yield* savedJson,
+    );
     assert.deepStrictEqual(yield* (yield* get(`/api/checks?id=${game.id}`)).json, {
       a: [{ check: "source text left" }],
     });
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );
 
-it.effect("restoring clears every translation and what runs left, and backs the catalog up", () =>
+it.effect("restoring clears every translation and what runs left", () =>
   Effect.gen(function* () {
     const response = yield* post("/api/restore", { id: game.id });
     assert.strictEqual(response.status, 200);
-    const restored: Catalog = {
-      ...catalog,
-      translate: true,
-      entries: [
-        {
-          id: "a",
-          location: catalog.entries[0]?.location ?? { _tag: "SystemText", keys: [] },
-          source: "你好",
-          translation: {},
-          previous: "Hello 你",
-        },
-        {
-          id: "b",
-          location: catalog.entries[1]?.location ?? { _tag: "SystemText", keys: [] },
-          source: "再见",
-          translation: {},
-        },
-      ],
-    };
-    assert.deepStrictEqual(yield* response.json, restored);
-    assert.deepStrictEqual(yield* (yield* get(`/api/catalog?id=${game.id}`)).json, restored);
-
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const dir = yield* StateDir;
-    const backupDir = path.join(dir, gameFiles(game.id).backups);
-    const backups = yield* fs.readDirectory(backupDir);
-    assert.strictEqual(backups.length, 1);
-    assert.match(backups[0] ?? "", /^catalog-\d+-[0-9a-f]{12}\.json$/);
-    const backup = yield* fs.readFileString(path.join(backupDir, backups[0] ?? ""));
-    assert.deepStrictEqual(JSON.parse(backup), catalog);
-  }).pipe(Effect.provide(serving(saved))),
+    const restored = yield* response.json;
+    assert.deepStrictEqual(restored, yield* savedJson);
+    assert.deepNestedInclude(restored, {
+      "texts[0]": { id: 1, source: "你好", isInImage: false, previousTranslation: "Hello 你" },
+      "texts[1]": { id: 2, source: "再见", isInImage: false },
+    });
+  }).pipe(Effect.provide(withStored)),
 );
 
-it.effect("the translation switch is saved in the catalog without a backup", () =>
+it.effect("the translation switch is saved in the catalog", () =>
   Effect.gen(function* () {
     const off = yield* post("/api/catalog/translate", { id: game.id, on: false });
     assert.strictEqual(off.status, 200);
-    assert.deepStrictEqual(yield* off.json, { ...catalog, translate: false });
-    assert.deepStrictEqual(yield* (yield* get(`/api/catalog?id=${game.id}`)).json, {
-      ...catalog,
-      translate: false,
-    });
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    assert.isFalse(yield* fs.exists(path.join(yield* StateDir, gameFiles(game.id).backups)));
+    const saved = yield* savedJson;
+    assert.deepStrictEqual(yield* off.json, saved);
+    assert.isFalse(saved.settings.isTranslationOn);
 
     const games = yield* Games.Games;
     const busy = yield* games.exclusive(
@@ -216,7 +186,7 @@ it.effect("the translation switch is saved in the catalog without a backup", () 
       post("/api/catalog/translate", { id: game.id, on: true }),
     );
     assert.deepStrictEqual(yield* refusal(busy), [400, { _tag: "GameBusy" }]);
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );
 
 it.effect("removing the image reader waits until images are no longer read", () =>
@@ -229,14 +199,14 @@ it.effect("removing the image reader waits until images are no longer read", () 
     yield* Scope.close(reading, Exit.void);
     const removed = yield* post("/api/image-reader/remove", {});
     assert.strictEqual(removed.status, 200);
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );
 
 it.effect(
   "the Glossary page saves its glossary, says what is wrong with it, and clears mismatches",
   () =>
     Effect.gen(function* () {
-      const hello = { source: "你好", translation: "Hi", kind: "word" as const };
+      const hello = { source: "你好", userTranslation: "Hi", userKind: "word" as const };
       const response = yield* post("/api/glossary", { id: game.id, glossary: [hello] });
       assert.strictEqual(response.status, 204);
       const repeated = yield* post("/api/glossary", { id: game.id, glossary: [hello, hello] });
@@ -250,53 +220,56 @@ it.effect(
       const now = yield* HttpClientResponse.schemaBodyJson(Catalog)(
         yield* get(`/api/catalog?id=${game.id}`),
       );
-      assert.deepStrictEqual(now.glossary, [
-        {
-          source: "你好",
-          translation: { user: "Hi" },
-          kind: { guess: { value: "name" }, user: "word" },
-        },
-      ]);
-      assert.isUndefined(inUse(now.entries[0]?.translation ?? {}));
-    }).pipe(Effect.provide(serving(saved))),
+      assert.deepNestedInclude(now.glossary[0], {
+        source: "你好",
+        userTranslation: "Hi",
+        userKind: "word",
+      });
+      assert.deepStrictEqual(now.texts[0], {
+        id: 1,
+        source: "你好",
+        isInImage: false,
+        previousTranslation: "Hello 你",
+      });
+    }).pipe(Effect.provide(withStored)),
 );
 
 it.effect("the Text page saves edited English and says why an edit can't be saved", () =>
   Effect.gen(function* () {
     const response = yield* post("/api/entries", {
       id: game.id,
-      entries: [{ id: "a", translation: "Hello" }],
+      entries: [{ id: "a", userTranslation: "Hello" }],
     });
     assert.strictEqual(response.status, 204);
     const unknown = yield* post("/api/entries", {
       id: game.id,
-      entries: [{ id: "gone", translation: "Hi" }],
+      entries: [{ id: "gone", userTranslation: "Hi" }],
     });
     assert.deepStrictEqual(yield* refusal(unknown), [
       400,
       { _tag: "EntryRejected", problem: "unknownEntry" },
     ]);
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );
 
 it.effect("the Images page saves the game's lettering and kept images", () =>
   Effect.gen(function* () {
     const response = yield* post("/api/catalog/images", {
       id: game.id,
-      imageFont: "serif",
-      unchangedImages: ["img/pictures/Logo"],
+      letteringFont: "serif",
+      untranslatedImages: ["img/pictures/Logo"],
     });
     assert.strictEqual(response.status, 204);
-    const cleared = yield* post("/api/catalog/images", { id: game.id, imageFont: null });
+    const cleared = yield* post("/api/catalog/images", { id: game.id, letteringFont: null });
     assert.strictEqual(cleared.status, 204);
     const now = yield* HttpClientResponse.schemaBodyJson(Catalog)(
       yield* get(`/api/catalog?id=${game.id}`),
     );
     assert.deepStrictEqual(
-      [now.imageFont, now.unchangedImages],
+      [now.settings.letteringFont, now.settings.untranslatedImages],
       [undefined, ["img/pictures/Logo"]],
     );
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );
 
 it.effect("forgetting a game removes it from the list and keeps it marked, with its catalog", () =>
@@ -306,7 +279,7 @@ it.effect("forgetting a game removes it from the list and keeps it marked, with 
       400,
       { _tag: "GameNotInspected" },
     ]);
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );
 
 it.effect("a game another operation holds refuses restoring and forgetting", () =>
@@ -324,7 +297,7 @@ it.effect("a game another operation holds refuses restoring and forgetting", () 
       }),
     );
     assert.strictEqual((yield* post("/api/restore", { id: game.id })).status, 200);
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );
 
 it.effect(
@@ -350,7 +323,7 @@ it.effect(
         yield* refusal(yield* post("/api/inspect", { path: `${root}/nothing` })),
         [400, { _tag: "NoGameFound" }],
       );
-    }).pipe(Effect.provide(serving(saved))),
+    }).pipe(Effect.provide(withStored)),
 );
 
 it.effect(
@@ -358,58 +331,41 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const edited = {
-        ...catalog,
-        entries: [{ ...catalog.entries[1], translation: { user: "Bye" } }],
+        version: 2,
+        texts: [{ source: "再见", isInImage: false, userTranslation: "Bye" }],
+        entries: [],
+        glossary: [],
+        settings: {},
       };
       const preview = yield* post("/api/import/preview", { id: game.id, catalog: edited });
       assert.strictEqual(preview.status, 200);
       assert.deepInclude(yield* preview.json, {
         translations: { inFile: 1, added: 1, changed: 0, cleared: 0, notInGame: 0 },
       });
+      const newer = { ...edited, version: 3 };
       assert.deepStrictEqual(
-        yield* refusal(
-          yield* post("/api/import/preview", { id: game.id, catalog: { ...edited, version: 2 } }),
-        ),
+        yield* refusal(yield* post("/api/import/preview", { id: game.id, catalog: newer })),
         [400, { _tag: "TranslationFileRejected", problem: "newer" }],
       );
       const imported = yield* post("/api/import", { id: game.id, catalog: edited });
       assert.strictEqual(imported.status, 200);
       const result = yield* HttpClientResponse.schemaBodyJson(Catalog)(imported);
-      assert.strictEqual(inUse(result.entries[1]?.translation ?? {}), "Bye");
-      assert.isUndefined(result.entries[1]?.suggestion);
+      assert.deepStrictEqual(result.texts[1], {
+        id: 2,
+        source: "再见",
+        isInImage: false,
+        userTranslation: "Bye",
+      });
+      const elsewhere = { ...edited, texts: [{ ...edited.texts[0], source: "别处" }] };
       assert.deepStrictEqual(
-        yield* refusal(
-          yield* post("/api/import", {
-            id: game.id,
-            catalog: { ...edited, entries: [{ ...edited.entries[0], id: "other" }] },
-          }),
-        ),
+        yield* refusal(yield* post("/api/import", { id: game.id, catalog: elsewhere })),
         [400, { _tag: "TranslationFileRejected", problem: "otherGame" }],
       );
       assert.deepStrictEqual(
-        yield* refusal(
-          yield* post("/api/import", { id: game.id, catalog: { ...edited, version: 2 } }),
-        ),
+        yield* refusal(yield* post("/api/import", { id: game.id, catalog: newer })),
         [400, { _tag: "TranslationFileRejected", problem: "newer" }],
       );
-    }).pipe(Effect.provide(serving(saved))),
-);
-
-it.effect("a catalog that doesn't decode is an error naming its file", () =>
-  Effect.gen(function* () {
-    const response = yield* get(`/api/catalog?id=${game.id}`);
-    assert.strictEqual(response.status, 500);
-    const body = yield* response.json;
-    assert.include(yield* messageOf(response), gameFiles(game.id).catalog);
-    assert.notProperty(body, "cause");
-  }).pipe(
-    Effect.provide(
-      serving({
-        ...saved,
-        [gameFiles(game.id).catalog]: JSON.stringify({ ...catalog, version: 2 }),
-      }),
-    ),
-  ),
+    }).pipe(Effect.provide(withStored)),
 );
 
 it.effect(
@@ -436,7 +392,7 @@ it.effect(
         400,
         { _tag: "OllamaModelMissing", problem: "unknown" },
       ]);
-    }).pipe(Effect.provide(serving(saved))),
+    }).pipe(Effect.provide(withStored)),
 );
 
 it.effect("image reading gives empty results before a run, and says why it can't start", () =>
@@ -476,8 +432,8 @@ it.effect("image reading gives empty results before a run, and says why it can't
       }),
     );
     const cleared = yield* post("/api/images/clear", { id: game.id });
-    assert.deepStrictEqual(yield* HttpClientResponse.schemaBodyJson(Catalog)(cleared), catalog);
-  }).pipe(Effect.provide(serving(saved))),
+    assert.deepStrictEqual(yield* cleared.json, yield* savedJson);
+  }).pipe(Effect.provide(withStored)),
 );
 
 it.effect("lists the folders of the home folder for the page's folder browser", () =>
@@ -488,7 +444,7 @@ it.effect("lists the folders of the home folder for the page's folder browser", 
     );
     assert.strictEqual(listing.path, dir);
     assert.strictEqual(listing.home, dir);
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );
 
 /** The data of the first Server-Sent Event in the response, decoded. */
@@ -528,7 +484,7 @@ it.effect("tells whether NW.js is downloaded, and what a game's page follows", (
       400,
       { _tag: "GameNotInspected" },
     ]);
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );
 
 it.effect(
@@ -547,7 +503,7 @@ it.effect(
         400,
         { _tag: "GameNotInspected" },
       ]);
-    }).pipe(Effect.provide(serving(saved))),
+    }).pipe(Effect.provide(withStored)),
 );
 
 it.effect("requests without the token, from another origin or for another host are refused", () =>
@@ -579,7 +535,7 @@ it.effect("requests without the token, from another origin or for another host a
       ).pipe(Effect.provide(NodeHttpClient.layerNodeHttp));
       assert.deepStrictEqual(yield* refused(rebound), [403, "Invalid host."]);
     }
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );
 
 const report = (id: string, body: unknown, from?: string) =>
@@ -603,7 +559,7 @@ it.effect("a game played in the browser adds to its playtime, from RPGTL's origi
       yield* get(`/api/playtime?id=${game.id}`),
     );
     assert.strictEqual(playtime.seconds, 30);
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );
 
 it.effect("serves the page at each of its addresses, and only the files it was built with", () =>
@@ -620,7 +576,7 @@ it.effect("serves the page at each of its addresses, and only the files it was b
     assert.strictEqual((yield* HttpClient.get("/style.css")).status, 404);
     assert.strictEqual((yield* HttpClient.get("/assets/missing.js")).status, 404);
     assert.strictEqual((yield* HttpClient.get("/api/missing")).status, 404);
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );
 
 it.effect("plays an inspected game's files under /game/", () =>
@@ -646,8 +602,8 @@ it.effect("plays an inspected game's files under /game/", () =>
     assert.strictEqual(index.headers["cache-control"], "no-store");
     assert.include(yield* index.text, `<script src="/runtime.js" data-game="${played.id}">`);
     // A newly opened game plays as it is until its translation switch is on.
-    const stored = yield* HttpClient.get(`/game/${played.id}/data/Map001.json`);
-    assert.strictEqual(stored.headers["content-type"], "application/json");
+    const untouched = yield* HttpClient.get(`/game/${played.id}/data/Map001.json`);
+    assert.strictEqual(untouched.headers["content-type"], "application/json");
     yield* post("/api/catalog/translate", { id: played.id, on: true });
     const map = yield* HttpClient.get(`/game/${played.id}/data/Map001.json`);
     assert.strictEqual(map.headers["content-type"], "application/json; charset=utf-8");
@@ -659,5 +615,5 @@ it.effect("plays an inspected game's files under /game/", () =>
       (yield* HttpClient.get(`/erased/${played.id}/${"0".repeat(64)}.png`)).status,
       404,
     );
-  }).pipe(Effect.provide(serving(saved))),
+  }).pipe(Effect.provide(withStored)),
 );

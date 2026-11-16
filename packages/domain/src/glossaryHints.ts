@@ -3,7 +3,10 @@ import type { PromptTerm, RequestEntry } from "./prompts.ts";
 import { nameAliases, nameParts, sentPronoun, shortNameTranslations } from "./shortNames.ts";
 import { matchingSounds } from "./sounds.ts";
 import { hasTerm } from "./termMatch.ts";
-import { termTranslation, termKind, termPronoun } from "./guesses.ts";
+import { translationInUse, termKind, termPronoun } from "./inUse.ts";
+
+/** A term as a run reads it, also one it added that has no id yet. */
+type HintTerm = Omit<GlossaryTerm, "id">;
 
 type Mentioned = Pick<RequestEntry, "speaker" | "text">;
 
@@ -11,7 +14,7 @@ const lowerOrdinaryWords = (translation: string) =>
   translation.replace(/\b\p{Lu}\p{Ll}+\b/gu, (word) => word.toLowerCase());
 
 /** Whether entries mention a term: its source, a character's unique short name, or as speaker. */
-function mentions(glossary: ReadonlyArray<GlossaryTerm>) {
+function mentions(glossary: ReadonlyArray<HintTerm>) {
   const aliasesByName = new Map<string, Array<string>>();
   const characters = glossary.filter((term) => termKind(term) === "character");
   for (const [alias, owner] of nameAliases(characters.map((term) => term.source))) {
@@ -19,10 +22,10 @@ function mentions(glossary: ReadonlyArray<GlossaryTerm>) {
     if (aliases) aliases.push(alias);
     else aliasesByName.set(owner, [alias]);
   }
-  return (entries: ReadonlyArray<Mentioned>, term: GlossaryTerm) =>
+  return (entries: ReadonlyArray<Mentioned>, term: HintTerm) =>
     entries.some(
       (entry) =>
-        (termKind(term) === "character" && entry.speaker === termTranslation(term)) ||
+        (termKind(term) === "character" && entry.speaker === translationInUse(term)) ||
         hasTerm(entry.text, term.source) ||
         (termKind(term) === "character" &&
           aliasesByName.get(term.source)?.some((alias) => hasTerm(entry.text, alias))),
@@ -35,14 +38,14 @@ function mentions(glossary: ReadonlyArray<GlossaryTerm>) {
  * English goes lowercased, as it is written in a sentence.
  */
 export function requestGlossary(
-  glossary: ReadonlyArray<GlossaryTerm>,
+  glossary: ReadonlyArray<HintTerm>,
   entries: ReadonlyArray<Mentioned>,
 ): ReadonlyArray<PromptTerm> {
   const mentioned = mentions(glossary);
   const shorts = shortNameTranslations(glossary);
   const terms = new Map<string, PromptTerm>();
   for (const term of glossary) {
-    if (!termTranslation(term)) continue;
+    if (!translationInUse(term)) continue;
     const mentionsShort =
       termKind(term) === "character" &&
       nameParts(term.source.trim()).some(
@@ -53,8 +56,8 @@ export function requestGlossary(
         source: term.source,
         translation:
           termKind(term) === "word"
-            ? lowerOrdinaryWords(termTranslation(term))
-            : termTranslation(term),
+            ? lowerOrdinaryWords(translationInUse(term))
+            : translationInUse(term),
       });
   }
   for (const [source, translation] of shorts)
@@ -68,17 +71,16 @@ export function requestGlossary(
 
 /** The pronoun lines a request sends, for the characters the entries mention. */
 export function requestPronouns(
-  glossary: ReadonlyArray<GlossaryTerm>,
+  glossary: ReadonlyArray<HintTerm>,
   entries: ReadonlyArray<Mentioned>,
 ): ReadonlyArray<string> {
   const mentioned = mentions(glossary);
   return glossary.flatMap((term) =>
     termKind(term) === "character" &&
-    term.pronoun &&
-    sentPronoun(term.pronoun) &&
+    sentPronoun(term) &&
     Array.from(term.source).length >= 2 &&
     mentioned(entries, term)
-      ? [`${termTranslation(term)}: ${termPronoun(term) === "she" ? "she/her" : "he/him"}`]
+      ? [`${translationInUse(term)}: ${termPronoun(term) === "she" ? "she/her" : "he/him"}`]
       : [],
   );
 }

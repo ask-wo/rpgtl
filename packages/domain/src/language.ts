@@ -1,4 +1,4 @@
-import type { Entry, SourceLanguage } from "@rpgtl/contracts";
+import type { GameSettings, SourceLanguage, Text } from "@rpgtl/contracts";
 
 const hangul = /\p{Script=Hangul}/gu;
 const kana = /[\p{Script=Hiragana}\p{Script=Katakana}]/gu;
@@ -10,11 +10,11 @@ const count = (text: string, pattern: RegExp) => text.match(pattern)?.length ?? 
  * and Chinese fan games spell a few Japanese sounds in kana, so a script must make up a good share
  * of the text, not just appear in it.
  */
-export function guessedLanguage(entries: ReadonlyArray<Pick<Entry, "source">>): SourceLanguage {
+export function detectedLanguage(texts: ReadonlyArray<Pick<Text, "source">>): SourceLanguage {
   let korean = 0;
   let japanese = 0;
   let all = 0;
-  for (const { source } of entries) {
+  for (const { source } of texts) {
     const syllables = count(source, hangul);
     const sounds = count(source, kana);
     korean += syllables;
@@ -26,11 +26,11 @@ export function guessedLanguage(entries: ReadonlyArray<Pick<Entry, "source">>): 
   return "chinese";
 }
 
-/** The language the user chose for the game's text, or else the one it looks like. */
+/** The language the player chose for the game's text, or else the one it looks like. */
 export const gameLanguage = (catalog: {
-  readonly language?: SourceLanguage;
-  readonly entries: ReadonlyArray<Pick<Entry, "source">>;
-}): SourceLanguage => catalog.language ?? guessedLanguage(catalog.entries);
+  readonly settings: Pick<GameSettings, "sourceLanguage">;
+  readonly texts: ReadonlyArray<Pick<Text, "source">>;
+}): SourceLanguage => catalog.settings.sourceLanguage ?? detectedLanguage(catalog.texts);
 
 export const languageNames: Record<SourceLanguage, string> = {
   chinese: "Chinese",

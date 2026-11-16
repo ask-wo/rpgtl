@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import type { Entry, Location } from "@rpgtl/contracts";
+import type { Location } from "@rpgtl/contracts";
 import * as Predicate from "effect/Predicate";
 import * as Result from "effect/Result";
 import {
@@ -8,6 +8,8 @@ import {
   extractPlugins,
   GameDataChanged,
   messageLayouts,
+  type EntryText,
+  type ReadEntry,
   translatedImageNames,
 } from "../../index.ts";
 import { extractFrom, readGameFile } from "../../testUtils/gameFiles.ts";
@@ -15,16 +17,25 @@ import { extractFrom, readGameFile } from "../../testUtils/gameFiles.ts";
 const changedFile = (result: Result.Result<unknown, GameDataChanged>) =>
   Result.isFailure(result) ? result.failure.file : undefined;
 
-const applied = (file: string, data: unknown, entries: ReadonlyArray<Entry>) =>
+const withUser = (entry: ReadEntry, userTranslation: string): EntryText => ({
+  ...entry,
+  textId: 0,
+  isInImage: false,
+  ...(userTranslation && { userTranslation }),
+});
+
+const applied = (file: string, data: unknown, entries: ReadonlyArray<EntryText>) =>
   Result.getOrThrow(applyTranslations(file, readGameFile(file, data), entries)).data;
 
 it("applying a translation checks that the data still holds the source", () => {
-  const entry: Entry = {
-    id: "a",
-    location: { _tag: "RecordField", table: "actors", record: 1, field: "name" },
-    source: "勇者",
-    translation: { user: "Hero" },
-  };
+  const entry = withUser(
+    {
+      id: "a",
+      location: { _tag: "RecordField", table: "actors", record: 1, field: "name" },
+      source: "勇者",
+    },
+    "Hero",
+  );
   const translated = applied("Actors.json", [null, { id: 1, name: "勇者" }], [entry]);
   assert.deepStrictEqual(translated, [null, { id: 1, name: "Hero" }]);
   assert.strictEqual(
@@ -44,20 +55,17 @@ it("a message's lines become one command holding the translation", () => {
   const [entry] = extractFrom("CommonEvents.json", data);
   assert.isDefined(entry);
   assert.strictEqual(entry.source, "第一行\n第二行");
-  assert.deepStrictEqual(
-    applied("CommonEvents.json", data, [{ ...entry, translation: { user: "One line" } }]),
-    [
-      null,
-      {
-        id: 1,
-        list: [
-          { code: 101, parameters: ["", 0, 0, 2] },
-          { code: 401, parameters: ["One line"] },
-          { code: 0, parameters: [] },
-        ],
-      },
-    ],
-  );
+  assert.deepStrictEqual(applied("CommonEvents.json", data, [withUser(entry, "One line")]), [
+    null,
+    {
+      id: 1,
+      list: [
+        { code: 101, parameters: ["", 0, 0, 2] },
+        { code: 401, parameters: ["One line"] },
+        { code: 0, parameters: [] },
+      ],
+    },
+  ]);
 });
 
 it("a message whose command is gone from a shortened list means the data changed", () => {
@@ -72,10 +80,9 @@ it("a message whose command is gone from a shortened list means the data changed
       ],
     },
   ];
-  const entries = extractFrom("CommonEvents.json", data).map((entry) => ({
-    ...entry,
-    translation: { user: "One line" },
-  }));
+  const entries = extractFrom("CommonEvents.json", data).map((entry) =>
+    withUser(entry, "One line"),
+  );
   const shortened = [null, { id: 1, list: [{ code: 0, parameters: [] }] }];
   assert.strictEqual(
     changedFile(
@@ -90,12 +97,14 @@ it("plugin settings are translated inside JSON text, and a changed setting means
     null,
     { name: "Menu", status: true, description: "菜单", parameters: { Items: '["物品","技能"]' } },
   ];
-  const entry: Entry = {
-    id: "a",
-    location: { _tag: "PluginSetting", plugin: "Menu", keys: ["Items", "1"] },
-    source: "技能",
-    translation: { user: "Skills" },
-  };
+  const entry = withUser(
+    {
+      id: "a",
+      location: { _tag: "PluginSetting", plugin: "Menu", keys: ["Items", "1"] },
+      source: "技能",
+    },
+    "Skills",
+  );
   assert.deepStrictEqual(Result.getOrThrow(applyPluginTranslations(plugins, [entry])), [
     null,
     { name: "Menu", status: true, description: "菜单", parameters: { Items: '["物品","Skills"]' } },
@@ -113,19 +122,15 @@ it("of two enabled plugins with the same name, the last one's settings are trans
   const entries = extractPlugins([menuPlugin("旧"), menuPlugin("新")], {
     nonText: () => new Set(),
     fileNames: new Set(),
-  }).map((entry) => ({ ...entry, translation: { user: "New" } }));
+  }).map((entry) => withUser(entry, "New"));
   assert.deepStrictEqual(
     Result.getOrThrow(applyPluginTranslations([menuPlugin("旧"), menuPlugin("新")], entries)),
     [menuPlugin("旧"), menuPlugin("New")],
   );
 });
 
-const systemEntry = (keys: string[], source: string, translation: string): Entry => ({
-  id: keys.join("."),
-  location: { _tag: "SystemText", keys },
-  source,
-  translation: translation ? { user: translation } : {},
-});
+const systemEntry = (keys: string[], source: string, translation: string) =>
+  withUser({ id: keys.join("."), location: { _tag: "SystemText", keys }, source }, translation);
 
 it("translated menu commands mark System.json for the title screen", () => {
   const title = systemEntry(["gameTitle"], "游戏", "Game");
@@ -139,12 +144,11 @@ it("translated menu commands mark System.json for the title screen", () => {
   );
 });
 
-const skillType = (source: string, translation: string): Entry => ({
-  id: translation,
-  location: { _tag: "SystemText", keys: ["skillTypes", "1"] },
-  source,
-  translation: translation ? { user: translation } : {},
-});
+const skillType = (source: string, translation: string) =>
+  withUser(
+    { id: translation, location: { _tag: "SystemText", keys: ["skillTypes", "1"] }, source },
+    translation,
+  );
 
 it("images named after translated text are loaded under their translated names", () => {
   // Com_Attack is already a file, and 麻痹 is only part of the Chinese in 雷电麻痹.
@@ -193,7 +197,7 @@ it("MZ plugin commands and variable text in scripts are applied", () => {
   const entries = extractFrom("CommonEvents.json", [null, { id: 1, list: original }], {
     nonText: (plugin) => (plugin === "Pic" ? new Set(["size"]) : new Set(["Icon"])),
     fileNames: new Set(),
-  }).map((entry) => ({ ...entry, translation: { user: words[entry.source] ?? "" } }));
+  }).map((entry) => withUser(entry, words[entry.source] ?? ""));
   const translated = applied("CommonEvents.json", [null, { id: 1, list: original }], entries);
   const parameters = [
     ["Pic", "show", "显示", { text: "HP", size: "红" }],
@@ -234,10 +238,9 @@ it("note tags with text are translated in place; other note tags are left alone"
     "\\C[4]Slot      \\C[0]Shoulder <L>\nguard",
     "An old turtle lives by the river.\nIt never speaks.",
   ];
-  const entries = extractFrom("Armors.json", [null, armor]).map((entry, i) => ({
-    ...entry,
-    translation: { user: translations[i] ?? "" },
-  }));
+  const entries = extractFrom("Armors.json", [null, armor]).map((entry, i) =>
+    withUser(entry, translations[i] ?? ""),
+  );
   assert.deepStrictEqual(applied("Armors.json", [null, armor], entries), [
     null,
     {
@@ -261,12 +264,7 @@ const layoutEntry = (
     list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
     index: 0,
   },
-): Entry => ({
-  id: source,
-  source,
-  translation: translation ? { user: translation } : {},
-  location,
-});
+): EntryText => withUser({ id: source, source, location }, translation);
 
 it("message layouts include only leading-blank, space-padded event messages", () => {
   const padded = "\n        The source text sits inside its picture\n        with a second line.";

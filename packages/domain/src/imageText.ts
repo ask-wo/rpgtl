@@ -16,9 +16,19 @@ import { sourceScript } from "./checks.ts";
 import { sourceText } from "./engines/mvmz/extract.ts";
 import { newEntry } from "./engines/mvmz/location.ts";
 import { isImageText } from "./location.ts";
-import { entryTranslation, isUserValue, withoutGuess } from "./guesses.ts";
+import { translationInUse } from "./inUse.ts";
+import {
+  type EntryText,
+  type ReadEntry,
+  entryTexts,
+  textsById,
+  withTexts,
+  withTextOf,
+} from "./catalog.ts";
 
-type ImageEntry = Entry & { readonly location: Extract<Location, { readonly _tag: "ImageLines" }> };
+type ImageEntry = ReadEntry & {
+  readonly location: Extract<Location, { readonly _tag: "ImageLines" }>;
+};
 
 function keptPrefix(text: string) {
   const index = text.search(sourceText);
@@ -221,30 +231,6 @@ export function imageEntries(results: ImageReadResults) {
   );
 }
 
-/** The text the entry's id was made from: for an image's text the user corrected, what was read. */
-export const idText = (entry: Pick<Entry, "source" | "readerText">) =>
-  entry.readerText ?? entry.source;
-
-/**
- * The image's entry with its text corrected to `text`, or back to what was read when it is that.
- * A run's English was made from the old text, so it is dropped and kept as `previous`, and a
- * rejected answer goes with it; English the user typed stays.
- */
-export function withImageText(entry: Entry, text: string): Entry {
-  if (text === entry.source) return entry;
-  const readerText = idText(entry);
-  const { readerText: _, suggestion: __, previous, ...rest } = entry;
-  const dropped = isUserValue(entry.translation) ? undefined : entryTranslation(entry) || undefined;
-  const kept = dropped ?? previous;
-  return {
-    ...rest,
-    source: text,
-    ...(text !== readerText && { readerText }),
-    translation: withoutGuess(entry.translation),
-    ...(kept !== undefined && { previous: kept }),
-  };
-}
-
 /** The text without spaces and punctuation, as lines are compared. */
 export const normalise = (text: string) => text.replace(/[\s\p{P}]/gu, "");
 
@@ -272,34 +258,56 @@ function overlap([ax0, ay0, ax1, ay1]: Box, [bx0, by0, bx1, by1]: Box) {
   return smaller > 0 ? shared / smaller : 0;
 }
 
+/** The text read in `results` at an image entry's place, as its id was made from. */
+export const readText = (
+  results: ImageReadResults | undefined,
+  entry: Pick<ImageEntry, "location">,
+) =>
+  results === undefined
+    ? undefined
+    : imageEntries({ ...results, images: pick(results.images, entry.location.image) }).find(
+        (read) => sameLines(read.location.lines, entry.location.lines),
+      )?.source;
+
+const pick = <V>(record: Readonly<Record<string, V>>, key: string): Record<string, V> => {
+  const value = record[key];
+  return value === undefined ? {} : { [key]: value };
+};
+
 /**
  * The catalog with its image text rebuilt from read results, keeping translations and choices.
  * When an image was read again, an entry's id changes with its lines or text. A new entry then
- * takes the translation and choices of a dropped entry of the same image: one with the same text,
- * or else the one whose lines overlap it most in `before`, the results the catalog's entries were
- * read from, flagged since its text changed. A text the user corrected keeps the correction while
- * the image reads as before.
+ * takes the choices of a dropped entry of the same image: one with the same text, or else the one
+ * whose lines overlap it most in `before`, the results the catalog's entries were read from. Its
+ * text keeps its own translation; one without takes the dropped entry's, flagged, since its text
+ * changed. A text the user corrected keeps the correction while the image reads as before.
  */
 export function withImageEntries(
   current: Catalog,
   results: ImageReadResults,
   before?: ImageReadResults,
 ): Catalog {
-  const saved = new Map(current.entries.map((entry) => [entry.id, entry]));
+  const texts = textsById(current);
+  const saved = new Map(
+    current.entries.flatMap((entry) => {
+      const text = texts.get(entry.textId);
+      return text ? [[entry.id, { ...text, ...entry }] as const] : [];
+    }),
+  );
   const entries = imageEntries(results);
   const ids = new Set(entries.map((entry) => entry.id));
   const dropped = new Set(
-    current.entries
+    [...saved.values()]
       .filter(isImageText)
       .filter(
         (entry) =>
           !ids.has(entry.id) &&
-          (entryTranslation(entry) !== "" || entry.keepOriginal !== undefined),
+          (translationInUse(entry) !== "" || entry.isLeftUntranslated !== undefined),
       ),
   );
-  const taken = new Map<ImageEntry, ImageEntry>();
-  const take = (entry: ImageEntry, match: (other: ImageEntry) => number) => {
-    let best: ImageEntry | undefined;
+  const taken = new Map<ImageEntry, ImageEntry & EntryText>();
+  const take = (entry: ImageEntry, match: (other: ImageEntry & EntryText) => number) => {
+    let best: (ImageEntry & EntryText) | undefined;
     let bestScore = 0;
     for (const other of dropped) {
       const score = other.location.image === entry.location.image ? match(other) : 0;
@@ -312,7 +320,10 @@ export function withImageEntries(
   const unmatched = entries.filter((entry) => !saved.has(entry.id));
   for (const entry of unmatched)
     take(entry, (other) =>
-      Number(sameText(idText(other), entry.source) || sameText(other.source, entry.source)),
+      Number(
+        sameText(readText(before, other) ?? other.source, entry.source) ||
+          sameText(other.source, entry.source),
+      ),
     );
   for (const entry of unmatched.filter((other) => !taken.has(other))) {
     const box = entryBox(results, entry);
@@ -322,40 +333,43 @@ export function withImageEntries(
       return share >= 0.5 ? share : 0;
     });
   }
+  let next: Catalog = current;
+  const rebuilt = entries.map((entry): Entry => {
+    const own = saved.get(entry.id);
+    if (own) return { id: entry.id, textId: own.textId, location: entry.location, ...kept(own) };
+    const taker = taken.get(entry);
+    const read = taker && readText(before, taker);
+    const correction = taker !== undefined && read !== undefined && sameText(read, entry.source);
+    if (taker && correction)
+      return { id: entry.id, textId: taker.textId, location: entry.location, ...kept(taker) };
+    const found = withTextOf(next, { source: entry.source, isInImage: true });
+    next = found.catalog;
+    const translation = taker && translationInUse(taker);
+    if (taker && translation && !sameText(taker.source, entry.source))
+      next = withTexts(next, (text) =>
+        text.id === found.id && !translationInUse(text)
+          ? {
+              ...text,
+              modelTranslation: translation,
+              flagReason: `The image was read again; its text was ${taker.source}.`,
+            }
+          : text,
+      );
+    return {
+      id: entry.id,
+      textId: found.id,
+      location: entry.location,
+      ...(taker && kept(taker)),
+    };
+  });
   return {
-    ...current,
-    entries: [
-      ...current.entries.filter((entry) => !isImageText(entry)),
-      ...entries.map((entry) => {
-        const own = saved.get(entry.id);
-        if (own) return { ...entry, ...own };
-        const taker = taken.get(entry);
-        if (!taker) return entry;
-        const { readerText, ...old } = taker;
-        const correction = readerText !== undefined && sameText(readerText, entry.source);
-        const translation = entryTranslation(old);
-        return {
-          ...old,
-          id: entry.id,
-          location: entry.location,
-          ...(correction
-            ? { source: old.source, readerText: entry.source }
-            : { source: entry.source }),
-          ...(!correction &&
-            !sameText(old.source, entry.source) &&
-            translation && {
-              translation: {
-                guess: {
-                  value: translation,
-                  flag: `The image was read again; its text was ${old.source}.`,
-                },
-              },
-            }),
-        };
-      }),
-    ],
+    ...next,
+    entries: [...current.entries.filter((entry) => !isImageText(entry)), ...rebuilt],
   };
 }
+
+const kept = ({ isLeftUntranslated }: Pick<Entry, "isLeftUntranslated">) =>
+  isLeftUntranslated === undefined ? {} : { isLeftUntranslated };
 
 const sameLines = (a: ReadonlyArray<number>, b: ReadonlyArray<number>) =>
   a.length === b.length && a.every((line, index) => line === b[index]);
@@ -474,27 +488,27 @@ export const imageFontOf = (engine: Engine, imageFont: LetteringFont | undefined
 /**
  * What the game needs to draw the English into images, by image path such as `img/pictures/Notice`.
  * Only blocks with a translation are included, and images without any are left out, as are images
- * and blocks kept original. `imageBold` overrides whether the original's lettering weight decides,
- * and `imageFont` replaces the game's font. `erasedUrl` makes the address of an erased image from
+ * and blocks left untranslated. `letteringWeight` overrides the original's lettering weight, and
+ * `letteringFont` replaces the game's font. `erasedUrl` makes the address of an erased image from
  * its file name.
  */
 export function imageTextHints(
   results: ImageReadResults,
-  catalog: Pick<Catalog, "entries" | "imageBold" | "imageFont" | "unchangedImages">,
+  catalog: Pick<Catalog, "entries" | "texts" | "settings">,
   erasedUrl: (file: string) => string,
 ): Record<string, ImageTextHint> {
-  const { imageBold: bold, imageFont: font, unchangedImages = [] } = catalog;
+  const { letteringWeight: weight, letteringFont: font, untranslatedImages } = catalog.settings;
   const translated = new Map<string, Array<{ lines: ReadonlyArray<number>; text: string }>>();
-  for (const entry of catalog.entries) {
-    if (!entryTranslation(entry) || entry.keepOriginal || !isImageText(entry)) continue;
+  for (const entry of entryTexts(catalog)) {
+    if (!translationInUse(entry) || entry.isLeftUntranslated || !isImageText(entry)) continue;
     const { image, lines } = entry.location;
     const blocks = translated.get(image) ?? [];
-    blocks.push({ lines, text: entryTranslation(entry) });
+    blocks.push({ lines, text: translationInUse(entry) });
     translated.set(image, blocks);
   }
   const hints: Record<string, ImageTextHint> = {};
   for (const [image, result] of Object.entries(results.images)) {
-    if (result.error || !result.erased || !result.blocks || unchangedImages.includes(image))
+    if (result.error || !result.erased || !result.blocks || untranslatedImages.includes(image))
       continue;
     const translations = translated.get(image) ?? [];
     const blocks = result.blocks.flatMap((block): Array<DrawBlock> => {
@@ -502,7 +516,7 @@ export function imageTextHints(
       const text = withoutIcons((translation?.text ?? "").replace(/\s*\n\s*/g, " ").trim());
       if (!text || block.fill === null) return [];
       const { lines: _lines, weight: _weight, fill, ...drawn } = block;
-      return [{ ...drawn, fill, text, bold: bold ? bold === "always" : block.bold }];
+      return [{ ...drawn, fill, text, bold: weight ? weight === "bold" : block.bold }];
     });
     if (blocks.length)
       hints[image] = { erased: erasedUrl(result.erased), blocks, ...(font && { font }) };

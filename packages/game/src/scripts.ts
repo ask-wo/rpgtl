@@ -4,7 +4,8 @@ export type ScriptFile = (typeof scriptFiles)[number];
 
 /** Where the NW.js hook reads the game's data and RPGTL's state for the game. */
 export interface HookConfig {
-  readonly catalog: string;
+  /** The game's database, which the hook only reads. */
+  readonly database: string;
   readonly data: string;
   readonly erased: string;
   readonly images: string;

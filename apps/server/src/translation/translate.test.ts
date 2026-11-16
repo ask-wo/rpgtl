@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
-import type { Catalog, Entry, RequestLine } from "@rpgtl/contracts";
-import { CatalogDraft, entryTranslation } from "@rpgtl/domain";
+import type { RequestLine } from "@rpgtl/contracts";
+import { CatalogDraft, translationInUse } from "@rpgtl/domain";
+import { testCatalog, type TestEntry } from "@rpgtl/domain/testUtils/catalog";
 import * as AiError from "effect/ai/AiError";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Effect from "effect/Effect";
@@ -9,7 +10,7 @@ import { textMessages } from "./prompt.ts";
 import { RunReport } from "./RunReport.ts";
 import { translateCatalog, type Pass } from "./translate.ts";
 
-const line = (id: string, index: number, source: string): Entry => ({
+const line = (id: string, index: number, source: string): TestEntry => ({
   id,
   location: {
     _tag: "Message",
@@ -17,7 +18,6 @@ const line = (id: string, index: number, source: string): Entry => ({
     index,
   },
   source,
-  translation: {},
 });
 
 const Request = Schema.fromJsonString(
@@ -74,15 +74,8 @@ const pass: Pass = {
 };
 
 /** Translates `entries`, `batchSize` per request, with the fake model; the draft and the run's request lines. */
-const translated = (entries: Catalog["entries"], batchSize = 40) => {
-  const catalog: Catalog = {
-    version: 1,
-    game: { id: "0123456789abcdef0123", title: "雨", engine: "MV" },
-    translate: true,
-    entries,
-    glossary: [],
-  };
-  const draft = new CatalogDraft(catalog, new Map(), "2026-11-13T00:00:00.000Z");
+const translated = (entries: ReadonlyArray<TestEntry>, batchSize = 40) => {
+  const draft = new CatalogDraft(testCatalog({ entries }), new Map());
   const requests: Array<Omit<RequestLine, "type" | "at">> = [];
   const run = translateCatalog(
     draft,
@@ -112,7 +105,7 @@ const translated = (entries: Catalog["entries"], batchSize = 40) => {
   return { draft, requests, run };
 };
 
-const item = (record: number, source: string): Entry => ({
+const item = (record: number, source: string): TestEntry => ({
   ...line(String(record), 0, source),
   location: { _tag: "RecordField", table: "items", record, field: "name" },
 });
@@ -161,7 +154,7 @@ it.effect(
       const { draft, requests, run } = translated([line("a", 0, "你好"), line("b", 1, "不译")]);
       yield* run;
       assert.deepStrictEqual(draft.failed, ["b"]);
-      assert.deepStrictEqual(draft.catalog.entries.map(entryTranslation), ["Hello", ""]);
+      assert.deepStrictEqual(draft.entries.map(translationInUse), ["Hello", ""]);
       assert.deepStrictEqual(
         requests.map((request) => [
           request.entryIds,
@@ -186,7 +179,7 @@ it.effect("the run stops once the safeguards have flagged three requests", () =>
     const error = yield* Effect.flip(run);
     assert.isTrue(AiError.isAiError(error) && error.reason._tag === "ContentPolicyError");
     assert.deepStrictEqual(draft.failed, ["0", "2", "3"]);
-    assert.deepStrictEqual(draft.catalog.entries.map(entryTranslation), ["", "Hello", "", "", ""]);
+    assert.deepStrictEqual(draft.entries.map(translationInUse), ["", "Hello", "", "", ""]);
     assert.lengthOf(requests, 4);
   }),
 );

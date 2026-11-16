@@ -2,17 +2,17 @@ import type {
   Catalog,
   CheckName,
   Engine,
-  Entry,
   Finding,
   Findings,
   GlossaryTerm,
   SourceLanguage,
 } from "@rpgtl/contracts";
+import { type EntryText, entryTexts } from "./catalog.ts";
 import { controlCodePattern, plainText, speakerTagPattern } from "./controlCodes.ts";
 import { keepsTags, withoutTags } from "./engines/xp/databaseTags.ts";
 import { isNameEntry, isSpeakerNameEntry } from "./nameEntries.ts";
 import { hasTerm } from "./termMatch.ts";
-import { entryTranslation, termTranslation, termKind } from "./guesses.ts";
+import { translationInUse, termKind } from "./inUse.ts";
 import { gameLanguage } from "./language.ts";
 import type { Placed } from "./location.ts";
 
@@ -179,14 +179,14 @@ const mentions = (text: string, english: string) =>
 /** The translated terms, longest first, and the names among them that the checks look for. */
 function checkedTerms(glossary: ReadonlyArray<GlossaryTerm>) {
   const terms = glossary
-    .filter((term) => term.source.trim() && termTranslation(term).trim())
+    .filter((term) => term.source.trim() && translationInUse(term).trim())
     .toSorted((a, b) => b.source.length - a.source.length);
   // A one-character term such as 月 is often part of an ordinary word.
   const names = terms.filter(
     (term) =>
       (termKind(term) === "character" || termKind(term) === "name") &&
       length(term.source.trim()) > 1 &&
-      !sourceScript.test(termTranslation(term)),
+      !sourceScript.test(translationInUse(term)),
   );
   return { terms, isName: new Set(names), nearTerms: termLookup(terms) };
 }
@@ -219,7 +219,7 @@ export function glossaryFindings(
     const codes = (term.source.match(/[!-~]+/g) ?? []).filter((run) => /[^A-Za-z0-9]/.test(run));
     const blanked = (text: string) =>
       codes.reduce((rest, code) => rest.replaceAll(code, " "), text);
-    const english = blanked(termTranslation(term));
+    const english = blanked(translationInUse(term));
     const missing = termsIn(
       term.source,
       nearTerms(term.source).filter((other) => other.source !== term.source),
@@ -228,12 +228,12 @@ export function glossaryFindings(
       // Only a character may go by a part of their name: "Karlo Lake" doesn't have
       // "Lake Carlo" for its word "Lake".
       .filter((inside) => {
-        const name = blanked(termTranslation(inside)).trim();
+        const name = blanked(translationInUse(inside)).trim();
         return termKind(inside) === "character"
           ? !mentions(english, name)
           : !mentionsWhole(english, name);
       })
-      .map((inside) => `${inside.source} → ${termTranslation(inside).trim()}`);
+      .map((inside) => `${inside.source} → ${translationInUse(inside).trim()}`);
     if (missing.length) found.set(term.source, missing);
   }
   return found;
@@ -245,7 +245,7 @@ export function translationChecks(
   engine: Engine,
 ) {
   const { isName, nearTerms } = checkedTerms(glossary);
-  return (entry: Pick<Entry, "source"> & Placed, written: string): Finding[] => {
+  return (entry: Pick<EntryText, "source"> & Placed, written: string): Finding[] => {
     if (!written) return [];
     const tags = keepsTags(engine, entry);
     const source = tags ? withoutTags(entry.source) : entry.source;
@@ -269,8 +269,8 @@ export function translationChecks(
     for (const term of termsIn(sourceText, nearTerms(sourceText)).filter((found) =>
       isName.has(found),
     ))
-      if (!mentions(text, termTranslation(term)))
-        add("glossary name missing", `${term.source} → ${termTranslation(term)}`);
+      if (!mentions(text, translationInUse(term)))
+        add("glossary name missing", `${term.source} → ${translationInUse(term)}`);
     // In Japanese, 他 means other (他の人).
     const pronoun = language === "chinese" ? pronounUnlike(sourceText, translation) : undefined;
     if (pronoun) add("pronoun unlike the source", pronoun);
@@ -280,12 +280,12 @@ export function translationChecks(
 
 /** The findings of every translated entry that has any, by entry id. */
 export function catalogFindings(
-  catalog: Pick<Catalog, "entries" | "glossary" | "language" | "game">,
+  catalog: Pick<Catalog, "entries" | "texts" | "glossary" | "settings" | "game">,
 ): Findings {
   const check = translationChecks(catalog.glossary, gameLanguage(catalog), catalog.game.engine);
   const found: Record<string, Finding[]> = {};
-  for (const entry of catalog.entries) {
-    const findings = check(entry, entryTranslation(entry));
+  for (const entry of entryTexts(catalog)) {
+    const findings = check(entry, translationInUse(entry));
     if (findings.length) found[entry.id] = findings;
   }
   return found;

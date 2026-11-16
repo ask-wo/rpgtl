@@ -1,13 +1,26 @@
-import type { Entry } from "@rpgtl/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Result from "effect/Result";
-import { applyXpTranslations, decodeXpFile, patchXpFile, xpGameEntries } from "../../index.ts";
+import {
+  applyXpTranslations,
+  decodeXpFile,
+  patchXpFile,
+  type ReadEntry,
+  xpGameEntries,
+} from "../../index.ts";
 import { command, xpFile, xpMap, xpScripts } from "../../testUtils/xpGame.ts";
 import { xpImageScript } from "./images.ts";
 import { textFittingScript } from "./textFitting.ts";
 
-const translated = (entries: ReadonlyArray<Entry>, english: Record<string, string>) =>
-  entries.map((entry) => ({ ...entry, translation: { user: english[entry.source] ?? "" } }));
+const translated = (entries: ReadonlyArray<ReadEntry>, english: Record<string, string>) =>
+  entries.map((entry, index) => {
+    const userTranslation = english[entry.source];
+    return {
+      ...entry,
+      textId: index + 1,
+      isInImage: false,
+      ...(userTranslation !== undefined && { userTranslation }),
+    };
+  });
 
 const entriesOf = (name: string, bytes: Uint8Array) =>
   xpGameEntries([Result.getOrThrow(decodeXpFile(name, bytes))]);
@@ -70,7 +83,7 @@ it("puts translations into an XP game's scripts, keeping their `#{}` code and th
   );
   const english = { "金币：#{@gold}": 'Gold "now": #{@gold}', 盾: "Shield's", 龙: "Dragon" };
   const entries = translated(entriesOf("Scripts.rxdata", scripts), english).map((entry) =>
-    entry.source === "龙" ? { ...entry, keepOriginal: true } : entry,
+    entry.source === "龙" ? { ...entry, isLeftUntranslated: true } : entry,
   );
   const result = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", scripts, entries));
   const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", result ?? new Uint8Array()));
@@ -158,7 +171,7 @@ it("puts the translation alone in place of a text that holds its source and the 
   );
   const entries = entriesOf("Map001.rxdata", map);
   assert.deepStrictEqual(
-    entries.map(({ source, gameEnglish }) => [source, gameEnglish]),
+    entries.map(({ source, builtinTranslation }) => [source, builtinTranslation]),
     [
       ["粉挽き", "Quernish"],
       ["薬湯|(+50)", undefined],

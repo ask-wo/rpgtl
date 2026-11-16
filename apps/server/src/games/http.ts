@@ -32,6 +32,8 @@ const readFailed = {
   StateFileError: stateFileFailed,
 } as const;
 const writeFailed = { ...readFailed, GameBusyError: busy } as const;
+const catalogReadFailed = { GameNotInspectedError: notInspected } as const;
+const catalogWriteFailed = { ...catalogReadFailed, GameBusyError: busy } as const;
 
 /** What reading a game folder fails with, as the page shows it. */
 const folderFailed = {
@@ -113,13 +115,13 @@ const CatalogsHandlers = HttpApiBuilder.group(
     const catalogs = yield* Catalogs.Catalogs;
     return handlers.handleAll({
       get: Effect.fn("catalogs.get")(function* ({ query }) {
-        return yield* catalogs.get(query.id).pipe(Effect.catchTags(readFailed));
+        return yield* catalogs.get(query.id).pipe(Effect.catchTags(catalogReadFailed));
       }),
       checks: Effect.fn("catalogs.checks")(function* ({ query }) {
-        return yield* catalogs.checks(query.id).pipe(Effect.catchTags(readFailed));
+        return yield* catalogs.checks(query.id).pipe(Effect.catchTags(catalogReadFailed));
       }),
       changes: Effect.fn("catalogs.changes")(function* ({ query }) {
-        return yield* catalogs.changes(query.id).pipe(Effect.catchTags(readFailed));
+        return yield* catalogs.changes(query.id).pipe(Effect.catchTags(catalogReadFailed));
       }),
       previewImport: Effect.fn("catalogs.previewImport")(function* ({ payload }) {
         return yield* Effect.fromResult(decodeTranslationFile(payload.catalog)).pipe(
@@ -149,17 +151,17 @@ const CatalogsHandlers = HttpApiBuilder.group(
       setTranslate: Effect.fn("catalogs.setTranslate")(function* ({ payload }) {
         return yield* catalogs
           .setTranslate(payload.id, payload.on)
-          .pipe(Effect.catchTags(writeFailed));
+          .pipe(Effect.catchTags(catalogWriteFailed));
       }),
-      setOriginalScripts: Effect.fn("catalogs.setOriginalScripts")(function* ({ payload }) {
+      setScriptTranslation: Effect.fn("catalogs.setScriptTranslation")(function* ({ payload }) {
         return yield* catalogs
-          .setOriginalScripts(payload.id, payload.on)
-          .pipe(Effect.catchTags(writeFailed));
+          .setScriptTranslation(payload.id, payload.on)
+          .pipe(Effect.catchTags(catalogWriteFailed));
       }),
       setLanguage: Effect.fn("catalogs.setLanguage")(function* ({ payload }) {
         return yield* catalogs
           .setLanguage(payload.id, payload.language)
-          .pipe(Effect.catchTags(writeFailed));
+          .pipe(Effect.catchTags(catalogWriteFailed));
       }),
       setGlossary: Effect.fn("catalogs.setGlossary")(function* ({ payload }) {
         return yield* catalogs.setGlossary(payload.id, payload.glossary).pipe(
@@ -167,7 +169,6 @@ const CatalogsHandlers = HttpApiBuilder.group(
             GameNotInspectedError: notInspected,
             GameBusyError: busy,
             GlossaryTermRepeated: (error) => Effect.fail(GlossaryRejected.repeated(error.source)),
-            StateFileError: stateFileFailed,
           }),
         );
       }),
@@ -178,33 +179,34 @@ const CatalogsHandlers = HttpApiBuilder.group(
             GameBusyError: busy,
             EntryEditInvalid: (error) =>
               Effect.fail(EntryRejected.because(error.id, error.problem)),
-            StateFileError: stateFileFailed,
           }),
         );
       }),
       setImageOptions: Effect.fn("catalogs.setImageOptions")(function* ({ payload }) {
         const { id, ...options } = payload;
-        return yield* catalogs.setImageOptions(id, options).pipe(Effect.catchTags(writeFailed));
+        return yield* catalogs
+          .setImageOptions(id, options)
+          .pipe(Effect.catchTags(catalogWriteFailed));
       }),
       clearTermLines: Effect.fn("catalogs.clearTermLines")(function* ({ payload }) {
         const cleared = yield* catalogs
           .clearTermLines(payload.id, payload.sources, payload.mismatchesOnly)
-          .pipe(Effect.catchTags(writeFailed));
+          .pipe(Effect.catchTags(catalogWriteFailed));
         return { cleared };
       }),
-      clearTermGuesses: Effect.fn("catalogs.clearTermGuesses")(function* ({ payload }) {
+      clearTermTranslations: Effect.fn("catalogs.clearTermTranslations")(function* ({ payload }) {
         return yield* catalogs
-          .clearTermGuesses(payload.id, payload.sources)
-          .pipe(Effect.catchTags(writeFailed));
+          .clearTermTranslations(payload.id, payload.sources)
+          .pipe(Effect.catchTags(catalogWriteFailed));
       }),
-      clearEntries: Effect.fn("catalogs.clearEntries")(function* ({ payload }) {
+      clearTranslations: Effect.fn("catalogs.clearTranslations")(function* ({ payload }) {
         const cleared = yield* catalogs
-          .clearEntries(payload.id, payload.ids)
-          .pipe(Effect.catchTags(writeFailed));
+          .clearTranslations(payload.id, payload.ids)
+          .pipe(Effect.catchTags(catalogWriteFailed));
         return { cleared };
       }),
       restore: Effect.fn("catalogs.restore")(function* ({ payload }) {
-        return yield* catalogs.restore(payload.id).pipe(Effect.catchTags(writeFailed));
+        return yield* catalogs.restore(payload.id).pipe(Effect.catchTags(catalogWriteFailed));
       }),
     });
   }),

@@ -2,7 +2,7 @@ import { gameFiles, runEnded } from "@rpgtl/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import type { ImageRunStatus, Settings as SavedSettings } from "@rpgtl/contracts";
-import { entryTranslation, isImageText, linesPrompt } from "@rpgtl/domain";
+import { entryTexts, translationInUse, isImageText, linesPrompt } from "@rpgtl/domain";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -32,7 +32,7 @@ import {
   type ReadRequest,
   testImage,
 } from "../testUtils/imageReader.ts";
-import { opened, readerNeeds, servicesWith, StateDir } from "../testUtils/state.ts";
+import { opened, readerNeeds, servicesWith, StateDir, typed } from "../testUtils/state.ts";
 import * as ImageReading from "./ImageReading.ts";
 import * as VisionModel from "./VisionModel.ts";
 
@@ -172,9 +172,9 @@ const statusWhen = Effect.fnUntraced(function* (
 
 const imageEntries = Effect.fnUntraced(function* (id: string) {
   const catalogs = yield* Catalogs.Catalogs;
-  return (yield* catalogs.get(id)).entries
-    .filter(isImageText)
-    .map((entry) => `${entry.location.image} ${entry.source}`);
+  return entryTexts(yield* catalogs.get(id)).flatMap((entry) =>
+    isImageText(entry) ? [`${entry.location.image} ${entry.source}`] : [],
+  );
 });
 
 const size = { width: 1120, height: 630 };
@@ -184,6 +184,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const reading = yield* ImageReading.ImageReading;
+      const catalogs = yield* Catalogs.Catalogs;
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const id = yield* gameWith({
@@ -274,7 +275,9 @@ it.effect(
       assert.deepStrictEqual(yield* asked, ["stop"]);
       assert.deepStrictEqual((yield* reading.results(id)).runs, runs);
 
-      // Clearing forgets every read, so the next run reads them all again.
+      // Clearing forgets every read and the English of its lines, so the next run reads them all
+      // again and the lines come back untranslated, with the English as their previous one.
+      yield* typed(id, (entry) => (entry.source === "开始游戏" ? "Start" : undefined));
       const cleared = yield* reading.clear(id);
       assert.isFalse(cleared.entries.some(isImageText));
       assert.deepStrictEqual(yield* reading.results(id), { version: 1, images: {} });
@@ -284,6 +287,11 @@ it.effect(
       assert.deepStrictEqual(afterClear, Option.some(Option.none()));
       yield* reading.start(id);
       assert.include(yield* statusWhen(id), { total: 4, entries: 3 });
+      const reread = entryTexts(yield* catalogs.get(id)).find(
+        (entry) => entry.isInImage && entry.source === "开始游戏",
+      );
+      assert.strictEqual(reread && translationInUse(reread), "");
+      assert.strictEqual(reread?.previousTranslation, "Start");
     }).pipe(Effect.provide(services)),
 );
 
@@ -291,58 +299,46 @@ it.effect(
 const noticeReads = (lines: ReadonlyArray<ReturnType<typeof line>>) =>
   readsAs(({ image }) => ({ ...size, lines: image === "Notice" ? lines : [] }));
 
-it.effect(
-  "reading an image again keeps its translations, after a backup, and keeps its result when it fails",
-  () =>
-    Effect.gen(function* () {
-      const reading = yield* ImageReading.ImageReading;
-      const catalogs = yield* Catalogs.Catalogs;
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const id = yield* gameWith({ "pictures/Notice.png": testImage("Notice") });
-      yield* noticeReads([line("开始游戏"), line("退出", [100, 300, 200, 330])]);
-      yield* reading.start(id);
-      yield* statusWhen(id);
-      const read = yield* catalogs.get(id);
-      yield* catalogs.write({
-        ...read,
-        entries: read.entries.map((entry) =>
-          entry.source === "开始游戏" ? { ...entry, translation: { user: "Start" } } : entry,
-        ),
-      });
-      const translations = Effect.map(catalogs.get(id), (catalog) =>
-        catalog.entries.flatMap((entry) =>
-          isImageText(entry) ? [[entry.source, entryTranslation(entry)]] : [],
-        ),
-      );
+it.effect("reading an image again keeps its translations, and keeps its result when it fails", () =>
+  Effect.gen(function* () {
+    const reading = yield* ImageReading.ImageReading;
+    const catalogs = yield* Catalogs.Catalogs;
+    const id = yield* gameWith({ "pictures/Notice.png": testImage("Notice") });
+    yield* noticeReads([line("开始游戏"), line("退出", [100, 300, 200, 330])]);
+    yield* reading.start(id);
+    yield* statusWhen(id);
+    yield* typed(id, (entry) => (entry.source === "开始游戏" ? "Start" : undefined));
+    const translations = Effect.map(catalogs.get(id), (catalog) =>
+      entryTexts(catalog).flatMap((entry) =>
+        entry.isInImage ? [[entry.source, translationInUse(entry)]] : [],
+      ),
+    );
 
-      // Read again, the line is read differently and gets a new entry with its translation.
-      yield* noticeReads([line("开始游戏吧"), line("退出", [100, 300, 200, 330])]);
-      yield* reading.start(id, ["img/pictures/Notice"]);
-      assert.include(yield* statusWhen(id), { total: 1, done: 1 });
-      assert.deepStrictEqual(yield* translations, [
-        ["开始游戏吧", "Start"],
-        ["退出", ""],
-      ]);
-      const backups = path.join(yield* StateDir, path.dirname(gameFiles(id).catalog), "backups");
-      assert.isNotEmpty(yield* fs.readDirectory(backups));
+    // Read again, the line is read differently and gets a new entry with its translation.
+    yield* noticeReads([line("开始游戏吧"), line("退出", [100, 300, 200, 330])]);
+    yield* reading.start(id, ["img/pictures/Notice"]);
+    assert.include(yield* statusWhen(id), { total: 1, done: 1 });
+    assert.deepStrictEqual(yield* translations, [
+      ["开始游戏吧", "Start"],
+      ["退出", ""],
+    ]);
 
-      // A read again that fails keeps the image's last result and its entries. A score that isn't
-      // a number is an answer the reader's schema refuses.
-      yield* noticeReads([{ ...line("开始游戏吧"), score: Number.NaN }]);
-      yield* reading.start(id, "all");
-      const failed = yield* statusWhen(id);
-      assert.include(failed, { total: 2 });
-      assert.deepStrictEqual(failed.failed, ["img/pictures/Notice"]);
-      assert.match(
-        failed.warnings[0] ?? "",
-        /^img\/pictures\/Notice: .* It keeps what was read before\.$/,
-      );
-      assert.deepStrictEqual(yield* translations, [
-        ["开始游戏吧", "Start"],
-        ["退出", ""],
-      ]);
-    }).pipe(Effect.provide(services)),
+    // A read again that fails keeps the image's last result and its entries. A score that isn't
+    // a number is an answer the reader's schema refuses.
+    yield* noticeReads([{ ...line("开始游戏吧"), score: Number.NaN }]);
+    yield* reading.start(id, "all");
+    const failed = yield* statusWhen(id);
+    assert.include(failed, { total: 2 });
+    assert.deepStrictEqual(failed.failed, ["img/pictures/Notice"]);
+    assert.match(
+      failed.warnings[0] ?? "",
+      /^img\/pictures\/Notice: .* It keeps what was read before\.$/,
+    );
+    assert.deepStrictEqual(yield* translations, [
+      ["开始游戏吧", "Start"],
+      ["退出", ""],
+    ]);
+  }).pipe(Effect.provide(services)),
 );
 
 it.effect("a run with no new images doesn't start the reader", () =>
@@ -549,18 +545,11 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const reading = yield* ImageReading.ImageReading;
-      const catalogs = yield* Catalogs.Catalogs;
       const games = yield* Games.Games;
       const first = yield* gameWith({}, {});
-      const catalog = yield* catalogs.get(first);
-      yield* catalogs.save({
-        ...catalog,
-        entries: catalog.entries.map((entry) =>
-          entry.location._tag === "SystemText" && entry.location.keys[0] === "gameTitle"
-            ? { ...entry, translation: { user: "Rain" } }
-            : entry,
-        ),
-      });
+      yield* typed(first, ({ location }) =>
+        location._tag === "SystemText" && location.keys[0] === "gameTitle" ? "Rain" : undefined,
+      );
       const second = yield* gameWith({});
       const third = yield* gameWith({});
 

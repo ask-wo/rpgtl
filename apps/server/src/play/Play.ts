@@ -1,4 +1,5 @@
 import {
+  entryTexts,
   applyPluginTranslations,
   applyTranslations,
   decodeGameFile,
@@ -105,12 +106,13 @@ const make = Effect.gen(function* () {
   ) {
     const name = path.basename(relative);
     const data = yield* Effect.fromResult(decodeGameFile(name, raw));
-    if (!catalog.translate) return data.data;
-    const translated = yield* Effect.fromResult(applyTranslations(name, data, catalog.entries));
+    if (!catalog.settings.isTranslationOn) return data.data;
+    const entries = entryTexts(catalog);
+    const translated = yield* Effect.fromResult(applyTranslations(name, data, entries));
     if (translated._tag !== "System") return translated.data;
     const game = yield* games.get(id);
     const withImages = withSystemImages(translated, {
-      images: translatedImageNames(yield* gameFolder.images(game), catalog.entries),
+      images: translatedImageNames(yield* gameFolder.images(game), entries),
       imageText: imageTextHints(
         yield* imageTexts.results(id),
         catalog,
@@ -120,9 +122,11 @@ const make = Effect.gen(function* () {
     return withImages.data;
   });
 
-  const translatedPlugins = Effect.fnUntraced(function* ({ entries }: Catalog, raw: string) {
+  const translatedPlugins = Effect.fnUntraced(function* (catalog: Catalog, raw: string) {
     const plugins = yield* Effect.fromResult(decodePlugins(raw));
-    return encodePlugins(yield* Effect.fromResult(applyPluginTranslations(plugins, entries)));
+    return encodePlugins(
+      yield* Effect.fromResult(applyPluginTranslations(plugins, entryTexts(catalog))),
+    );
   });
 
   const file = Effect.fn("Play.file")(function* (id: string, relative: string) {
@@ -139,7 +143,7 @@ const make = Effect.gen(function* () {
     const isData = dataFile.test(below);
     if (!isData && below !== "js/plugins.js") return PlayFile.Stored({ path: found });
     const catalog = yield* catalogs.get(id);
-    const on = catalog.translate;
+    const on = catalog.settings.isTranslationOn;
     if (isData && (on || path.basename(below) === "System.json")) {
       const raw = text(yield* gameFolder.readFile(game, below));
       return PlayFile.Made({

@@ -1,4 +1,5 @@
-import type { Catalog, Entry, SampleGroup, Samples } from "@rpgtl/contracts";
+import type { Catalog, SampleGroup, Samples } from "@rpgtl/contracts";
+import { type EntryText, entryTexts } from "./catalog.ts";
 import * as Option from "effect/Option";
 import { CatalogDraft } from "./catalogDraft.ts";
 import { speakerTagPattern } from "./controlCodes.ts";
@@ -8,7 +9,7 @@ const dialogueScenes = 6;
 const sceneLines = 10;
 
 /** The event list an entry's command is in, when it is in one. */
-const eventListOf = ({ location }: Entry) =>
+const eventListOf = ({ location }: EntryText) =>
   location._tag === "Message" || location._tag === "CommandText" || location._tag === "ScriptText"
     ? Option.some(location.list)
     : Option.none();
@@ -19,8 +20,8 @@ const describeList = EventListRef.match({
   MapEventPage: ({ map, event, page }) => `map ${map} event ${event} page ${page + 1}`,
 });
 
-const hasSpeakerTag = (entry: Entry) => entry.source.search(speakerTagPattern) >= 0;
-const hasControlCode = (entry: Entry) =>
+const hasSpeakerTag = (entry: EntryText) => entry.source.search(speakerTagPattern) >= 0;
+const hasControlCode = (entry: EntryText) =>
   /\\(?:N|V|C|I)\[/i.test(entry.source) || /\\!(?!\s*$)/.test(entry.source);
 
 /**
@@ -28,9 +29,10 @@ const hasControlCode = (entry: Entry) =>
  * descriptions, and lines with control codes. A scene whose text is already in the sample, as
  * where an event repeats another, is skipped.
  */
-export function pickSamples(catalog: Pick<Catalog, "game" | "entries">): Samples {
-  const lists = new Map<string, { label: string; entries: Array<Entry> }>();
-  for (const entry of catalog.entries) {
+export function pickSamples(catalog: Pick<Catalog, "game" | "entries" | "texts">): Samples {
+  const all = entryTexts(catalog);
+  const lists = new Map<string, { label: string; entries: Array<EntryText> }>();
+  for (const entry of all) {
     const list = eventListOf(entry);
     if (Option.isNone(list)) continue;
     const key = JSON.stringify(list.value);
@@ -42,7 +44,7 @@ export function pickSamples(catalog: Pick<Catalog, "game" | "entries">): Samples
   const groups: Array<SampleGroup> = [];
   const used = new Set<string>();
   const sources = new Set<string>();
-  const add = (label: string, entries: ReadonlyArray<Entry>) => {
+  const add = (label: string, entries: ReadonlyArray<EntryText>) => {
     const fresh = entries.filter((entry) => !used.has(entry.id));
     for (const entry of fresh) {
       used.add(entry.id);
@@ -66,14 +68,14 @@ export function pickSamples(catalog: Pick<Catalog, "game" | "entries">): Samples
 
   add(
     "Menu terms",
-    catalog.entries
+    all
       .filter(({ location }) => location._tag === "SystemText" && location.keys[0] === "terms")
       .slice(0, 20),
   );
   add(
     "Descriptions",
     (["items", "skills", "weapons", "armors"] as const).flatMap((table) =>
-      catalog.entries
+      all
         .filter(
           ({ location }) =>
             location._tag === "RecordField" &&
@@ -85,7 +87,7 @@ export function pickSamples(catalog: Pick<Catalog, "game" | "entries">): Samples
   );
   add(
     "Control codes",
-    catalog.entries.filter((entry) => !used.has(entry.id) && hasControlCode(entry)).slice(0, 15),
+    all.filter((entry) => !used.has(entry.id) && hasControlCode(entry)).slice(0, 15),
   );
   return { gameId: catalog.game.id, groups };
 }
@@ -98,19 +100,30 @@ export function sampleCatalog(catalog: Catalog, samples: Samples): Catalog {
   const whole = new CatalogDraft(catalog, new Map());
   whole.pronounsFromClues();
   const ids = new Set(samples.groups.flatMap((group) => group.ids));
+  const entries = catalog.entries.filter((entry) => ids.has(entry.id));
+  const fixed = new Map<number, string>();
+  for (const entry of entries) {
+    const translation = samples.fixed?.[entry.id];
+    if (translation !== undefined) fixed.set(entry.textId, translation);
+  }
+  const used = new Set(entries.map((entry) => entry.textId));
   return {
     ...catalog,
-    language: whole.language,
-    glossary: whole.catalog.glossary,
-    entries: catalog.entries
-      .filter((entry) => ids.has(entry.id))
-      .map(({ id, location, source, speaker, keepOriginal }) => ({
-        id,
-        location,
-        source,
-        translation: samples.fixed?.[id] ? { user: samples.fixed[id] } : {},
-        ...(speaker !== undefined && { speaker }),
-        ...(keepOriginal !== undefined && { keepOriginal }),
-      })),
+    settings: { ...catalog.settings, sourceLanguage: whole.language },
+    glossary: whole.glossary.filter((term) => term.id >= 0),
+    entries,
+    texts: catalog.texts.flatMap(({ id, source, speaker, isInImage }) => {
+      if (!used.has(id)) return [];
+      const userTranslation = fixed.get(id);
+      return [
+        {
+          id,
+          source,
+          isInImage,
+          ...(speaker !== undefined && { speaker }),
+          ...(userTranslation !== undefined && { userTranslation }),
+        },
+      ];
+    }),
   };
 }

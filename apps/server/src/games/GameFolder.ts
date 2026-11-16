@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import type { Entry, Game, Plugins } from "@rpgtl/contracts";
+import type { Game, Plugins } from "@rpgtl/contracts";
 import {
   type ArchiveEntry,
+  type ReadEntry,
   archiveEntries,
   bootEngines,
   decodeXpFile,
@@ -140,7 +141,7 @@ export class GameFolder extends Context.Service<
     readonly entries: (
       game: FolderGame,
     ) => Effect.Effect<
-      ReadonlyArray<Entry>,
+      ReadonlyArray<ReadEntry>,
       GameFileMissingError | GameFileReadError | GameFileInvalid
     >;
     /**

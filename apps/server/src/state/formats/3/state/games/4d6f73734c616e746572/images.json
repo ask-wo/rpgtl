@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "images": {
+    "img/pictures/Sign": {
+      "file": "img/pictures/Sign.png",
+      "sha256": "a1b2c3d4",
+      "width": 320,
+      "height": 96,
+      "lines": [
+        {
+          "text": "苔丁",
+          "score": 0.93,
+          "contrast": 180,
+          "polygon": [
+            [10, 10],
+            [110, 10],
+            [110, 50],
+            [10, 50]
+          ],
+          "box": [10, 10, 110, 50],
+          "reader": "paddle",
+          "enlarged": true
+        },
+        {
+          "text": "小镇",
+          "polygon": [
+            [120, 12],
+            [200, 12],
+            [200, 48],
+            [120, 48]
+          ],
+          "box": [120, 12, 200, 48],
+          "reader": "qwen",
+          "rough": true
+        }
+      ],
+      "fallback": "made-up-vision",
+      "erased": "9f8e7d6c.png",
+      "blocks": [
+        {
+          "lines": [0, 1],
+          "grow": 2,
+          "polygons": [
+            [
+              [10, 10],
+              [110, 10],
+              [110, 50],
+              [10, 50]
+            ]
+          ],
+          "angle": 90,
+          "area": [10, 10, 200, 50],
+          "lineHeight": 40,
+          "space": [5, 5, 210, 55],
+          "fill": "#ffeecc",
+          "outline": null,
+          "stroke": 0,
+          "weight": 700,
+          "bold": true,
+          "align": "centre",
+          "group": 0
+        }
+      ],
+      "contrastVersion": 2,
+      "includeFaint": false,
+      "readVersion": 4,
+      "preparedVersion": 2,
+      "run": "2026-11-01T08:00:00.000Z"
+    },
+    "img/pictures/Broken": {
+      "file": "img/pictures/Broken.png",
+      "sha256": "00ff00ff",
+      "width": 1,
+      "height": 1,
+      "lines": [],
+      "error": "The image could not be decoded."
+    }
+  },
+  "runs": {
+    "2026-11-01T08:00:00.000Z": {
+      "detection": "made-up-det",
+      "recognition": "made-up-rec",
+      "inpainting": "made-up-inpaint",
+      "backupReader": "made-up-vision",
+      "includeFaint": false
+    }
+  }
+}

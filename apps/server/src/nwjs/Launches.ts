@@ -1,17 +1,12 @@
 import { createHash } from "node:crypto";
-import {
-  type Entry,
-  type Game,
-  gameFiles,
-  type GameLaunch,
-  type ProgramStatus,
-} from "@rpgtl/contracts";
+import { type Game, gameFiles, type GameLaunch, type ProgramStatus } from "@rpgtl/contracts";
 import { hookScript, type HookConfig } from "@rpgtl/game/scripts";
 import {
+  type EntryText,
   patchXpFile,
   type RubyScript,
   scriptsFile,
-  entryTranslation,
+  translationInUse,
   translatedByXpFile,
   xpImageFolder,
   xpImageTable,
@@ -251,7 +246,7 @@ const make = Effect.gen(function* () {
 
   const hook = Effect.fnUntraced(function* (game: Game, log: string) {
     const config: HookConfig = {
-      catalog: path.join(state.root, gameFiles(game.id).catalog),
+      database: path.join(state.root, gameFiles(game.id).database),
       data: path.join(game.webRoot, "data"),
       erased: path.join(state.root, gameFiles(game.id).erasedImages),
       images: path.join(state.root, gameFiles(game.id).imageResults),
@@ -288,13 +283,13 @@ const make = Effect.gen(function* () {
   const fingerprint = (
     name: string,
     bytes: Uint8Array,
-    entries: ReadonlyArray<Entry> | undefined,
+    entries: ReadonlyArray<EntryText> | undefined,
     fixes: ReadonlyArray<RubyScript>,
     unpacked: boolean,
   ) => {
     const hash = createHash("sha256").update(writer).update(name).update(bytes);
     for (const entry of entries ?? [])
-      hash.update(JSON.stringify([entry.id, entryTranslation(entry)]));
+      hash.update(JSON.stringify([entry.id, translationInUse(entry)]));
     for (const fix of fixes) hash.update(JSON.stringify([fix.name, fix.code]));
     if (entries) hash.update("translated");
     if (unpacked) hash.update("unpacked");
@@ -348,7 +343,7 @@ const make = Effect.gen(function* () {
     // A launch that fails partway may leave files the old list doesn't describe.
     yield* fs.remove(writtenFile, { force: true });
     const catalog = yield* catalogs.get(game.id);
-    const translated = catalog.translate ? translatedByXpFile(catalog) : new Map();
+    const translated = catalog.settings.isTranslationOn ? translatedByXpFile(catalog) : new Map();
     const fixes = yield* xpFixes.active(catalog);
     const files = yield* gameFolder.xpData(game);
     // After Unpack, the game's loose data files may be a patch's English, which mkxp-z would read
@@ -380,7 +375,11 @@ const make = Effect.gen(function* () {
     }
     for (const name of Object.keys(written))
       if (!files.has(name)) yield* fs.remove(path.join(data, name), { force: true });
-    yield* writeImages(game, patches, catalog.translate && !catalog.originalScripts);
+    yield* writeImages(
+      game,
+      patches,
+      catalog.settings.isTranslationOn && catalog.settings.isScriptTranslationOn,
+    );
     yield* fs.writeFileString(writtenFile, JSON.stringify(prints));
     const config = mkxpConfig(path.dirname(program), game.root, patches);
     yield* fs.writeFileString(path.join(dir, "mkxp.json"), JSON.stringify(config, null, 2));

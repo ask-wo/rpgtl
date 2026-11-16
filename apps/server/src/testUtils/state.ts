@@ -2,15 +2,20 @@ import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcess
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { Catalog, Game, OtherVersion } from "@rpgtl/contracts";
+import { type EntryText, entryTexts } from "@rpgtl/domain";
+import { testCatalog, type TestCatalogParts } from "@rpgtl/domain/testUtils/catalog";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Reactivity from "effect/reactivity/Reactivity";
 import * as Path from "effect/Path";
 import * as Catalogs from "../games/Catalogs.ts";
+import { writeChanged, writeOperation } from "../games/catalogRows.ts";
 import * as GameFolder from "../games/GameFolder.ts";
 import * as Games from "../games/Games.ts";
+import * as GameDatabases from "../games/GameDatabases.ts";
 import * as ImageReader from "../imageText/ImageReader.ts";
 import * as ImageReaderSetup from "../imageText/ImageReaderSetup.ts";
 import * as ImageReading from "../imageText/ImageReading.ts";
@@ -90,11 +95,52 @@ export const opened = <E, R>(
       Effect.die(new Error(`Asked about another version of ${result.otherVersion.game.title}`)),
   );
 
+/**
+ * Writes a catalog made by `testCatalog` from `parts` as the listed game's, as reading the game
+ * and editing it would, and gives it as `Catalogs` reads it back.
+ */
+export const storedCatalog = Effect.fnUntraced(function* (
+  listed: Game,
+  parts: TestCatalogParts = {},
+) {
+  const databases = yield* GameDatabases.GameDatabases;
+  const made = testCatalog({ engine: listed.engine, ...parts });
+  const empty = testCatalog({ engine: listed.engine });
+  // New rows have ids below 0. SQLite numbers them from 1 in this order, as `testCatalog` does.
+  const unsaved = {
+    ...made,
+    texts: made.texts.map((text) => ({ ...text, id: -text.id })),
+    entries: made.entries.map((entry) => ({ ...entry, textId: -entry.textId })),
+    glossary: made.glossary.map((term) => ({ ...term, id: -term.id })),
+  };
+  yield* databases
+    .use(
+      listed.id,
+      writeOperation("inspection", (operationId) => writeChanged(empty, unsaved, operationId)),
+    )
+    .pipe(Effect.orDie);
+  return yield* (yield* Catalogs.Catalogs).get(listed.id);
+});
+
+/** Saves the English `english` gives each of the game's entries as typed by the user. */
+export const typed = Effect.fnUntraced(function* (
+  id: string,
+  english: (entry: EntryText) => string | undefined,
+) {
+  const catalogs = yield* Catalogs.Catalogs;
+  const edits = entryTexts(yield* catalogs.get(id)).flatMap((entry) => {
+    const userTranslation = english(entry);
+    return userTranslation === undefined ? [] : [{ id: entry.id, userTranslation }];
+  });
+  yield* catalogs.setEntries(id, edits);
+});
+
 /** The state services over a new state folder holding `files`. */
 export const servicesWith = (files: Record<string, string>) =>
   Catalogs.layer.pipe(
     Layer.provideMerge(Layer.mergeAll(Games.layer, GameFolder.layer, ImageTexts.layer)),
-    Layer.provideMerge(StateFolder.layer),
+    Layer.provideMerge(GameDatabases.layer),
+    Layer.provideMerge(Layer.mergeAll(StateFolder.layer, Reactivity.layer)),
     Layer.provideMerge(stateFolderWith(files)),
   );
 

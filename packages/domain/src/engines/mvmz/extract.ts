@@ -1,5 +1,4 @@
 import type {
-  Entry,
   EventCommand,
   EventList,
   EventListRef,
@@ -9,6 +8,7 @@ import type {
   Plugins,
   Table,
 } from "@rpgtl/contracts";
+import type { ReadEntry } from "../../catalog.ts";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
@@ -351,14 +351,14 @@ function fileText(file: GameFile, plugins: PluginText): ReadonlyArray<Found> {
  * Extracts the player-visible text of a data file such as `Map001.json`. `plugins` tells which
  * MZ plugin command arguments are text.
  */
-export const extract = (data: GameFile, plugins: PluginText = noPluginText): Entry[] =>
+export const extract = (data: GameFile, plugins: PluginText = noPluginText): ReadEntry[] =>
   fileText(data, plugins).map(({ location, text, speaker }) => ({
     ...newEntry(location, text),
     ...(speaker !== undefined && { speaker }),
   }));
 
 /** Text in the settings of enabled plugins, including lists and structs. */
-export const extractPlugins = (plugins: Plugins, { nonText, fileNames }: PluginText): Entry[] =>
+export const extractPlugins = (plugins: Plugins, { nonText, fileNames }: PluginText): ReadEntry[] =>
   [...pluginParameters(plugins)].flatMap(([plugin, parameters]) =>
     pluginText(parameters, [], nonText(plugin), fileNames).map(({ keys, text }) =>
       newEntry({ _tag: "PluginSetting", plugin, keys }, text),
@@ -376,7 +376,7 @@ export interface GameText {
 }
 
 /** A game's catalog entries: its data files' text in the order given, then its plugins'. */
-export function gameEntries({ plugins, pluginCode, assets, dataFiles }: GameText): Entry[] {
+export function gameEntries({ plugins, pluginCode, assets, dataFiles }: GameText): ReadEntry[] {
   const nonText = new Map(
     plugins.flatMap((plugin) =>
       plugin ? [[plugin.name, nonTextParameters(pluginCode.get(plugin.name) ?? "")] as const] : [],
@@ -416,7 +416,7 @@ export function nonTextParameters(code: string) {
  * A credits plugin's line such as "画师:青木流水" or "制作人 星澜Uno": the role is translated and the
  * names after it are kept as written, joined with ": ".
  */
-export function creditLine(entry: Pick<Entry, "source"> & Placed) {
+export function creditLine(entry: Pick<ReadEntry, "source"> & Placed) {
   if (entry.location?._tag !== "PluginSetting" || !/credit/i.test(entry.location.plugin))
     return undefined;
   const [, role, names] = /^([^\s:：]{1,12})(?:\s*[:：]\s*|\s+)(\S[^]*)$/.exec(entry.source) ?? [];

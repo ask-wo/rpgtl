@@ -2,49 +2,73 @@ import type {
   AnswerContext,
   Catalog,
   Entry,
-  GlossaryTerm,
+  GameSettings,
   PronounValue,
   RejectReason,
   SourceLanguage,
+  GlossaryTerm,
   TermKind,
+  Text,
 } from "@rpgtl/contracts";
+import * as Struct from "effect/Struct";
 import type * as Types from "effect/Types";
 import { answerSuggestion } from "./answers.ts";
 import { sourceScript } from "./checks.ts";
 import { speakerTagName, speakerTagPattern } from "./controlCodes.ts";
-import { entryTranslation, termTranslation, termKind, withGuess } from "./guesses.ts";
+import { type EntryText, entryTexts } from "./catalog.ts";
+import { termKind, termPronoun, translationInUse, withModelTranslation } from "./inUse.ts";
 import { keepsTags, withoutTags } from "./engines/xp/databaseTags.ts";
-import { gameEnglishLimit } from "./engines/xp/englishBranches.ts";
+import { builtinTranslationLimit } from "./engines/xp/englishBranches.ts";
 import { gameLanguage } from "./language.ts";
 import { isImageText, isMessage, isScriptText, type Placed } from "./location.ts";
 import { isActorName, isSpeakerNameEntry } from "./nameEntries.ts";
 import { nameTerm } from "./nameTerm.ts";
 import { collectClues, linesAbout, pronounFromClues } from "./pronouns.ts";
 import { type RequestText, requestText, withoutCodes } from "./requestText.ts";
-import { showTextSpeakers, translationReuse } from "./reuse.ts";
 import { type TermInput, termInputs } from "./termKinds.ts";
 
 const hasWords = (source: string) => withoutCodes(source).trim() !== "";
 
 /**
- * Whether a run translates the entry: all but those that keep their original, the text of images
- * the game shows unchanged, and script text while the game plays its scripts unchanged.
+ * Whether a run translates the entry: all but those the user leaves untranslated, the text of
+ * images the game shows as they are, and script text while the game plays its scripts unchanged.
  */
 export const runTranslates =
-  ({
-    unchangedImages = [],
-    originalScripts,
-  }: Pick<Catalog, "unchangedImages" | "originalScripts">) =>
-  (entry: Pick<Entry, "keepOriginal"> & Placed) =>
-    !entry.keepOriginal &&
-    !(isImageText(entry) && unchangedImages.includes(entry.location.image)) &&
-    !(originalScripts && isScriptText(entry));
+  ({ untranslatedImages, isScriptTranslationOn }: GameSettings) =>
+  (entry: Pick<Entry, "isLeftUntranslated"> & Placed) =>
+    !entry.isLeftUntranslated &&
+    !(isImageText(entry) && untranslatedImages.includes(entry.location.image)) &&
+    !(!isScriptTranslationOn && isScriptText(entry));
 
-/** An entry a run fills in; it replaces the nested values whole, so only the top level changes. */
-export type DraftEntry = Types.Mutable<Entry>;
-/** An entry a run asks about: one of the draft's, or a speaker's name that lives only for the run. */
-export type RunEntry = Types.Mutable<Omit<Entry, "location">> & Placed;
-export type DraftTerm = Types.Mutable<GlossaryTerm>;
+/** The fields of a text that a run writes. */
+type TextValues = Partial<Omit<Text, "id" | "source" | "speaker" | "isInImage">>;
+const textFields = [
+  "modelTranslation",
+  "modelOperationId",
+  "unshortenedTranslation",
+  "flagReason",
+  "rejectedTranslation",
+  "rejectionReason",
+  "userTranslation",
+] as const satisfies ReadonlyArray<keyof TextValues>;
+
+/** An entry with its text, which a run fills in; every entry of the text changes with it. */
+export type DraftEntry = Types.Mutable<EntryText>;
+/**
+ * An entry a run asks about: one of the draft's, or a speaker's name that lives only for the run
+ * and has no text.
+ */
+export type RunEntry = Types.Mutable<Omit<EntryText, "location" | "textId">> &
+  Partial<Pick<EntryText, "textId">> &
+  Placed;
+/** A glossary term a run fills in; one the run adds has an id below 0 until it is saved. */
+export type DraftTerm = Types.Mutable<Omit<GlossaryTerm, "id">> & { readonly id: number };
+
+/** What a run changed since it last asked: texts by id, and terms. */
+export interface DraftChanges {
+  readonly texts: ReadonlyArray<Pick<Text, "id"> & TextValues>;
+  readonly terms: ReadonlyArray<DraftTerm>;
+}
 
 /** An entry with its source as a request sends it. */
 export interface Prepared extends RequestText {
@@ -75,29 +99,27 @@ export class CatalogDraft {
   readonly language: SourceLanguage;
   readonly #catalog: Catalog;
   readonly #entries: Array<DraftEntry>;
-  readonly #glossary: Array<DraftTerm>;
-  readonly #terms: Map<string, DraftTerm>;
+  readonly #copies = new Map<number, Array<DraftEntry>>();
+  readonly #terms: Array<DraftTerm>;
+  readonly #termsBySource: Map<string, DraftTerm>;
   readonly #limits: ReadonlyMap<string, number>;
   readonly #failed = new Set<string>();
-  readonly #reuse: ReturnType<typeof translationReuse<RunEntry>>;
-  readonly #showTextSpeaker: (entry: RunEntry) => string | undefined;
-  readonly #run: string | undefined;
+  readonly #changedTexts = new Set<number>();
+  readonly #changedTerms = new Set<DraftTerm>();
 
-  /**
-   * `limits` is how many characters each image entry has room for, by entry id. `run`, when the
-   * run started, goes on every guess the draft makes.
-   */
-  constructor(catalog: Catalog, limits: ReadonlyMap<string, number>, run?: string) {
+  /** `limits` is how many characters each image entry has room for, by entry id. */
+  constructor(catalog: Catalog, limits: ReadonlyMap<string, number>) {
     this.#catalog = catalog;
-    this.#run = run;
     this.language = gameLanguage(catalog);
-    this.#entries = catalog.entries.map((entry) => ({ ...entry }));
-    this.#glossary = catalog.glossary.map((term) => ({ ...term }));
-    this.#terms = new Map(this.#glossary.map((term) => [term.source, term]));
+    this.#entries = entryTexts(catalog);
+    for (const entry of this.#entries) {
+      const copies = this.#copies.get(entry.textId);
+      if (copies) copies.push(entry);
+      else this.#copies.set(entry.textId, [entry]);
+    }
+    this.#terms = catalog.glossary.map((term) => ({ ...term }));
+    this.#termsBySource = new Map(this.#terms.map((term) => [term.source, term]));
     this.#limits = limits;
-    this.#showTextSpeaker = showTextSpeakers<RunEntry>(this.#entries);
-    this.#reuse = translationReuse<RunEntry>(this.translatable, run);
-    this.#reuse.fillAll();
   }
 
   get entries(): ReadonlyArray<DraftEntry> {
@@ -106,21 +128,39 @@ export class CatalogDraft {
 
   /** The glossary; sorting terms and finding pronouns change its terms in place. */
   get glossary(): ReadonlyArray<DraftTerm> {
-    return this.#glossary;
+    return this.#terms;
   }
 
   /** The entries a run translates. */
   get translatable(): ReadonlyArray<DraftEntry> {
-    return this.#entries.filter(runTranslates(this.#catalog));
+    return this.#entries.filter(runTranslates(this.#catalog.settings));
   }
 
-  /** A copy of the draft as a catalog. */
-  get catalog(): Catalog {
-    return {
-      ...this.#catalog,
-      entries: this.#entries.map((entry) => ({ ...entry })),
-      glossary: this.#glossary.map((term) => ({ ...term })),
-    };
+  /** The texts and terms the draft changed since the last call. */
+  takeChanges(): DraftChanges {
+    const texts = [...this.#changedTexts].flatMap((id) => {
+      const entry = this.#copies.get(id)?.[0];
+      if (!entry) return [];
+      return [{ id, ...Struct.pick(entry, textFields) }];
+    });
+    const terms = [...this.#changedTerms];
+    this.#changedTexts.clear();
+    this.#changedTerms.clear();
+    return { texts, terms };
+  }
+
+  /** Gives the entry's text, and so every entry of it, the values `f` makes of its own. */
+  #change(entry: RunEntry, f: (values: TextValues) => TextValues) {
+    const next = f(Struct.pick(entry, textFields));
+    const copies = (entry.textId === undefined ? undefined : this.#copies.get(entry.textId)) ?? [
+      entry,
+    ];
+    for (const copy of copies) {
+      for (const field of textFields) delete copy[field];
+      Object.assign(copy, next);
+    }
+    if (entry.textId !== undefined) this.#changedTexts.add(entry.textId);
+    return copies;
   }
 
   /** Entries the run gave up on, by id, in catalog order. */
@@ -133,34 +173,33 @@ export class CatalogDraft {
   }
 
   term(source: string): DraftTerm | undefined {
-    return this.#terms.get(source.trim());
-  }
-
-  #guess<A>(value: A) {
-    return { value, ...(this.#run !== undefined && { run: this.#run }) };
+    return this.#termsBySource.get(source.trim());
   }
 
   #add(term: DraftTerm) {
-    this.#glossary.push(term);
-    this.#terms.set(term.source, term);
+    this.#terms.push(term);
+    this.#termsBySource.set(term.source, term);
+    this.#changedTerms.add(term);
   }
 
   /** The term for the source, when it has English. */
   translatedTerm(source: string): DraftTerm | undefined {
     const term = this.term(source);
-    return term && termTranslation(term) ? term : undefined;
+    return term && translationInUse(term) ? term : undefined;
   }
 
-  /** Gives a term without English the run's English, keeping its kind and pronoun. */
+  /** Gives a term without English the model's English, keeping its kind and pronoun. */
   #fill(term: DraftTerm, translation: string) {
-    term.translation = { guess: this.#guess(translation) };
-    if (term.previous === translation) delete term.previous;
+    delete term.modelOperationId;
+    delete term.previousTranslation;
+    term.modelTranslation = translation;
+    this.#changedTerms.add(term);
     return term;
   }
 
   /**
-   * Adds a term for a name and the run's English, unless the glossary has one with English. Its
-   * kind is the rules' guess, for the model to check.
+   * Adds a term for a name and the model's English, unless the glossary has one with English. Its
+   * kind is the rules', for the model to check.
    */
   addTerm(source: string, translation: string, fromOrigin: boolean): DraftTerm | undefined {
     const trimmedSource = source.trim();
@@ -171,9 +210,10 @@ export class CatalogDraft {
     const existing = this.term(named.source);
     if (existing) return this.#fill(existing, named.translation);
     const term: DraftTerm = {
+      id: Math.min(0, ...this.#terms.map((each) => each.id)) - 1,
       source: named.source,
-      translation: { guess: this.#guess(named.translation) },
-      kind: { guess: { value: named.kind } },
+      modelTranslation: named.translation,
+      rulesKind: named.kind,
     };
     this.#add(term);
     return term;
@@ -181,7 +221,7 @@ export class CatalogDraft {
 
   /** Adds a term for a translated name entry, unless the glossary has one. */
   seedTerm(entry: RunEntry) {
-    this.#seed(entry, entryTranslation(entry));
+    this.#seed(entry, translationInUse(entry));
   }
 
   /**
@@ -210,28 +250,26 @@ export class CatalogDraft {
     return {
       entry,
       ...requestText(entry, (name) =>
-        tag === undefined
-          ? this.term(name) !== undefined || name === this.#showTextSpeaker(entry)
-          : name === tag,
+        tag === undefined ? this.term(name) !== undefined || name === entry.speaker : name === tag,
       ),
     };
   }
 
   /** The speaker's source name: from a speaker tag or first line at the text's start, or the Show Text's. */
   speakerName(item: Prepared): string | undefined {
-    return speakerTagName(item.leading) ?? item.speakerLine ?? this.#showTextSpeaker(item.entry);
+    return speakerTagName(item.leading) ?? item.speakerLine ?? item.entry.speaker;
   }
 
   /** The speaker as requests name them: in English when the glossary has the name. */
   speaker(item: Prepared): string | undefined {
     const name = this.speakerName(item);
     const term = name === undefined ? undefined : this.translatedTerm(name);
-    return term ? termTranslation(term) : name;
+    return term ? translationInUse(term) : name;
   }
 
   /** How many characters the entry has room for where the game draws it, when that is known. */
-  limit(entry: Pick<Entry, "id" | "source" | "gameEnglish">): number | undefined {
-    return this.#limits.get(entry.id) ?? gameEnglishLimit(entry);
+  limit(entry: Pick<EntryText, "id" | "source" | "builtinTranslation">): number | undefined {
+    return this.#limits.get(entry.id) ?? builtinTranslationLimit(entry);
   }
 
   /**
@@ -254,8 +292,8 @@ export class CatalogDraft {
     const translation = this.speaker(item);
     const limit = this.limit(item.entry);
     return {
-      glossary: this.#glossary.flatMap((term) => {
-        const english = termTranslation(term);
+      glossary: this.#terms.flatMap((term) => {
+        const english = translationInUse(term);
         return sourceScript.test(english) ? [{ source: term.source, translation: english }] : [];
       }),
       ...(source && translation && { speaker: { source, translation } }),
@@ -267,7 +305,7 @@ export class CatalogDraft {
   #withSpeakerNames(item: Prepared, text: string) {
     const tagged = text.replace(speakerTagPattern, (tag, name: string) => {
       const term = this.translatedTerm(name);
-      const translation = term && termTranslation(term);
+      const translation = term && translationInUse(term);
       return translation === undefined ? tag : tag.replace(/<[^>]*>/, () => `<${translation}>`);
     });
     const name = item.speakerLine;
@@ -279,37 +317,39 @@ export class CatalogDraft {
   }
 
   /**
-   * Takes a translation for the entry and for every untranslated copy of its text. The first
-   * accepted copy of repeated text sets the translation of every copy, flag and all.
+   * Takes the model's translation for the entry's text, which every entry of the text shows. When
+   * another entry of the text was accepted first, its translation stays, flag and all.
    */
   accept(item: Prepared, translation: string, { flag, long, seedGlossary }: Accepted = {}) {
     const { entry } = item;
-    const known = this.#reuse.known(entry);
+    const known = translationInUse(entry) || undefined;
     let result = known ?? this.#withSpeakerNames(item, translation);
     if (seedGlossary) {
       const term = this.#seed(entry, result);
-      if (term) result = termTranslation(term);
+      if (term) result = translationInUse(term);
     }
-    entry.translation = withGuess(entry.translation, {
-      ...this.#guess(result),
-      ...(known === undefined && flag && { flag }),
-      ...(known === undefined &&
-        long !== undefined && { long: this.#withSpeakerNames(item, long) }),
-    });
-    if (entry.previous === result) delete entry.previous;
-    delete entry.suggestion;
-    for (const filled of this.#reuse.spread(entry)) this.#failed.delete(filled.id);
+    if (known !== undefined) return;
+    const copies = this.#change(entry, (values) =>
+      withModelTranslation(values, {
+        modelTranslation: result,
+        ...(flag && { flagReason: flag }),
+        ...(long !== undefined && { unshortenedTranslation: this.#withSpeakerNames(item, long) }),
+      }),
+    );
+    for (const copy of copies) this.#failed.delete(copy.id);
   }
 
-  /** Keeps a rejected answer on the entry, with its control codes back, for the user to fix. */
+  /** Keeps a rejected answer on the entry's text, with its control codes back, for the user to fix. */
   suggest(item: Prepared, answer: string, reason: RejectReason) {
-    item.entry.suggestion = {
-      text: this.#withSpeakerNames(
-        item,
-        answerSuggestion(item, answer, this.answerContext(item).speaker),
-      ),
-      reason,
-    };
+    const rejectedTranslation = this.#withSpeakerNames(
+      item,
+      answerSuggestion(item, answer, this.answerContext(item).speaker),
+    );
+    this.#change(item.entry, (values) => ({
+      ...values,
+      rejectedTranslation,
+      rejectionReason: reason,
+    }));
   }
 
   fail(entry: Pick<Entry, "id">) {
@@ -321,12 +361,12 @@ export class CatalogDraft {
    * the user sorted or gave a pronoun stay as they are.
    */
   termsToSort(): ReadonlyArray<{ readonly term: DraftTerm; readonly input: TermInput }> {
-    const terms = this.#glossary.filter(
+    const terms = this.#terms.filter(
       (term) =>
         hasWords(term.source) &&
-        term.kind.guess.run === undefined &&
-        term.kind.user === undefined &&
-        term.pronoun?.user === undefined,
+        term.modelKind === undefined &&
+        term.userKind === undefined &&
+        term.userPronoun === undefined,
     );
     const inputs = termInputs(this.#entries, terms);
     return terms.flatMap((term, index) => {
@@ -337,8 +377,14 @@ export class CatalogDraft {
 
   /** Gives the term the kind the model chose. A term that stops being a character loses its pronoun. */
   setKind(term: DraftTerm, kind: TermKind) {
-    if (kind !== "character" || termKind(term) !== "character") delete term.pronoun;
-    term.kind = { guess: this.#guess(kind) };
+    if (kind !== "character" || termKind(term) !== "character") {
+      delete term.rulesPronoun;
+      delete term.sheClues;
+      delete term.heClues;
+      delete term.modelPronoun;
+    }
+    term.modelKind = kind;
+    this.#changedTerms.add(term);
   }
 
   /**
@@ -351,18 +397,18 @@ export class CatalogDraft {
     readonly term: DraftTerm;
     readonly lines: ReadonlyArray<string>;
   }> {
-    const names = this.#glossary.filter(
+    const names = this.#terms.filter(
       (term) =>
         termKind(term) === "character" &&
         hasWords(term.source) &&
         Array.from(term.source.trim()).length >= 2,
     );
     const unset = names.filter(
-      ({ pronoun }) =>
-        !pronoun ||
-        (pronoun.user === undefined &&
-          pronoun.guess?.run === undefined &&
-          pronoun.guess?.value === "unknown"),
+      (term) =>
+        termPronoun(term) === undefined ||
+        (term.userPronoun === undefined &&
+          term.modelPronoun === undefined &&
+          term.rulesPronoun === "unknown"),
     );
     if (!unset.length) return [];
     const clues = collectClues(
@@ -374,10 +420,13 @@ export class CatalogDraft {
     return unset.flatMap((term) => {
       const found = clues.get(term.source.trim());
       if (!found) return [];
-      const guess = pronounFromClues(found);
-      term.pronoun = { guess };
-      if (guess.value !== "unknown") return [];
-      about ??= linesAbout(this.#entries, this.#glossary, this.language);
+      const { pronoun, she, he } = pronounFromClues(found);
+      term.rulesPronoun = pronoun;
+      term.sheClues = she;
+      term.heClues = he;
+      this.#changedTerms.add(term);
+      if (pronoun !== "unknown") return [];
+      about ??= linesAbout(this.#entries, this.#terms, this.language);
       const { lines } = about(term.source.trim());
       return lines.length ? [{ term, lines }] : [];
     });
@@ -385,6 +434,7 @@ export class CatalogDraft {
 
   /** Takes the pronoun the model decided, keeping the clues' counts. */
   setPronoun(term: DraftTerm, value: PronounValue) {
-    term.pronoun = { guess: { ...term.pronoun?.guess, ...this.#guess(value) } };
+    term.modelPronoun = value;
+    this.#changedTerms.add(term);
   }
 }

@@ -1,130 +1,144 @@
 import { assert, it } from "@effect/vitest";
-import type { Catalog } from "@rpgtl/contracts";
 import * as Result from "effect/Result";
-import { newEntry, withEntryEdits } from "./index.ts";
+import { entryTexts, newEntry, withEntryEdits } from "./index.ts";
+import { testCatalog } from "./testUtils/catalog.ts";
 
-const line = (index: number, source: string, translation: string) => ({
-  ...newEntry(
-    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index: index },
+const line = (index: number, source: string) =>
+  newEntry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index },
     source,
-  ),
-  translation: translation ? { user: translation } : {},
+  );
+const fromRun = { modelTranslation: "Hello", modelOperationId: 1, flagReason: "Check the tone" };
+const hello = line(0, "你好");
+const bye = line(1, "再见");
+const arlene = line(2, "\\N[1]来了");
+const catalog = testCatalog({
+  entries: [
+    { ...hello, ...fromRun },
+    { ...bye, rejectedTranslation: "再见 bye", rejectionReason: "source text left" },
+    { ...arlene, userTranslation: "\\N[1] is here" },
+  ],
 });
-const run = "2026-11-04T10:00:00.000Z";
-const hello = {
-  ...newEntry(
-    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index: 0 },
-    "你好",
-  ),
-  translation: { guess: { value: "Hello", run, flag: "Check the tone" } },
-};
-const bye = {
-  ...line(1, "再见", ""),
-  suggestion: { text: "再见 bye", reason: "source text left" },
-};
-const arlene = line(2, "\\N[1]来了", "\\N[1] is here");
-const catalog: Catalog = {
-  version: 1,
-  game: { id: "g", title: "G", engine: "MZ" },
-  translate: true,
-  entries: [hello, bye, arlene],
-  glossary: [],
-};
+const textOf = (saved: typeof catalog, id: string) =>
+  entryTexts(saved).find((entry) => entry.id === id);
 
-it("English other than the run's is the user's, beside the run's guess, and the guess's own English restores it", () => {
+it("English other than the run's is the user's, beside the run's, and the run's own English restores it", () => {
   const saved = Result.getOrThrow(
     withEntryEdits(catalog, [
-      { id: hello.id, translation: "Hi" },
-      { id: arlene.id, translation: "\\N[1] is here" },
+      { id: hello.id, userTranslation: "Hi" },
+      { id: arlene.id, userTranslation: "\\N[1] is here" },
     ]),
   );
-  assert.deepStrictEqual(saved.entries[0]?.translation, { ...hello.translation, user: "Hi" });
-  assert.strictEqual(saved.entries[1], bye);
-  assert.strictEqual(saved.entries[2], arlene);
-  assert.strictEqual(saved.translate, true);
+  assert.deepStrictEqual(saved.texts[0], {
+    id: 1,
+    source: "你好",
+    isInImage: false,
+    ...fromRun,
+    userTranslation: "Hi",
+  });
+  assert.strictEqual(saved.texts[1], catalog.texts[1]);
+  assert.strictEqual(saved.texts[2], catalog.texts[2]);
   const restored = Result.getOrThrow(
-    withEntryEdits(saved, [{ id: hello.id, translation: "Hello" }]),
+    withEntryEdits(saved, [{ id: hello.id, userTranslation: "Hello" }]),
   );
-  assert.deepStrictEqual(restored.entries[0], hello);
+  assert.deepStrictEqual(restored.texts[0], catalog.texts[0]);
 });
 
-it("a rejected answer stays until the entry has English typed, and clearing keeps the old English", () => {
-  const typed = Result.getOrThrow(withEntryEdits(catalog, [{ id: bye.id, translation: "Bye" }]));
-  assert.deepStrictEqual(typed.entries[1], line(1, "再见", "Bye"));
-  const cleared = Result.getOrThrow(withEntryEdits(typed, [{ id: bye.id, translation: "" }]));
-  assert.deepStrictEqual(cleared.entries[1], { ...line(1, "再见", ""), previous: "Bye" });
+it("a rejected answer stays until the text has English typed, and clearing keeps the old English", () => {
+  const typed = Result.getOrThrow(
+    withEntryEdits(catalog, [{ id: bye.id, userTranslation: "Bye" }]),
+  );
+  assert.deepStrictEqual(typed.texts[1], {
+    id: 2,
+    source: "再见",
+    isInImage: false,
+    userTranslation: "Bye",
+  });
+  const cleared = Result.getOrThrow(withEntryEdits(typed, [{ id: bye.id, userTranslation: "" }]));
+  assert.deepStrictEqual(cleared.texts[1], {
+    id: 2,
+    source: "再见",
+    isInImage: false,
+    previousTranslation: "Bye",
+  });
 });
 
 it("an edit that drops a control code, or names an entry the catalog lacks, saves nothing", () => {
-  const dropped = withEntryEdits(catalog, [{ id: arlene.id, translation: "Arlene is here" }]);
+  const dropped = withEntryEdits(catalog, [{ id: arlene.id, userTranslation: "Arlene is here" }]);
   assert.strictEqual(Result.isFailure(dropped) && dropped.failure.problem, "controlCodes");
-  const unknown = withEntryEdits(catalog, [{ id: "gone", translation: "Hi" }]);
+  const unknown = withEntryEdits(catalog, [{ id: "gone", userTranslation: "Hi" }]);
   assert.strictEqual(Result.isFailure(unknown) && unknown.failure.problem, "unknownEntry");
 });
 
-it("an image text keeps or drops its original artwork without touching its English", () => {
-  const title = {
-    ...newEntry({ _tag: "ImageLines", image: "img/pictures/Title", lines: [0] }, "标题"),
-    translation: { guess: { value: "Title", run } },
-  };
-  const images = { ...catalog, entries: [title] };
-  const kept = Result.getOrThrow(withEntryEdits(images, [{ id: title.id, keepOriginal: true }]));
-  assert.deepStrictEqual(kept.entries[0], { ...title, keepOriginal: true });
-  const both = Result.getOrThrow(
-    withEntryEdits(kept, [{ id: title.id, keepOriginal: false, translation: "Name" }]),
-  );
-  assert.deepStrictEqual(both.entries[0], {
-    ...title,
-    translation: { ...title.translation, user: "Name" },
+it("an image text is left untranslated or not without touching its English", () => {
+  const title = newEntry({ _tag: "ImageLines", image: "img/pictures/Title", lines: [0] }, "标题");
+  const images = testCatalog({
+    entries: [{ ...title, modelTranslation: "Title", modelOperationId: 1 }],
   });
+  const kept = Result.getOrThrow(
+    withEntryEdits(images, [{ id: title.id, isLeftUntranslated: true }]),
+  );
+  const [placed] = images.entries;
+  if (!placed) throw new Error("one entry expected");
+  assert.deepStrictEqual(kept.entries, [{ ...placed, isLeftUntranslated: true }]);
+  assert.deepStrictEqual(kept.texts, images.texts);
+  const both = Result.getOrThrow(
+    withEntryEdits(kept, [{ id: title.id, isLeftUntranslated: false, userTranslation: "Name" }]),
+  );
+  assert.deepStrictEqual(both.entries, images.entries);
+  assert.strictEqual(textOf(both, title.id)?.userTranslation, "Name");
 });
 
-it("a corrected image text drops the run's English for the old text, keeps the user's, and the text read restores it", () => {
-  const start = {
-    ...newEntry({ _tag: "ImageLines", image: "img/pictures/Title", lines: [0] }, "开使"),
-    translation: { guess: { value: "Open", run } },
-    suggestion: { text: "开使 open", reason: "source text left" },
-  };
-  const quit = {
-    ...newEntry({ _tag: "ImageLines", image: "img/pictures/Title", lines: [1] }, "退山"),
-    translation: { guess: { value: "Retreat mountain", run }, user: "Quit" },
-  };
-  const images = { ...catalog, entries: [...catalog.entries, start, quit] };
+it("a corrected image text moves the entry to the text of its new source, with the user's English, and the text read moves it back", () => {
+  const start = newEntry({ _tag: "ImageLines", image: "img/pictures/Title", lines: [0] }, "开使");
+  const quit = newEntry({ _tag: "ImageLines", image: "img/pictures/Title", lines: [1] }, "退山");
+  const images = testCatalog({
+    entries: [
+      { ...hello, ...fromRun },
+      { ...start, modelTranslation: "Open", modelOperationId: 1 },
+      {
+        ...quit,
+        modelTranslation: "Retreat mountain",
+        modelOperationId: 1,
+        userTranslation: "Quit",
+      },
+    ],
+  });
   const fixed = Result.getOrThrow(
     withEntryEdits(images, [
-      { id: start.id, text: " 开始 " },
-      { id: quit.id, text: "退出" },
+      { id: start.id, source: " 开始 " },
+      { id: quit.id, source: "退出" },
     ]),
   );
-  assert.deepStrictEqual(fixed.entries.slice(3), [
-    {
-      id: start.id,
-      location: start.location,
-      source: "开始",
-      readerText: "开使",
-      translation: {},
-      previous: "Open",
-    },
-    { ...quit, source: "退出", readerText: "退山", translation: { user: "Quit" } },
+  const texts = (saved: typeof images) =>
+    [start.id, quit.id].map((id) => {
+      const entry = textOf(saved, id);
+      return [entry?.source, entry?.userTranslation, entry?.modelTranslation];
+    });
+  assert.deepStrictEqual(texts(fixed), [
+    ["开始", undefined, undefined],
+    ["退出", "Quit", undefined],
   ]);
-  const back = Result.getOrThrow(withEntryEdits(fixed, [{ id: start.id, text: "开使" }]));
-  assert.deepStrictEqual(back.entries[3], {
-    id: start.id,
-    location: start.location,
-    source: "开使",
-    translation: {},
-    previous: "Open",
+  const back = Result.getOrThrow(withEntryEdits(fixed, [{ id: start.id, source: "开使" }]));
+  assert.deepStrictEqual(textOf(back, start.id), {
+    ...start,
+    textId: 2,
+    isInImage: true,
+    modelTranslation: "Open",
+    modelOperationId: 1,
   });
 
-  const problem = (edit: { id: string; text: string; translation?: string }) => {
+  const problem = (edit: { id: string; source: string; userTranslation?: string }) => {
     const result = withEntryEdits(images, [edit]);
     return Result.isFailure(result) ? result.failure.problem : undefined;
   };
-  assert.strictEqual(problem({ id: start.id, text: " " }), "emptyText");
-  assert.strictEqual(problem({ id: hello.id, text: "你好啊" }), "notImageText");
+  assert.strictEqual(problem({ id: start.id, source: " " }), "emptyText");
+  assert.strictEqual(problem({ id: hello.id, source: "你好啊" }), "notImageText");
   assert.strictEqual(
-    problem({ id: start.id, text: "\\V[1]开始", translation: "Start" }),
+    problem({ id: start.id, source: "\\V[1]开始", userTranslation: "Start" }),
     "controlCodes",
   );
-  assert.isUndefined(problem({ id: start.id, text: "\\V[1]开始", translation: "\\V[1] Start" }));
+  assert.isUndefined(
+    problem({ id: start.id, source: "\\V[1]开始", userTranslation: "\\V[1] Start" }),
+  );
 });

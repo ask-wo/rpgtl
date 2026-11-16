@@ -17,14 +17,14 @@ export const RunSummary = Schema.Struct({
 });
 export type RunSummary = typeof RunSummary.Type;
 
-/** A run's guess that the user replaced with a value of their own. */
+/** A run's translation that the user replaced with English of their own. */
 export const Correction = Schema.Struct({
   /** An entry's English, or a glossary term's English, kind or pronoun. */
   of: Schema.Literals(["translation", "termTranslation", "kind", "pronoun"]),
   /** The entry's id, or the term's source. */
   id: Schema.String,
   source: Schema.String,
-  guess: Schema.String,
+  modelTranslation: Schema.String,
   user: Schema.String,
 });
 
@@ -87,24 +87,13 @@ export const AuditReport = Schema.Struct({
       missing: Schema.Array(Schema.String),
     }),
   ),
-  /** Sources, with their speaker, that got different translations. */
-  differing: Schema.Struct({
-    count: Schema.Int,
-    examples: Schema.Array(
-      Schema.Struct({
-        source: Schema.String,
-        speaker: Schema.optionalKey(Schema.String),
-        translations: Schema.Array(Schema.String),
-      }),
-    ),
-  }),
   /** Accepted translations each check flags, in the order of `CheckName`. */
   findings: Schema.Array(FindingGroup),
-  /** The run, the user's corrections of its guesses and the rejections; none without a run log. */
+  /** The run, the user's corrections of its translations and the rejections; none without a run log. */
   run: Schema.optionalKey(
     Schema.Struct({
       summary: RunSummary,
-      /** How many values the run guessed that the catalog keeps, and those the user corrected. */
+      /** How many of the run's translations the catalog keeps, and those the user corrected. */
       corrections: Schema.Struct({
         of: Schema.Int,
         count: Schema.Int,

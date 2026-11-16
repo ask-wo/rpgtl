@@ -1,6 +1,6 @@
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import * as SqliteMigrator from "@effect/sql-sqlite-node/SqliteMigrator";
-import { gameFiles } from "@rpgtl/contracts";
+import { gameDatabaseMigrations, gameFiles } from "@rpgtl/contracts";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -12,7 +12,6 @@ import * as Reactivity from "effect/reactivity/Reactivity";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as String from "effect/String";
 import * as StateFolder from "../state/StateFolder.ts";
-import { migrations } from "./tables.ts";
 
 /** Each game's database, `games/<game id>/game.db` in the state folder, open while RPGTL runs. */
 export class GameDatabases extends Context.Service<
@@ -30,6 +29,16 @@ export class GameDatabases extends Context.Service<
     readonly close: (id: string) => Effect.Effect<void>;
   }
 >()("@rpgtl/server/games/GameDatabases") {}
+
+const migrations = Object.fromEntries(
+  Object.entries(gameDatabaseMigrations).map(([name, statements]) => [
+    name,
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      for (const statement of statements) yield* sql.unsafe(statement);
+    }),
+  ]),
+);
 
 const make = Effect.gen(function* () {
   const folder = yield* StateFolder.StateFolder;

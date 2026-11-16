@@ -4,7 +4,7 @@ import {
   CheckName,
   type Correction,
   type Engine,
-  type Entry,
+  type GlossaryTerm,
   type RejectionGroup,
   type RejectReason,
   type RequestLine,
@@ -15,7 +15,7 @@ import {
   type RunSummary,
   type RunTotals,
 } from "@rpgtl/contracts";
-import { guessedValues } from "./catalog.ts";
+import { entryTexts } from "./catalog.ts";
 import {
   capitalisedMidSentence,
   capitalisedWord,
@@ -24,9 +24,8 @@ import {
 } from "./checks.ts";
 import { isNameEntry, isSpeakerNameEntry } from "./nameEntries.ts";
 import { gameLanguage } from "./language.ts";
-import { reuseKeys, showTextSpeakers } from "./reuse.ts";
 import { hasTerm } from "./termMatch.ts";
-import { termKind, termTranslation, entryTranslation } from "./guesses.ts";
+import { termKind, translationInUse } from "./inUse.ts";
 
 /** A run's log, its lines sorted by kind. */
 export interface RunLog {
@@ -88,31 +87,67 @@ const summary = (log: RunLog): RunSummary => ({
   answers: runAnswers(log).size,
 });
 
-/** The values the run that started at `started` guessed, and the user's corrections of them. */
-function corrections(catalog: Pick<Catalog, "entries" | "glossary">, started: string | undefined) {
-  const guessed = [...guessedValues(catalog)].filter(
-    ({ value }) => started !== undefined && value.guess?.run === started,
+/**
+ * The translations the model gave in the run that started at `started` and are still its, and the
+ * user's corrections of them.
+ */
+function corrections(
+  catalog: Pick<Catalog, "entries" | "texts" | "glossary" | "operations">,
+  started: string | undefined,
+) {
+  const run = catalog.operations.find(
+    (operation) => operation.kind === "run" && operation.startedAt === started,
   );
-  const corrected = guessed.flatMap((each): Array<typeof Correction.Type> => {
-    const { guess, user } = each.value;
-    if (!guess || user === undefined) return [];
-    const [id, source] =
-      each.of === "translation"
-        ? [each.entry.id, each.entry.source]
-        : [each.term.source, each.term.source];
-    return [{ of: each.of, id, source, guess: guess.value, user }];
-  });
-  return { of: guessed.length, count: corrected.length, examples: corrected.slice(0, 50) };
+  const fromRun = <T extends Pick<GlossaryTerm, "modelOperationId">>(values: ReadonlyArray<T>) =>
+    run === undefined ? [] : values.filter((value) => value.modelOperationId === run.id);
+  const firstEntry = new Map<number, string>();
+  for (const entry of catalog.entries)
+    if (!firstEntry.has(entry.textId)) firstEntry.set(entry.textId, entry.id);
+  const texts = fromRun(catalog.texts);
+  const terms = fromRun(catalog.glossary);
+  const corrected: Array<typeof Correction.Type> = [
+    ...texts.flatMap(({ id, source, modelTranslation, userTranslation }) =>
+      modelTranslation === undefined || userTranslation === undefined
+        ? []
+        : [
+            {
+              of: "translation" as const,
+              id: firstEntry.get(id) ?? String(id),
+              source,
+              modelTranslation,
+              user: userTranslation,
+            },
+          ],
+    ),
+    ...terms.flatMap(({ source, modelTranslation, userTranslation }) =>
+      modelTranslation === undefined || userTranslation === undefined
+        ? []
+        : [
+            {
+              of: "termTranslation" as const,
+              id: source,
+              source,
+              modelTranslation,
+              user: userTranslation,
+            },
+          ],
+    ),
+  ];
+  return {
+    of: texts.length + terms.length,
+    count: corrected.length,
+    examples: corrected.slice(0, 50),
+  };
 }
 
-function rejectionGroups(catalog: Pick<Catalog, "entries">, log: RunLog) {
+function rejectionGroups(catalog: Pick<Catalog, "entries" | "texts">, log: RunLog) {
   const all = log.requests.flatMap((request) => request.rejected);
   const last = new Map(all.map((rejection) => [rejection.id, rejection]));
   return {
     all: groupRejections(all),
     untranslated: groupRejections(
-      catalog.entries.flatMap((entry) => {
-        const rejection = entryTranslation(entry) ? undefined : last.get(entry.id);
+      entryTexts(catalog).flatMap((entry) => {
+        const rejection = translationInUse(entry) ? undefined : last.get(entry.id);
         return rejection ? [rejection] : [];
       }),
     ),
@@ -144,52 +179,25 @@ export function runTotals(
   };
 }
 
-/** Sources, with their speaker, whose translations differ, matched as repeated text is reused. */
-function differing(entries: ReadonlyArray<Entry>) {
-  const speakerOf = showTextSpeakers(entries);
-  const keyOf = reuseKeys(entries);
-  const groups = new Map<
-    string,
-    { source: string; speaker: string | undefined; translations: Set<string> }
-  >();
-  for (const entry of entries) {
-    if (!entryTranslation(entry)) continue;
-    const speaker = speakerOf(entry);
-    const key = keyOf(entry);
-    const group = groups.get(key) ?? { source: entry.source, speaker, translations: new Set() };
-    groups.set(key, group);
-    group.translations.add(entryTranslation(entry));
-  }
-  const found = [...groups.values()].filter((group) => group.translations.size > 1);
-  return {
-    count: found.length,
-    examples: found.slice(0, 20).map(({ source, speaker, translations }) => ({
-      source,
-      ...(speaker !== undefined && { speaker }),
-      translations: [...translations],
-    })),
-  };
-}
-
 /** What to look at in a game's translations, and in the run of `log` when there is one. */
 export function audit(
-  catalog: Pick<Catalog, "entries" | "glossary" | "game">,
+  catalog: Pick<Catalog, "entries" | "texts" | "glossary" | "game" | "settings" | "operations">,
   log?: RunLog,
 ): AuditReport {
-  const translated = catalog.entries.filter((entry) => entryTranslation(entry));
+  const translated = entryTexts(catalog).filter((entry) => translationInUse(entry));
   const prose = translated.filter((entry) => !isNameEntry(entry) && !isSpeakerNameEntry(entry));
   const capitalised = catalog.glossary
     .filter(
       (term) =>
-        termKind(term) === "word" && termTranslation(term).split(/\s+/).some(capitalisedWord),
+        termKind(term) === "word" && translationInUse(term).split(/\s+/).some(capitalisedWord),
     )
     .map((term) => {
       const lines = prose.filter((entry) => hasTerm(entry.source, term.source));
       return {
         source: term.source,
-        english: termTranslation(term),
+        english: translationInUse(term),
         lines: lines.filter((entry) =>
-          capitalisedMidSentence(entryTranslation(entry), termTranslation(term)),
+          capitalisedMidSentence(translationInUse(entry), translationInUse(term)),
         ).length,
         of: lines.length,
       };
@@ -204,7 +212,7 @@ export function audit(
     examples: new Array<AuditReport["findings"][number]["examples"][number]>(),
   }));
   for (const entry of translated)
-    for (const { check: name, detail } of check(entry, entryTranslation(entry))) {
+    for (const { check: name, detail } of check(entry, translationInUse(entry))) {
       const group = findings[CheckName.literals.indexOf(name)];
       if (!group) continue;
       group.count++;
@@ -212,7 +220,7 @@ export function audit(
         group.examples.push({
           id: entry.id,
           source: entry.source,
-          translation: entryTranslation(entry),
+          translation: translationInUse(entry),
           ...(detail !== undefined && { detail }),
         });
     }
@@ -222,9 +230,8 @@ export function audit(
     capitalised,
     terms: catalog.glossary.flatMap((term) => {
       const missing = inGlossary.get(term.source);
-      return missing ? [{ source: term.source, english: termTranslation(term), missing }] : [];
+      return missing ? [{ source: term.source, english: translationInUse(term), missing }] : [];
     }),
-    differing: differing(catalog.entries),
     findings,
     ...(log && {
       run: {

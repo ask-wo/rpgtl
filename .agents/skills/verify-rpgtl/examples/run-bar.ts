@@ -1,19 +1,18 @@
 // The run bar: Translate runs the real Ollama model on the fixture's Chinese lines, the bar and
 // the Translation card follow the run live (also after a reload) and lock the card meanwhile, and
 // Stop ends a second run keeping what it saved.
-import { copyFileSync, readFileSync } from "node:fs";
-import { entryTranslation } from "../../../../packages/domain/src/guesses.ts";
+import { keepDatabase, savedCatalog } from "./saved.ts";
 
 const barText = `(document.querySelector('[aria-label="Runs"]')?.textContent ?? "")`;
 const translated = (catalog: any) =>
-  catalog.entries.filter((entry: any) => entryTranslation(entry) && /[一-鿿]/.test(entry.source));
+  catalog.entries.filter((entry: any) => entry.english && /[一-鿿]/.test(entry.source));
 
 export default async ({ page, run, log }: any) => {
   await page.fill("#game-path", run.game);
   await page.clickText("Open");
   await page.waitUntil(`document.querySelector("h1")?.textContent === "Fixture Adventure"`);
   const id = (await page.eval("location.pathname")).slice("/games/".length);
-  const saved = () => JSON.parse(readFileSync(`${run.state}/games/${id}/catalog.json`, "utf8"));
+  const saved = () => savedCatalog(run.state, id);
 
   await page.waitUntil(`document.body.textContent.includes("Switch on to translate")`);
   if (await page.eval(`!!document.querySelector('[aria-label="Runs"]')`))
@@ -57,7 +56,7 @@ export default async ({ page, run, log }: any) => {
   const after = saved();
   const chinese = translated(after);
   log(
-    `translated Chinese lines: ${JSON.stringify(chinese.map((e: any) => [e.source, entryTranslation(e)]))}`,
+    `translated Chinese lines: ${JSON.stringify(chinese.map((e: any) => [e.source, e.english]))}`,
   );
   if (chinese.length === 0) throw new Error("the run saved no translation");
   const counts = await page.eval(
@@ -65,7 +64,7 @@ export default async ({ page, run, log }: any) => {
   );
   log(`counts on the page without a reload: ${JSON.stringify(counts)}`);
   await page.shot("done");
-  copyFileSync(`${run.state}/games/${id}/catalog.json`, `${run.evidence}/catalog-after-run.json`);
+  keepDatabase(run.state, id, run.evidence, "game-after-run.db");
 
   await page.clickText("Clear all…");
   await page.clickText("Clear all translations");
@@ -91,5 +90,5 @@ export default async ({ page, run, log }: any) => {
         ?.disabled === false,
   );
   if (!enabled) throw new Error("Import… stays locked after the run");
-  copyFileSync(`${run.state}/games/${id}/catalog.json`, `${run.evidence}/catalog-after-stop.json`);
+  keepDatabase(run.state, id, run.evidence, "game-after-stop.db");
 };

@@ -1,12 +1,13 @@
 import type {
   Catalog,
-  Entry,
   GameActivity,
+  GlossaryTerm,
   ImageReaderSetupStatus,
   ImageRunStatus,
   Location,
   RunStatus,
 } from "@rpgtl/contracts";
+import { testCatalog, type TestEntry, testTerm } from "@rpgtl/domain/testUtils/catalog";
 import { useState } from "react";
 import { page } from "vite-plus/test/browser";
 import { expect, onTestFinished, test, vi } from "vite-plus/test";
@@ -16,11 +17,11 @@ import { game, idle } from "../testUtils/game.ts";
 import { RunBar } from "./RunBar.tsx";
 import { TranslationCard } from "./TranslationCard.tsx";
 
-const entry = (id: string, location: Location, translation: string): Entry => ({
+const entry = (id: string, location: Location, translation: string): TestEntry => ({
   id,
   location,
-  source: "你好",
-  translation: translation ? { user: translation } : {},
+  source: `你好${id}`,
+  ...(translation && { userTranslation: translation }),
 });
 const text = (id: string, translation: string) =>
   entry(id, { _tag: "SystemText", keys: [id] }, translation);
@@ -129,13 +130,19 @@ const fakeServer = (saved: Catalog) => {
   return server;
 };
 
-const translating = (entries: Catalog["entries"]): Catalog => ({
-  version: 1,
-  game: { id: game.id, title: game.title, engine: "MV" },
-  entries,
-  glossary: [],
-  translate: true,
-});
+const translating = (
+  entries: ReadonlyArray<TestEntry>,
+  {
+    glossary = [],
+    isTranslationOn = true,
+  }: { readonly glossary?: ReadonlyArray<GlossaryTerm>; readonly isTranslationOn?: boolean } = {},
+): Catalog =>
+  testCatalog({
+    game: { id: game.id, title: game.title, engine: "MV" },
+    entries,
+    glossary,
+    settings: { isTranslationOn },
+  });
 
 const showGame = (fits: RunStatus["kind"] | "read-images" = "translate", onShowFailed = () => {}) =>
   render(
@@ -215,10 +222,11 @@ test("Translate starts a run, and the counts grow while it saves", async () => {
 });
 
 test("on the Glossary page the bar offers Build glossary, and says how building it goes", async () => {
-  const server = fakeServer({
-    ...translating([text("a", ""), text("b", "")]),
-    glossary: [{ source: "雨", translation: { user: "Rain" }, kind: { guess: { value: "name" } } }],
-  });
+  const server = fakeServer(
+    translating([text("a", ""), text("b", "")], {
+      glossary: [testTerm("雨", { userTranslation: "Rain", rulesKind: "name" })],
+    }),
+  );
   showGame("build-glossary");
   server.activity(idle);
   const bar = page.getByRole("region", { name: "Runs" });
@@ -384,7 +392,7 @@ test("image reading shows on the bar, and Stop asks to stop it", async () => {
 });
 
 test("the bar is hidden while the game's translation is off", async () => {
-  const server = fakeServer({ ...translating([text("a", "")]), translate: false });
+  const server = fakeServer(translating([text("a", "")], { isTranslationOn: false }));
   showGame();
   server.activity(idle);
   await expect.element(page.getByText("Switch on to translate or import.")).toBeVisible();

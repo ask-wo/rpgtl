@@ -1,8 +1,7 @@
 // Build glossary on the Glossary page runs the real Ollama model on the fixture's names only: the
 // bar says it is building the glossary, the glossary is locked meanwhile, and afterwards the page
 // lists the terms the run added and takes edits again.
-import { copyFileSync, readFileSync } from "node:fs";
-import { entryTranslation, termTranslation } from "../../../../packages/domain/src/guesses.ts";
+import { keepDatabase, savedCatalog } from "./saved.ts";
 
 const barText = `(document.querySelector('[aria-label="Runs"]')?.textContent ?? "")`;
 
@@ -11,7 +10,7 @@ export default async ({ page, run, log }: any) => {
   await page.clickText("Open");
   await page.waitUntil(`document.querySelector("h1")?.textContent === "Fixture Adventure"`);
   const id = (await page.eval("location.pathname")).slice("/games/".length);
-  const saved = () => JSON.parse(readFileSync(`${run.state}/games/${id}/catalog.json`, "utf8"));
+  const saved = () => savedCatalog(run.state, id);
 
   await page.click('label[for="translate-game"]');
   await page.waitUntil(`${barText}.includes("text entries translated")`);
@@ -40,13 +39,9 @@ export default async ({ page, run, log }: any) => {
   log(`glossary: ${JSON.stringify(glossary)}`);
   const guide = glossary.find((term: any) => term.source === "向导");
   if (!guide) throw new Error("the run didn't add 向导 to the glossary");
-  if (
-    entries.some((entry: any) => entry.source.startsWith("你好，旅行者") && entryTranslation(entry))
-  )
+  if (entries.some((entry: any) => entry.source.startsWith("你好，旅行者") && entry.english))
     throw new Error("Build glossary translated dialogue");
-  await page.waitUntil(
-    `document.body.textContent.includes(${JSON.stringify(termTranslation(guide))})`,
-  );
+  await page.waitUntil(`document.body.textContent.includes(${JSON.stringify(guide.english)})`);
   await page.shot("built");
 
   await page.eval(() =>
@@ -59,15 +54,11 @@ export default async ({ page, run, log }: any) => {
   await page.waitUntil(`document.querySelector("#term-source")?.value === "向导"`);
   await page.fill("#term-translation", "Pathfinder");
   await page.waitUntil(`document.body.textContent.includes("All changes saved")`);
-  for (
-    let tries = 0;
-    saved().glossary.every((t: any) => termTranslation(t) !== "Pathfinder");
-    tries++
-  ) {
+  for (let tries = 0; saved().glossary.every((t: any) => t.english !== "Pathfinder"); tries++) {
     if (tries > 50) throw new Error("the edit after the run wasn't saved");
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   log("edited the built term after the run");
   await page.shot("edited");
-  copyFileSync(`${run.state}/games/${id}/catalog.json`, `${run.evidence}/catalog.json`);
+  keepDatabase(run.state, id, run.evidence);
 };

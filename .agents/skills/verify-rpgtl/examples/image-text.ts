@@ -1,9 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
-import { entryTranslation } from "../../../../packages/domain/src/guesses.ts";
+import { savedCatalog } from "./saved.ts";
 import { setTimeout as sleep } from "node:timers/promises";
 // Reads a generated picture with a fake reader through the bar's Read new images, translates one of
 // its two blocks on the Images page, and checks in the game tab that the engine's bitmap is drawn
-// with the English before it is ready; then the lettering weight and Clear image text.
+// with the English before it is ready; then the lettering weight and Clear image text, after which
+// reading the image again finds no English.
 /* oxlint-disable no-shadow, no-underscore-dangle, unicorn/consistent-function-scoping --
    the functions passed to game.eval run in the page, so they can't use anything from this file. */
 // Run for MV and MZ: scripts/verify.sh image-text-mv MV examples/image-text.ts
@@ -179,8 +180,7 @@ export default async ({ page, openPage, api, run, log }: any) => {
   });
   const lines = [line("开始游戏", [48, 48, 152, 82]), line("退出", [48, 118, 152, 152])];
   const reader = await fakeReader(run, lines);
-  const saved = (id: string) =>
-    JSON.parse(readFileSync(`${run.state}/games/${id}/catalog.json`, "utf8"));
+  const saved = (id: string) => savedCatalog(run.state, id);
   try {
     const id = await openImages(page, run);
     await page.shot("opened");
@@ -194,9 +194,7 @@ export default async ({ page, openPage, api, run, log }: any) => {
     await page.fill(box, "Begin");
     await until(
       "the typed English's save",
-      () =>
-        entryTranslation(saved(id).entries.find((entry: any) => entry.source === "开始游戏")) ===
-        "Begin",
+      () => saved(id).entries.find((entry) => entry.source === "开始游戏")?.english === "Begin",
     );
     await page.press("Escape");
     await page.shot("translated");
@@ -336,7 +334,7 @@ export default async ({ page, openPage, api, run, log }: any) => {
       throw new Error("The lettering weight does not start at Original weight");
     await page.shot("weight-default");
     await page.select("#lettering-weight", "Always bold");
-    await until("the weight's save", () => saved(id).imageBold === "always");
+    await until("the weight's save", () => saved(id).settings.letteringWeight === "bold");
     await page.goto(`/games/${id}/images`);
     await page.waitUntil(
       `document.querySelector("#lettering-weight")?.textContent.includes("Always bold")`,
@@ -346,16 +344,21 @@ export default async ({ page, openPage, api, run, log }: any) => {
     if (hinted.rpgtlImageText["img/pictures/Test"].blocks[0].bold !== true) throw new Error("bold");
     log("Always bold saved, kept over a reload, and served to the game");
 
-    // Clear image text asks, then deletes the reads, the erased images and the image entries.
+    // Clear image text asks, then deletes the reads, the erased images, the image entries and
+    // their English, which reading the image again doesn't bring back.
     await page.clickText("Clear image text…");
     await page.waitFor('[role="alertdialog"]');
     await page.clickText("Clear image text", '[role="alertdialog"]');
     await page.waitUntil(`document.body.textContent.includes("Cleared the image text")`);
-    if (saved(id).entries.some((entry: any) => entry.location._tag === "ImageLines"))
+    if (saved(id).entries.some((entry) => entry.location._tag === "ImageLines"))
       throw new Error("image entries left after clearing");
     if (existsSync(`${run.state}/games/${id}/images.json`)) throw new Error("read results left");
     log("Clear image text removed the image entries and the read results");
     await page.shot("cleared");
+    await readImages(page, api, id);
+    if (saved(id).entries.find((entry) => entry.source === "开始游戏")?.english)
+      throw new Error("the English came back after Clear image text");
+    log("reading the image again after the clear finds no English");
   } finally {
     reader.stop();
   }

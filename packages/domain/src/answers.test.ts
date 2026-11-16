@@ -1,9 +1,8 @@
 import { assert, it } from "@effect/vitest";
-import type { Entry } from "@rpgtl/contracts";
 import * as Result from "effect/Result";
-import { checkAnswer, outOfOrder, requestText } from "./index.ts";
+import { checkAnswer, type EntryText, outOfOrder, requestText } from "./index.ts";
 
-type Asked = Pick<Entry, "location" | "source">;
+type Asked = Pick<EntryText, "location" | "source">;
 
 const messageEntry = (source: string): Asked => ({
   location: {

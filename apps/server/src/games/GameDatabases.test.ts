@@ -28,9 +28,9 @@ it.effect("every change to a tracked value is recorded with the operation that m
           (1, 'inspection', '2026-01-01T00:00:00.000Z'), (2, 'run', '2026-01-02T00:00:00.000Z'),
           (3, 'edit', '2026-01-03T00:00:00.000Z')`;
         yield* sql`insert into texts (id, source, is_in_image, last_operation_id) values (7, '雨', 0, 1)`;
-        yield* sql`update texts set inferred_translation = 'Rain', last_operation_id = 2 where id = 7`;
-        yield* sql`update texts set inferred_translation = 'Rain', last_operation_id = 2 where id = 7`;
-        yield* sql`update texts set player_translation = 'Rainfall', last_operation_id = 3 where id = 7`;
+        yield* sql`update texts set model_translation = 'Rain', last_operation_id = 2 where id = 7`;
+        yield* sql`update texts set model_translation = 'Rain', last_operation_id = 2 where id = 7`;
+        yield* sql`update texts set user_translation = 'Rainfall', last_operation_id = 3 where id = 7`;
         yield* sql`update texts set last_operation_id = 3 where id = 7`;
         yield* sql`delete from texts where id = 7`;
         return yield* changes;
@@ -40,14 +40,14 @@ it.effect("every change to a tracked value is recorded with the operation that m
       {
         operationId: 2,
         rowId: 7,
-        columnName: "inferred_translation",
+        columnName: "model_translation",
         oldValue: null,
         newValue: "Rain",
       },
       {
         operationId: 3,
         rowId: 7,
-        columnName: "player_translation",
+        columnName: "user_translation",
         oldValue: null,
         newValue: "Rainfall",
       },
@@ -59,12 +59,12 @@ it.effect("every change to a tracked value is recorded with the operation that m
           source: "雨",
           speaker: null,
           is_in_image: 0,
-          inferred_translation: "Rain",
+          model_translation: "Rain",
           unshortened_translation: null,
           flag_reason: null,
           rejected_translation: null,
           rejection_reason: null,
-          player_translation: "Rainfall",
+          user_translation: "Rainfall",
         }),
         newValue: null,
       },

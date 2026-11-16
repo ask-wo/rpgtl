@@ -1,6 +1,8 @@
-import type { ComparedSetup, Comparison, Entry } from "@rpgtl/contracts";
+import type { ComparedSetup, Comparison } from "@rpgtl/contracts";
 import {
-  entryTranslation,
+  type EntryText,
+  entryTexts,
+  translationInUse,
   gameLanguage,
   runAnswers,
   runLog,
@@ -39,7 +41,7 @@ function readSetup(setup: ComparedSetup, { sample, game }: Comparison) {
     log,
     answers,
     totals: runTotals(log, glossary, language, game.engine),
-    findings: (entry: Entry) => {
+    findings: (entry: EntryText) => {
       const answer = answers.get(entry.id);
       return answer ? check(answer, answer.translation).map((finding) => finding.check) : [];
     },
@@ -79,8 +81,8 @@ const summaryRow = (run: ReadSetup, entries: number) => {
 <td>${log.warnings.map((warning) => `<small>${escape(warning)}</small>`).join("")}</td></tr>`;
 };
 
-const cell = (run: ReadSetup, entry: Entry) => {
-  const kept = entryTranslation(entry);
+const cell = (run: ReadSetup, entry: EntryText) => {
+  const kept = translationInUse(entry);
   if (kept) return `<td class="where">kept: ${escape(kept)}</td>`;
   const answer = run.answers.get(entry.id);
   if (!answer) {
@@ -103,11 +105,11 @@ const dataNotice = ({ setup, costUsd }: ReadSetup) =>
 
 /** The comparison as a page: a summary of each setup's run, then the sample side by side. */
 export function comparisonHtml(comparison: Comparison) {
-  const { entries } = comparison.sample;
+  const entries = entryTexts(comparison.sample);
   const runs = comparison.setups.map((setup) => readSetup(setup, comparison));
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const speakerOf = showTextSpeakers(entries);
-  const kept = entries.filter((entry) => entryTranslation(entry)).length;
+  const kept = entries.filter((entry) => translationInUse(entry)).length;
   const translated = entries.length - kept;
   const tables = comparison.samples.groups
     .map((group) => {

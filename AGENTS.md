@@ -24,7 +24,7 @@ The words in bold are defined in `docs/glossary.md`.
 
 ## Three ways to do harm
 
-1. **Writing into a real state folder.** One is wherever `RPGTL_DIR` points outside the repo (the git-ignored `.env` may set it; `pnpm start` and `pnpm run dev` read that file). It holds real catalogs, backups and run logs, and the running RPGTL may be using it. Read it, or copy it into a temporary folder for a test. Never start RPGTL or a script against it and never write into it: a new run truncates its logs.
+1. **Writing into a real state folder.** One is wherever `RPGTL_DIR` points outside the repo (the git-ignored `.env` may set it; `pnpm start` and `pnpm run dev` read that file). It holds real game databases and run logs, and the running RPGTL may be using it. Read it, or copy it into a temporary folder for a test. Never start RPGTL or a script against it and never write into it: a new run truncates its logs.
 2. **Playing a real game.** Don't play or drive a real game in a browser (Claude in Chrome, DevTools, Playwright or anything else), not even one kept for testing. Checks in a real game aren't yours to make: list what to look at and where, and leave them open in your report. Opening the RPGTL page in a browser is fine, and so is driving a small artificial game made for the test, such as one written by `packages/game/src/testUtils/fixture.ts` or `mvGame.ts`.
 3. **Putting a real game into the repo.** The repo is public, and a game's text belongs to its authors. Tests, fixtures, comments, docs and prompts use made-up names, lines, items, places, file names and game ids, never a real game's title or its English from a translation. Names of public plugins and RPG Maker's own defaults are fine. When a real game shows a bug, rebuild its shape with invented text, and before committing the example, check that it doesn't occur in that game.
 
@@ -37,7 +37,7 @@ The easiest mistake here is a change that works on the path you tried and is mis
 - **Engines.** MV and MZ differ in file names, script names and window code.
 - **Translators.** Ollama, llama-server, Claude and Codex each need a decision, even if it is "not supported here".
 - **Routes.** A route that moves or changes its payload is also called by the verify-rpgtl examples and feature map (`.agents/skills/verify-rpgtl/`); run the ones that use it.
-- **Ways back.** A way in needs a way out and a way to see it: forgetting a game needs inspecting it again, clearing translations needs the backup.
+- **Ways back.** A way in needs a way out and a way to see it: forgetting a game needs inspecting it again, clearing translations keeps the English it cleared as the previous translation.
 - **Contracts.** A schema in `packages/contracts` is read by every side; change it and check each one. A schema for a state file or the settings must also read the files players already have. A change that the files in `apps/server/src/state/formats/` no longer decode with needs an upgrade step and a new format (`docs/testing.md`, **State files**). Also run `pnpm run decode-state <copy of a real state folder>`, which decodes each file with the schemas the server uses, applies each catalog to its game's files, and writes nothing.
 - **Saved catalogs.** A change to what extraction makes an entry's source or id must still apply a catalog saved before it, until the player reads the game again. `decode-state` on a copy shows a file that would play untranslated.
 

@@ -1,6 +1,7 @@
-import type { Entry, GlossaryTerm } from "@rpgtl/contracts";
+import type { GlossaryTerm } from "@rpgtl/contracts";
+import type { EntryText } from "./catalog.ts";
 import { characterAliases, nameParts, shortNameTranslations } from "./shortNames.ts";
-import { termKind } from "./guesses.ts";
+import { termKind } from "./inUse.ts";
 
 interface TextSearch {
   readonly sources: ReadonlyArray<string>;
@@ -29,7 +30,7 @@ function pairsIn(sources: ReadonlyArray<string>) {
 }
 
 /** Finds the ids of the entries containing a text. */
-function textFinder(entries: ReadonlyArray<Entry>) {
+function textFinder(entries: ReadonlyArray<EntryText>) {
   const { sources } = textSearch;
   if (
     sources.length !== entries.length ||
@@ -87,7 +88,7 @@ export function termTexts(
  */
 export function glossaryOrder(
   glossary: ReadonlyArray<GlossaryTerm>,
-  entries: ReadonlyArray<Entry>,
+  entries: ReadonlyArray<EntryText>,
 ) {
   const shortNames = shortNameTranslations(glossary);
   const aliases = characterAliases(glossary);

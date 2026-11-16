@@ -1,7 +1,14 @@
-import type { Catalog, Entry, Findings, Table } from "@rpgtl/contracts";
+import type { Catalog, Findings, Table } from "@rpgtl/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { entryTranslation, isImageText, isUserValue, Place } from "@rpgtl/domain";
+import {
+  type EntryText,
+  entryTexts,
+  isImageText,
+  isUserTranslation,
+  Place,
+  translationInUse,
+} from "@rpgtl/domain";
 
 export const Area = Schema.Literals(["Maps", "Database", "System", "Plugins", "Scripts"]);
 export type Area = typeof Area.Type;
@@ -66,16 +73,16 @@ export const areaOf = (place: Place): Area | undefined => {
 
 /** The game's text that the Text page edits: everything but the text in images. */
 export const textEntries = (catalog: Catalog) =>
-  catalog.entries.filter((entry) => !isImageText(entry));
+  entryTexts(catalog).filter((entry) => !isImageText(entry));
 
 /** Each map's name from the game's map list, in English once translated, by map id. */
 export const mapNames = (catalog: Catalog) =>
   new Map(
-    catalog.entries.flatMap((entry) =>
+    entryTexts(catalog).flatMap((entry) =>
       entry.location._tag === "RecordField" &&
       entry.location.table === "mapInfos" &&
       entry.location.field === "name"
-        ? [[entry.location.record, entryTranslation(entry) || entry.source] as const]
+        ? [[entry.location.record, translationInUse(entry) || entry.source] as const]
         : [],
     ),
   );
@@ -111,9 +118,9 @@ export const placeLabel = (place: Place, maps: ReadonlyMap<number, string>) =>
   });
 
 /** Why an accepted translation is worth a look: its run's flag and what the checks found. */
-export const checkNotes = (entry: Entry, findings: Findings) =>
+export const checkNotes = (entry: EntryText, findings: Findings) =>
   [
-    isUserValue(entry.translation) ? undefined : entry.translation.guess?.flag,
+    isUserTranslation(entry) ? undefined : entry.flagReason,
     ...(findings[entry.id] ?? []).map(({ check, detail }) =>
       detail ? `${check} (${detail})` : check,
     ),
@@ -123,38 +130,39 @@ export const checkNotes = (entry: Entry, findings: Findings) =>
 export interface ShownContext {
   /** The entries the game's last run couldn't translate. */
   readonly failed: ReadonlySet<string>;
-  readonly lastRun: string | undefined;
+  /** The operation id of the last run that gave a text its English. */
+  readonly lastRun: number | undefined;
   readonly findings: Findings;
   /** Whether a run translates an entry, which only then counts as untranslated. */
-  readonly translates: (entry: Entry) => boolean;
+  readonly translates: (entry: EntryText) => boolean;
 }
 
 /** Whether the entry has English other than the one it had before it was cleared. */
-const isChanged = (entry: Entry) => {
-  const english = entryTranslation(entry);
-  return !!english && entry.previous !== undefined && entry.previous !== english;
-};
+const isChanged = (entry: EntryText) =>
+  !!translationInUse(entry) && entry.previousTranslation !== undefined;
 
-export const isShown = (entry: Entry, show: Shown, context: ShownContext) => {
+export const isShown = (entry: EntryText, show: Shown, context: ShownContext) => {
   switch (show) {
     case "all":
       return true;
     case "untranslated":
-      return !entryTranslation(entry) && context.translates(entry);
+      return !translationInUse(entry) && context.translates(entry);
     case "failed":
-      return context.failed.has(entry.id) || (!entryTranslation(entry) && !!entry.suggestion);
+      return (
+        context.failed.has(entry.id) || (!translationInUse(entry) && !!entry.rejectedTranslation)
+      );
     case "last-run":
-      return context.lastRun !== undefined && entry.translation.guess?.run === context.lastRun;
+      return context.lastRun !== undefined && entry.modelOperationId === context.lastRun;
     case "changed":
       return isChanged(entry);
     case "flagged":
-      return !!entryTranslation(entry) && checkNotes(entry, context.findings).length > 0;
+      return !!translationInUse(entry) && checkNotes(entry, context.findings).length > 0;
   }
 };
 
 /** Whether the entry's original, English or English from before clearing holds the search, ignoring case. */
-export const matches = (entry: Entry, query: string) =>
+export const matches = (entry: EntryText, query: string) =>
   !query ||
   entry.source.toLowerCase().includes(query) ||
-  entryTranslation(entry).toLowerCase().includes(query) ||
-  (entry.previous ?? "").toLowerCase().includes(query);
+  translationInUse(entry).toLowerCase().includes(query) ||
+  (entry.previousTranslation ?? "").toLowerCase().includes(query);

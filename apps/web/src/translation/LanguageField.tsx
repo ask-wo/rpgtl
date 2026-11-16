@@ -1,6 +1,6 @@
 import { useAtomSet } from "@effect/atom-react";
 import { type Catalog, SourceLanguage } from "@rpgtl/contracts";
-import { guessedLanguage, languageNames } from "@rpgtl/domain";
+import { detectedLanguage, languageNames } from "@rpgtl/domain";
 import * as Exit from "effect/Exit";
 import { useMemo, useState } from "react";
 import { failureMessage } from "../app/failure.ts";
@@ -18,7 +18,7 @@ export function LanguageField({
 }) {
   const choose = useAtomSet(setLanguage, { mode: "promiseExit" });
   const [error, setError] = useState<string>();
-  const guessed = useMemo(() => guessedLanguage(saved.entries), [saved.entries]);
+  const guessed = useMemo(() => detectedLanguage(saved.texts), [saved.texts]);
   const choices: ReadonlyArray<Choice<"guessed" | SourceLanguage>> = [
     { value: "guessed", label: `${languageNames[guessed]} (Automatic)` },
     ...SourceLanguage.literals.map((language) => ({
@@ -39,7 +39,7 @@ export function LanguageField({
       <ChoiceField
         id="game-language"
         label="Game language"
-        value={saved.language ?? "guessed"}
+        value={saved.settings.sourceLanguage ?? "guessed"}
         choices={choices}
         onChoose={change}
       />

@@ -1,13 +1,9 @@
 import { assert, it } from "@effect/vitest";
-import type { Entry } from "@rpgtl/contracts";
 import { isNameEntry, nameGroups } from "./index.ts";
+import { testEntry } from "./testUtils/catalog.ts";
 
-const system = (keys: ReadonlyArray<string>, source: string): Entry => ({
-  id: keys.join("."),
-  location: { _tag: "SystemText", keys },
-  source,
-  translation: {},
-});
+const system = (keys: ReadonlyArray<string>, source: string) =>
+  testEntry({ _tag: "SystemText", keys }, source, { id: keys.join(".") });
 
 it("the game's title is a name entry, so the glossary pass translates it", () => {
   const title = system(["gameTitle"], "勇者的旅途");
@@ -20,12 +16,11 @@ it("the game's title is a name entry, so the glossary pass translates it", () =>
   );
 });
 
-const skill = (record: number, translated: boolean): Entry => ({
-  id: `skill ${record}`,
-  location: { _tag: "RecordField", table: "skills", record, field: "name" },
-  source: `技能${record}`,
-  translation: translated ? { user: `Skill ${record}` } : {},
-});
+const skill = (record: number, translated: boolean) =>
+  testEntry({ _tag: "RecordField", table: "skills", record, field: "name" }, `技能${record}`, {
+    id: `skill ${record}`,
+    ...(translated && { userTranslation: `Skill ${record}` }),
+  });
 
 it("a long table of names is cut into groups of a batch's untranslated names, so they run side by side", () => {
   const skills = Array.from({ length: 95 }, (_, i) => skill(i + 1, i < 5));

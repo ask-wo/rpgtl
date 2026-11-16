@@ -1,4 +1,3 @@
-import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -54,8 +53,6 @@ export class StateFolder extends Context.Service<
     readonly list: (folder: string) => Effect.Effect<ReadonlyArray<string>, StateFileError>;
     /** Removes the file, or the folder with everything in it; nothing when it isn't there. */
     readonly remove: (file: string) => Effect.Effect<void, StateFileError>;
-    /** Copies the file to `backups/` in its folder, if it exists, under its name and the time. */
-    readonly backUp: (file: string) => Effect.Effect<void, StateFileError>;
     /** Copies the file or folder to `to`, making the folders above it; nothing when it isn't there. */
     readonly copy: (file: string, to: string) => Effect.Effect<void, StateFileError>;
     /** Moves the file or folder to `to`, making the folders above it; nothing when it isn't there. */
@@ -168,23 +165,6 @@ export const make = Effect.fn("StateFolder.make")(function* (dir: string) {
       .pipe(Effect.mapError(failed(file, "write")));
   });
 
-  const backUp = Effect.fn("StateFolder.backUp")(function* (file: string) {
-    const extension = path.extname(file);
-    const backups = path.join(path.dirname(file), "backups");
-    const backup = path.join(
-      backups,
-      `${path.basename(file, extension)}-${yield* Clock.currentTimeMillis}-${yield* randomName}${extension}`,
-    );
-    yield* fs.makeDirectory(path.join(root, backups), { recursive: true }).pipe(
-      Effect.andThen(fs.copyFile(path.join(root, file), path.join(root, backup))),
-      Effect.catchTags({
-        PlatformError: (error) =>
-          error.reason._tag === "NotFound" ? Effect.void : Effect.fail(error),
-      }),
-      Effect.mapError(failed(backup, "write")),
-    );
-  });
-
   const intoOrNotThere = (
     file: string,
     to: string,
@@ -218,7 +198,6 @@ export const make = Effect.fn("StateFolder.make")(function* (dir: string) {
     appendLine,
     list,
     remove,
-    backUp,
     copy,
     move,
   });

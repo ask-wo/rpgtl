@@ -11,7 +11,7 @@ The glossary holds fixed English names and terms that translators get with each 
 - `gl-add` **Add term**: a new term, saved once it has an original.
 - `gl-remove` the `×` over a term's pronoun tag in the list (`[aria-label="Remove <original> from the glossary"]`) and **Remove glossary…** both ask first; the lines keep their translations.
 - `gl-clear` **Clear wrong text** on a term and **Clear all wrong text** for every character, which clear lines that miss the English, and **Clear all text…** on a term, which asks first and clears every line with it: save pending edits, back up, clear, and say how many.
-- `gl-flagged` the **Flagged** filter lists terms whose English leaves out the English of a name inside them; a term's details name it ("Leaves out the English of a name inside it: …"). **Clear flagged** (`POST /api/glossary/clear-guesses`) clears the English runs gave the listed terms and the lines with them, backing up first and keeping English the user typed and terms with no entry of their own, so **Translate** translates them again.
+- `gl-flagged` the **Flagged** filter lists terms whose English leaves out the English of a name inside them; a term's details name it ("Leaves out the English of a name inside it: …"). **Clear flagged** (`POST /api/glossary/clear-translations`) clears the English runs gave the listed terms and the lines with them, keeping English the user typed and terms with no entry of their own, so **Translate** translates them again.
 - `gl-build` **Build glossary** in the bar on this page: a run of the glossary pass only; the bar reads `Building the glossary · <done> of <total> names translated`, the page is locked while it goes, and the bar ends with `Glossary built: …`.
 
 ## How to get to it (user POV)
@@ -25,11 +25,11 @@ Preconditions:
 - Fixture game open and its translation switched on. `examples/glossary.ts` is a complete, passing steps file for everything above except `gl-build`, which `examples/build-glossary.ts` covers with the real Ollama model.
 
 - **Fields.** `#term-source`, `#term-translation`; the Kind and Pronoun selects are Base UI comboboxes `#term-kind`, `#term-pronoun`: click one, wait for `[role="option"]`, and click the option by its text through `page.eval`.
-- **Saves.** Wait on `$RUN/state/games/<id>/catalog.json` rather than the header's text, which reads "All changes saved" before the first edit too.
+- **Saves.** Wait on `$RUN/state/games/<id>/game.db` (read it with `examples/saved.ts`) rather than the header's text, which reads "All changes saved" before the first edit too.
 - **Terms to clear.** The fixture has no glossary and no translations; import a translation file first (as `examples/translation-card.ts` does) with the term and a line that doesn't use its English.
 
 ## Gotchas
 
 - A term without an original isn't saved; a reload drops it.
-- Glossary saves write the catalog without a backup; clearing backs up first.
+- Each glossary save is one `edit` operation in the database; clearing is one `clear` operation, and the API's texts then give the cleared English as `previousTranslation`.
 - A one-character term is used for speaker tags and exact matches only, not sent with batches.

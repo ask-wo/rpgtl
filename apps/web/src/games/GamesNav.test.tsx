@@ -1,4 +1,5 @@
 import type { Catalog, Game, ListedGame } from "@rpgtl/contracts";
+import { testCatalog } from "@rpgtl/domain/testUtils/catalog";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { page } from "vite-plus/test/browser";
 import { beforeAll, expect, test } from "vite-plus/test";
@@ -10,13 +11,11 @@ beforeAll(() => page.viewport(1280, 800));
 
 const moved: Game = { ...game, root: "/games/new/rain", webRoot: "/games/new/rain/www" };
 
-const catalogOf = (listed: Game): Catalog => ({
-  version: 1,
-  game: { id: listed.id, title: listed.title, engine: "MV" },
-  entries: [],
-  glossary: [],
-  translate: true,
-});
+const catalogOf = (listed: Game): Catalog =>
+  testCatalog({
+    game: { id: listed.id, title: listed.title, engine: "MV" },
+    settings: { isTranslationOn: true },
+  });
 
 /**
  * The folder at `path` on a computer whose only folder with anything in it is `/games/new`, which

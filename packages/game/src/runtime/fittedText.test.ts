@@ -7,13 +7,13 @@ test("runtime draws a dotted actor name by its short form only on HUD bitmaps it
       id: "a",
       location: { _tag: "RecordField", table: "actors", record: 1, field: "name" },
       source: "藤原·雄一郎",
-      translation: { user: "Fujiwara Yuichiro" },
+      userTranslation: "Fujiwara Yuichiro",
     },
     {
       id: "b",
       location: { _tag: "RecordField", table: "actors", record: 2, field: "name" },
       source: "星澜",
-      translation: { user: "Xinglan" },
+      userTranslation: "Xinglan",
     },
   ]);
   expect(system.rpgtlShortNames).toEqual({
@@ -51,19 +51,19 @@ test("runtime draws a class name wider than the original in a font that fits the
       id: "a",
       location: { _tag: "RecordField", table: "classes", record: 1, field: "name" },
       source: "暗影咒术师",
-      translation: { user: "Shade Warlock" },
+      userTranslation: "Shade Warlock",
     },
     {
       id: "b",
       location: { _tag: "RecordField", table: "classes", record: 2, field: "name" },
       source: "魔剑士",
-      translation: { user: "Fencer" },
+      userTranslation: "Fencer",
     },
     {
       id: "c",
       location: { _tag: "RecordField", table: "classes", record: 3, field: "name" },
       source: "见习魔导士",
-      translation: { user: "Trainee Sorcerer" },
+      userTranslation: "Trainee Sorcerer",
     },
   ]);
   expect(system.rpgtlClassNames).toEqual({

@@ -1,15 +1,9 @@
-import {
-  Catalog,
-  Games,
-  ImageReadResults,
-  Playtime,
-  RunLogLine,
-  Samples,
-  Settings,
-} from "@rpgtl/contracts";
+import { Games, ImageReadResults, Playtime, RunLogLine, Samples, Settings } from "@rpgtl/contracts";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import { readCatalogAt } from "../games/catalogRows.ts";
 import * as StateFolder from "./StateFolder.ts";
 
 type Folder = StateFolder.StateFolder["Service"];
@@ -37,10 +31,20 @@ const readRunLog = Effect.fn("decodeStateFolder.readRunLog")(function* (
       );
 });
 
+/** The game's database, read as the server reads it, without writing to it. */
+const readDatabase: Read = (folder, file) =>
+  readCatalogAt(`${folder.root}/${file}`, { id: "", title: "", engine: "MV" }).pipe(
+    // oxlint-disable-next-line rpgtl/no-catch-all -- a row that doesn't decode dies, and it is as much this file's problem as a failed query.
+    Effect.catchCause((cause) =>
+      Effect.fail(
+        new StateFolder.StateFileError({ file, operation: "read", cause: Cause.squash(cause) }),
+      ),
+    ),
+  );
+
 /** A game's files by their path in `games/<game id>/`, each read as the server reads it. */
 const gameKinds: ReadonlyArray<{ readonly name: RegExp; readonly read: Read }> = [
-  { name: /^catalog\.json$/, read: (folder, file) => folder.read(file, Catalog) },
-  { name: /^backups\/[^/]+\.json$/, read: (folder, file) => folder.read(file, Catalog) },
+  { name: /^game\.db$/, read: readDatabase },
   { name: /^images\.json$/, read: (folder, file) => folder.read(file, ImageReadResults) },
   { name: /^samples\.json$/, read: (folder, file) => folder.read(file, Samples) },
   { name: /^playtime\.json$/, read: (folder, file) => folder.read(file, Playtime) },
@@ -62,7 +66,7 @@ const decoded = (read: Effect.Effect<unknown, StateFolder.StateFileError>, file:
   );
 
 /**
- * Decodes `games.json` and each file in the game folders that the server reads, catalog backups
+ * Decodes `games.json` and each file in the game folders that the server reads, game databases
  * and run logs included, without writing anything. Files of no known kind, such as reports, are
  * left out.
  */
@@ -73,7 +77,6 @@ export const decodeStateFolder = Effect.fn("decodeStateFolder")(function* () {
     const dir = `games/${id}`;
     const names = [
       ...(yield* folder.list(dir)),
-      ...(yield* folder.list(`${dir}/backups`)).map((name) => `backups/${name}`),
       ...(yield* folder.list(`${dir}/logs`)).map((name) => `logs/${name}`),
     ];
     for (const name of names.toSorted()) {

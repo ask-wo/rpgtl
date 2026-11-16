@@ -7,7 +7,6 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { imageFixtureKey } from "../../../../packages/game/src/testUtils/fixture.ts";
-import { entryTranslation } from "../../../../packages/domain/src/guesses.ts";
 import { encrypt, fakeReader, openImages, picture, readImages } from "./image-text.ts";
 
 const line = (text: string, box: number[]) => ({
@@ -39,13 +38,21 @@ export default async ({ page, api, run, log }: any) => {
     line("开始游戏", [48, 48, 152, 82]),
     line("退山", [48, 118, 152, 152]),
   ]);
-  const saved = async (id: string) =>
-    (await api(`catalog?id=${id}`)).entries.find(
+  const saved = async (id: string) => {
+    const catalog = await api(`catalog?id=${id}`);
+    const entry = catalog.entries.find(
       (e: any) =>
         e.location._tag === "ImageLines" &&
         e.location.image === "img/pictures/Test" &&
         e.location.lines[0] === 1,
     );
+    const text = catalog.texts.find((each: any) => each.id === entry.textId);
+    return {
+      id: entry.id,
+      source: text.source,
+      english: text.userTranslation ?? text.modelTranslation ?? "",
+    };
+  };
   try {
     const id = await openImages(page, run);
     await readImages(page, api, id);
@@ -65,12 +72,8 @@ export default async ({ page, api, run, log }: any) => {
     }
     const corrected = await saved(id);
     log(`entry after correction: ${JSON.stringify(corrected)}`);
-    if (
-      corrected.id !== read.id ||
-      corrected.readerText !== "退山" ||
-      entryTranslation(corrected) !== "Quit"
-    )
-      throw new Error("the entry didn't keep its id, the text read and the typed English");
+    if (corrected.id !== read.id || corrected.english !== "Quit")
+      throw new Error("the entry didn't keep its id and the typed English");
     await page.shot("corrected");
 
     await page.clickText("Read again", '[role="dialog"]');
@@ -82,19 +85,18 @@ export default async ({ page, api, run, log }: any) => {
     await page.waitFor(group("退出"));
     const reread = await saved(id);
     log(`after read again: ${JSON.stringify(reread)}`);
-    if (reread.source !== "退出" || reread.readerText !== "退山")
-      throw new Error("reading the image again lost the correction");
+    if (reread.source !== "退出") throw new Error("reading the image again lost the correction");
     await page.shot("read-again");
 
     await page.clickText("Use it", group("退出"));
     await page.waitFor(group("退山"));
-    for (let tries = 0; (await saved(id)).readerText !== undefined; tries++) {
+    for (let tries = 0; (await saved(id)).source !== "退山"; tries++) {
       if (tries > 50) throw new Error("going back to the text read wasn't saved");
       await sleep(100);
     }
     const restored = await saved(id);
     log(`after Use it: ${JSON.stringify(restored)}`);
-    if (restored.source !== "退山" || entryTranslation(restored) !== "Quit")
+    if (restored.source !== "退山" || restored.english !== "Quit")
       throw new Error("the text read didn't come back with the typed English");
     await page.shot("restored");
   } finally {

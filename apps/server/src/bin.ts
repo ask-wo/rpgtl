@@ -7,6 +7,7 @@ import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
+import * as Reactivity from "effect/reactivity/Reactivity";
 import * as Option from "effect/Option";
 import * as Runtime from "effect/Runtime";
 import * as Schema from "effect/Schema";
@@ -17,6 +18,7 @@ import * as Comparisons from "./comparison/Comparisons.ts";
 import * as Catalogs from "./games/Catalogs.ts";
 import * as GameFolder from "./games/GameFolder.ts";
 import * as Games from "./games/Games.ts";
+import * as GameDatabases from "./games/GameDatabases.ts";
 import * as FreeMemory from "./localModels/FreeMemory.ts";
 import * as LlamaServer from "./localModels/LlamaServer.ts";
 import * as LocalModelsCli from "./localModels/cli.ts";
@@ -41,8 +43,12 @@ const services = (state: Option.Option<string>) =>
       ),
     ),
     Layer.provideMerge(Layer.mergeAll(Games.layer, GameFolder.layer, ImageTexts.layer)),
+    Layer.provideMerge(GameDatabases.layer),
     Layer.provideMerge(
-      Option.match(state, { onNone: () => StateFolder.layer, onSome: StateFolder.layerAt }),
+      Layer.mergeAll(
+        Option.match(state, { onNone: () => StateFolder.layer, onSome: StateFolder.layerAt }),
+        Reactivity.layer,
+      ),
     ),
     // As for the server, the endpoints are on this computer, so redirects aren't followed.
     Layer.provide(

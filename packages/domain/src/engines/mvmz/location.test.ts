@@ -34,7 +34,9 @@ it("applying translations leaves the data it was given unchanged", () => {
   const before = structuredClone(data);
   const entries = extractFrom("CommonEvents.json", commonEvents).map((entry) => ({
     ...entry,
-    translation: { user: `EN ${entry.source}` },
+    textId: 1,
+    isInImage: false,
+    userTranslation: `EN ${entry.source}`,
   }));
   assert.isTrue(Result.isSuccess(applyTranslations("CommonEvents.json", data, entries)));
   assert.deepStrictEqual(data, before);

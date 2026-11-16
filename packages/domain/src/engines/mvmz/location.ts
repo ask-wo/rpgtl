@@ -1,6 +1,7 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
-import { type Entry, EventListRef, Location, NoteOwner, Table } from "@rpgtl/contracts";
+import { EventListRef, Location, NoteOwner, Table } from "@rpgtl/contracts";
+import type { ReadEntry } from "../../catalog.ts";
 
 const tableFiles: Record<Table, string> = {
   actors: "Actors.json",
@@ -109,11 +110,10 @@ export const pathOf: (location: Location) => ReadonlyArray<string> = Location.ma
 export const newEntry = <L extends Location>(
   location: L,
   source: string,
-): Entry & { readonly location: L } => ({
+): ReadEntry & { readonly location: L } => ({
   id: bytesToHex(
     sha256(utf8ToBytes(JSON.stringify([fileOf(location), pathOf(location), source]))),
   ).slice(0, 24),
   location,
   source,
-  translation: {},
 });

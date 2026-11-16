@@ -1,23 +1,15 @@
 import { glossaryFindings, sourceLeft, translationChecks } from "./index.ts";
 import { assert, it } from "@effect/vitest";
-import type { GlossaryTerm } from "@rpgtl/contracts";
+import { testTerm } from "./testUtils/catalog.ts";
 
-const glossary: GlossaryTerm[] = [
-  {
-    source: "老师",
-    translation: { user: "Teacher" },
-    kind: { guess: { value: "word", run: "r" } },
-  },
-  {
-    source: "装备",
-    translation: { user: "Equipment" },
-    kind: { guess: { value: "word", run: "r" } },
-  },
-  { source: "小葵", translation: { user: "Aoi" }, kind: { guess: { value: "word" } } },
-  { source: "林若溪", translation: { user: "Lin Ruoxi" }, kind: { guess: { value: "character" } } },
-  { source: "变身", translation: { user: "Transform" }, kind: { guess: { value: "name" } } },
-  { source: "月", translation: { user: "Yue" }, kind: { guess: { value: "character" } } },
-  { source: "토키", translation: { user: "Toki" }, kind: { guess: { value: "character" } } },
+const glossary = [
+  testTerm("老师", { userTranslation: "Teacher", modelKind: "word" }),
+  testTerm("装备", { userTranslation: "Equipment", modelKind: "word" }),
+  testTerm("小葵", { userTranslation: "Aoi", rulesKind: "word" }),
+  testTerm("林若溪", { userTranslation: "Lin Ruoxi", rulesKind: "character" }),
+  testTerm("变身", { userTranslation: "Transform", rulesKind: "name" }),
+  testTerm("月", { userTranslation: "Yue", rulesKind: "character" }),
+  testTerm("토키", { userTranslation: "Toki", rulesKind: "character" }),
 ];
 const check = translationChecks(glossary, "chinese", "MV");
 const line = (source: string, translation: string) =>
@@ -116,11 +108,8 @@ it("The ミ of a shooting star ★ミ may stay", () => {
   assert.isTrue(sourceLeft("流れ星キックミ", "Shooting Star Kickミ"));
 });
 
-const name = (source: string, english: string): GlossaryTerm => ({
-  source,
-  translation: { user: english },
-  kind: { guess: { value: "name" } },
-});
+const name = (source: string, english: string) =>
+  testTerm(source, { userTranslation: english, rulesKind: "name" });
 
 it("a term whose English leaves out a name inside it is flagged, though a character may go by part of their name", () => {
   const found = glossaryFindings([
