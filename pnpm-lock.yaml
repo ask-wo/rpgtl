@@ -208,6 +208,9 @@ importers:
       '@effect/platform-node':
         specifier: 4.1.2
         version: 4.1.2(effect@4.1.2)(redis@6.3.1(@opentelemetry/api@1.10.0))
+      '@effect/sql-sqlite-node':
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@fontsource/noto-sans':
         specifier: ^5.3.0
         version: 5.3.0
@@ -604,6 +607,11 @@ packages:
     peerDependencies:
       effect: ^4.1.2
       redis: '>=5.1.0 <7.0.0'
+
+  '@effect/sql-sqlite-node@4.1.2':
+    resolution: {integrity: sha512-fTmI8Ol1Lf8rGITtdIW285nuT9G46ETOPZ48CxlZ7vkfWDYgipYnH0dILxPGcZ6f/BMLeybmLRKKBcRWStShfQ==}
+    peerDependencies:
+      effect: ^4.1.2
 
   '@effect/tsgo-darwin-arm64@0.67.5':
     resolution: {integrity: sha512-wCtc/UafbsiWDZlDboVqW6qZI4PdlJzWnK1M29KgJVrey0E6yvGA9YV0ak+38cVqcAaXm1azL9qgI0IKwgNk8A==}
@@ -3707,6 +3715,10 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+
+  '@effect/sql-sqlite-node@4.1.2(effect@4.1.2)':
+    dependencies:
+      effect: 4.1.2
 
   '@effect/tsgo-darwin-arm64@0.67.5':
     optional: true

@@ -10,6 +10,8 @@ export const gameFiles = (id: string) => {
   return {
     folder,
     catalog: `${folder}/catalog.json`,
+    /** The game's text, translations, glossary, settings and their history, in SQLite. */
+    database: `${folder}/game.db`,
     /** Earlier catalogs, which each catalog change copies here first. */
     backups: `${folder}/backups`,
     /** What the image reader found, by image path. */
