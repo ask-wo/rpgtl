@@ -314,6 +314,23 @@ test("a run whose work is over says it is ending, without Stop, until it has end
   expect(bar.getByRole("button", { name: "Stop" }).query()).toBeNull();
 });
 
+test("a failed run says why, and how many entries it saved only when it saved some", async () => {
+  const server = fakeServer(translating([text("a", "")]));
+  showGame();
+  const failed = { _tag: "Failed", error: "The model stopped answering." } as const;
+  server.activity({ ...idle, translation: { ...running, phase: failed } });
+  const bar = page.getByRole("region", { name: "Runs" });
+  await expect
+    .element(bar.getByText("The model stopped answering.", { exact: true }))
+    .toBeVisible();
+  server.activity({ ...idle, translation: { ...running, done: 1, phase: failed } });
+  await expect
+    .element(
+      bar.getByText("The model stopped answering. The 1 entry translated before that is saved."),
+    )
+    .toBeVisible();
+});
+
 test("a run says how long the rest takes once it has gone on for a while", async () => {
   const server = fakeServer(translating([text("a", "")]));
   showGame();
