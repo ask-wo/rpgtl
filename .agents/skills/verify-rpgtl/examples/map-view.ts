@@ -1,5 +1,6 @@
 import { spriteColor } from "../../../../packages/game/src/testUtils/fixture.ts";
-import { writeFile } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { savedCatalog as readSaved } from "./saved.ts";
 
 // Run with verify-rpgtl/scripts/drive.ts against an MV or MZ fixture only.
@@ -143,6 +144,7 @@ export default async ({ page, openPage, run, log }: any) => {
     if (!value) throw new Error(message);
     log("PASS " + message);
   };
+  await rm(path.join(run.game, "img/characters/Actor1.png"));
   await page.fill("#game-path", run.game);
   await page.clickText("Open");
   await page.waitUntil(`document.querySelector("h1")?.textContent === "Fixture Adventure"`);

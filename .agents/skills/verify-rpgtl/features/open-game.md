@@ -34,12 +34,12 @@ Preconditions:
 - **Own address.** `await page.goto("/games/" + id)`. The overview shows without pressing Open.
 - **Forget.** `await page.click('[aria-label="Remove Fixture Adventure from the list"]')` (it shows on hover, but `page.click` reaches it), then `page.clickText("Remove from list")` in the dialog that asks first. The page goes to `/`, `api("games")` is `[]`, and `$RUN/state/games/<id>/game.db` still exists.
 - **Delete.** The same `×`, then `page.clickText("Delete")`. The page goes to `/`, `api("games")` is `[]`, `$RUN/state/games/<id>/` is gone and `games.json` no longer has the game.
-- **Overview.** The fixture asks for `img/characters/Actor1`, which it doesn't ship, so the overview starts with "1 image the game asks for isn't in its folder".
+- **Overview.** The fixture ships every image it asks for, so the overview shows no warning; `features/missing-images.md` removes one to show it.
 - **Folder browser.** `await page.clickText("Choose folder…")`, fill `input[name="path"]` and `clickText("Go")`, `clickText("Up")`, click the folder whose button text is `gameGame` (its name and the Game badge) in `[aria-label="Folders"]`, then `clickText("Choose this folder")`. `examples/folder-browser.ts` does this. The MV fixture keeps `data/` directly in the game folder, with no `www/`.
-- **Proof.** `page.shot("opened")` after each entry point, and the `api("games")` result logged. `examples/open-game.ts` does all of this except Delete.
+- **Proof.** A screenshot after each entry point, and the `api("games")` result logged. `examples/open-game.ts` covers the path, `index.html`, the sidebar, the own address, Settings and Remove from list; `examples/folder-browser.ts` the folder browser and `examples/open-version.ts` another version. `examples/moved-folder.ts` covers **Choose its new folder…** and Delete.
 
 ## Gotchas
 
-- The folder browser starts in the server's real home folder (the run doesn't change `HOME`), so it lists the real folders there; it only reads names. Type the fixture's path right away rather than browsing from home.
+- The folder browser starts at the typed path, beside the open game from the sidebar, or else in the server's real home folder (the run doesn't change `HOME`), where it lists the real folders; it only reads names. Type the fixture's path right away rather than browsing from home.
 - Only opening the folder again (by path, **Open a game…** or **Choose folder…**) rescans the text; the sidebar and the own address don't. A change to the game's data files shows only after the rescan.
-- Moving the game folder gives it a new id.
+- A game keeps its id when it moves: opening the moved folder asks whether it is another version, and **Replace** or **Choose its new folder…** keep the id. Only **Keep both**, or a folder no saved game matches, gets a new one.

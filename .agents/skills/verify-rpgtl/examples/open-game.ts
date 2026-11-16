@@ -11,9 +11,7 @@ export default async ({ page, api, run, log }: any) => {
   const address = await page.eval("location.pathname");
   const id = address.slice("/games/".length);
   log(`opened at ${address}`);
-  await page.waitUntil(
-    `document.body.textContent.includes("1 image the game asks for isn't in its folder")`,
-  );
+  await page.waitFor('label[for="translate-game"]');
   await page.shot("overview");
 
   await page.goto("/");
