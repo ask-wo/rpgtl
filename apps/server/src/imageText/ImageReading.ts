@@ -183,7 +183,7 @@ export class ImageReading extends Context.Service<
     ) => Effect.Effect<Stream.Stream<Option.Option<ImageRunStatus>>, Games.GameNotInspectedError>;
     /**
      * Starts reading the game's images that changed or aren't read yet, and those in `again` from
-     * scratch, with the saved settings once the reading's turn comes, and gives its first status.
+     * scratch, with the saved settings as they are now, and gives its first status.
      * Fails while the game's last reading hasn't ended.
      */
     readonly start: (

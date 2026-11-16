@@ -583,7 +583,7 @@ export class TranslationApi extends HttpApiGroup.make("translation")
     }),
     /**
      * Starts translating the game's untranslated entries in the background, with the saved
-     * settings as they are once its turn comes; until then the run waits.
+     * settings as they are now; a run that can't start yet waits its turn.
      */
     HttpApiEndpoint.post("start", "/translate", {
       payload: Schema.Struct({ id: Schema.String, kind: RunKind }),
@@ -622,7 +622,7 @@ export class ImagesApi extends HttpApiGroup.make("images")
     }),
     /**
      * Starts reading the game's images in the background, with the saved settings as they are
-     * once its turn comes; until then the reading waits. `again` reads those images from scratch.
+     * now; a reading that can't start yet waits its turn. `again` reads those images from scratch.
      */
     HttpApiEndpoint.post("start", "/images/read", {
       payload: Schema.Struct({ id: Schema.String, again: Schema.optionalKey(ReadAgain) }),

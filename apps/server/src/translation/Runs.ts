@@ -156,8 +156,8 @@ export class Runs extends Context.Service<
       id: string,
     ) => Effect.Effect<Option.Option<RunStatus>, Games.GameNotInspectedError>;
     /**
-     * Starts translating the game's untranslated entries with the saved settings once the run's
-     * turn comes, and gives the run's first status. Fails while the game's last run hasn't ended.
+     * Starts translating the game's untranslated entries with the saved settings as they are now,
+     * since the translator decides which runs it waits for, and gives the run's first status. Fails while the game's last run hasn't ended.
      */
     readonly start: (
       id: string,
