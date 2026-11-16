@@ -1,5 +1,6 @@
 import { gameFiles } from "@rpgtl/contracts";
 import * as Effect from "effect/Effect";
+import { catalogDatabases } from "./catalogDatabases.ts";
 import { entryLocations } from "./entryLocations.ts";
 import type { Upgrades } from "./upgrade.ts";
 
@@ -13,11 +14,11 @@ const ofGames =
  * they are set aside.
  */
 export const stateUpgrades: Upgrades = {
-  steps: [entryLocations],
+  steps: [entryLocations, catalogDatabases],
   kept: (folder) =>
-    Effect.map(ofGames((files) => [files.catalog, files.imageResults])(folder), (files) => [
-      "games.json",
-      ...files,
-    ]),
+    Effect.map(
+      ofGames((files) => [files.catalog, files.database, files.imageResults])(folder),
+      (files) => ["games.json", ...files],
+    ),
   setAside: ofGames((files) => [files.backups, files.logs, files.samples]),
 };

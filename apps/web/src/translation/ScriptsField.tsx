@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
 import { failureMessage } from "../app/failure.ts";
-import { catalogKey, setOriginalScripts } from "./atoms.ts";
+import { catalogKey, setScriptTranslation } from "./atoms.ts";
 
 /** Whether an XP game plays with the English of its scripts' strings. */
 export function ScriptsField({
@@ -15,12 +15,12 @@ export function ScriptsField({
   readonly saved: Catalog;
   readonly locked: boolean;
 }) {
-  const set = useAtomSet(setOriginalScripts, { mode: "promiseExit" });
+  const set = useAtomSet(setScriptTranslation, { mode: "promiseExit" });
   const [error, setError] = useState<string>();
   const change = async (on: boolean) => {
     setError(undefined);
     const exit = await set({
-      payload: { id: saved.game.id, on: !on },
+      payload: { id: saved.game.id, on },
       reactivityKeys: catalogKey(saved.game.id),
     });
     if (Exit.isFailure(exit)) setError(failureMessage(exit.cause));
@@ -30,7 +30,7 @@ export function ScriptsField({
       <div className="flex items-center gap-2">
         <Switch
           id="translate-scripts"
-          checked={!saved.originalScripts}
+          checked={saved.settings.isScriptTranslationOn}
           disabled={locked}
           onCheckedChange={change}
         />

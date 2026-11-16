@@ -13,7 +13,7 @@ import * as SessionToken from "../auth/SessionToken.ts";
 import * as Catalogs from "../games/Catalogs.ts";
 import * as StateFolder from "../state/StateFolder.ts";
 import { folderWith } from "../testUtils/gameFolder.ts";
-import { noPrograms, opened, playServices, servicesWith } from "../testUtils/state.ts";
+import { noPrograms, opened, playServices, servicesWith, typed } from "../testUtils/state.ts";
 import { translatedSign } from "../testUtils/xpImages.ts";
 import * as XpFixes from "./XpFixes.ts";
 import * as XpPatch from "./XpPatch.ts";
@@ -48,15 +48,8 @@ const archivedGame = {
 const translated = Effect.fnUntraced(function* (files: Record<string, string | Uint8Array>) {
   const catalogs = yield* Catalogs.Catalogs;
   const dir = yield* folderWith(files);
-  const { game, catalog } = yield* opened(catalogs.inspect(dir));
-  yield* catalogs.save({
-    ...catalog,
-    translate: false,
-    entries: catalog.entries.map((entry) => ({
-      ...entry,
-      translation: { user: entry.source === "你好" ? "Hello" : "" },
-    })),
-  });
+  const { game } = yield* opened(catalogs.inspect(dir));
+  yield* typed(game.id, (entry) => (entry.source === "你好" ? "Hello" : undefined));
   return game;
 });
 
@@ -100,7 +93,7 @@ it.live("a patch's scripts hold the fixes that are on, which its readme names", 
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const game = yield* translated(archivedGame);
-    yield* catalogs.setOriginalScripts(game.id, true);
+    yield* catalogs.setScriptTranslation(game.id, false);
     const { root } = yield* StateFolder.StateFolder;
     const fixes = path.join(root, gameFiles(game.id).xpFixes);
     yield* fs.makeDirectory(fixes, { recursive: true });
@@ -151,7 +144,7 @@ it.live(
       yield* fs.writeFile(at("Data/Map001.rxdata"), map("Hello"));
       const { catalog } = yield* opened(catalogs.inspect(game.root));
       assert.include(
-        catalog.entries.map((entry) => entry.source),
+        catalog.texts.map((text) => text.source),
         "你好",
       );
 

@@ -4,7 +4,7 @@ import { seriesName } from "./imageText.ts";
 import { isNameEntry, isSpeakerNameEntry } from "./nameEntries.ts";
 import type { ContextLine, RequestEntry } from "./prompts.ts";
 import { withoutCodes } from "./requestText.ts";
-import { entryTranslation } from "./guesses.ts";
+import { translationInUse } from "./inUse.ts";
 import { isImageText, listKey, type Placed, placeKey, placeOf } from "./location.ts";
 import { hasTerm } from "./termMatch.ts";
 
@@ -32,14 +32,14 @@ const grouped = (entries: ReadonlyArray<RunEntry>, key: (entry: RunEntry) => str
 };
 
 const left = (group: ReadonlyArray<RunEntry>) =>
-  group.filter((entry) => !entryTranslation(entry)).length;
+  group.filter((entry) => !translationInUse(entry)).length;
 
 /** The group cut into groups of at most `batchSize` untranslated entries. */
 const cut = (group: ReadonlyArray<RunEntry>, batchSize: number) => {
   const groups: Array<Array<RunEntry>> = [[]];
   for (const entry of group) {
     const current = groups.at(-1) ?? [];
-    if (!entryTranslation(entry) && left(current) === batchSize) groups.push([entry]);
+    if (!translationInUse(entry) && left(current) === batchSize) groups.push([entry]);
     else current.push(entry);
   }
   return groups;
@@ -64,7 +64,7 @@ export const nameGroups = (entries: ReadonlyArray<RunEntry>, batchSize: number) 
  */
 export function sharedNames(entries: ReadonlyArray<RunEntry>) {
   const sources = [
-    ...new Set(entries.filter((entry) => !entryTranslation(entry)).map((e) => e.source.trim())),
+    ...new Set(entries.filter((entry) => !translationInUse(entry)).map((e) => e.source.trim())),
   ];
   const shorter = sources.filter((source) => Array.from(source).length >= 2);
   const lengths = [...new Set(shorter.map((source) => source.length))];
@@ -82,7 +82,7 @@ export function sharedNames(entries: ReadonlyArray<RunEntry>) {
   const picked = new Set<string>();
   return entries.filter((entry) => {
     const source = entry.source.trim();
-    if (entryTranslation(entry) || (containing.get(source) ?? 0) < 2 || picked.has(source))
+    if (translationInUse(entry) || (containing.get(source) ?? 0) < 2 || picked.has(source))
       return false;
     picked.add(source);
     return true;
@@ -123,7 +123,7 @@ export function speakerEntries(draft: CatalogDraft, prepared: ReadonlyArray<Prep
   return [...names].map((name): RunEntry => ({
     id: `speaker:${name}`,
     source: name,
-    translation: {},
+    isInImage: false,
   }));
 }
 
@@ -180,8 +180,8 @@ export function batchRequest(
         ...sceneOf(item),
         ...speakerOf(item),
         source: withoutCodes(item.entry.source),
-        ...(entryTranslation(item.entry) && {
-          translation: withoutCodes(entryTranslation(item.entry)),
+        ...(translationInUse(item.entry) && {
+          translation: withoutCodes(translationInUse(item.entry)),
         }),
       }));
   });

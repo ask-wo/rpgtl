@@ -1,4 +1,4 @@
-import type { Entry } from "@rpgtl/contracts";
+import type { EntryText } from "./catalog.ts";
 import { codeOrBackslash, controlCodePattern, isPauseCode, shownText } from "./controlCodes.ts";
 import { creditLine, keepsLineBreaks } from "./engines/mvmz/extract.ts";
 import { pauseMarker, pausesIn, withPauses, type Pause, type Pauses } from "./pauses.ts";
@@ -112,7 +112,7 @@ function withSpeakerLine(
 
 /** With `keepTags`, the tags of an XP database name or description are kept aside like control codes. */
 export function requestText(
-  entry: Pick<Entry, "source"> & Placed,
+  entry: Pick<EntryText, "source"> & Placed,
   isSpeaker?: (name: string) => boolean,
   keepTags = false,
 ): RequestText {

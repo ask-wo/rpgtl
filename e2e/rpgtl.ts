@@ -1,12 +1,12 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
+import { DatabaseSync } from "node:sqlite";
 import { test as base, expect, type Page } from "@playwright/test";
 import { fixture } from "../packages/game/src/testUtils/fixture.ts";
 import { mvGame } from "../packages/game/src/testUtils/mvGame.ts";
-import type { Entry } from "../packages/contracts/src/catalog.ts";
 
 const repo = path.join(import.meta.dirname, "..");
 
@@ -19,8 +19,8 @@ interface Rpgtl {
 /** A fixture game opened in RPGTL. */
 export interface OpenedGame {
   readonly id: string;
-  /** The game's catalog as RPGTL saved it. */
-  readonly saved: () => Promise<{ entries: Pick<Entry, "source" | "translation">[] }>;
+  /** The game's texts as its database holds them, each with the English in use or none. */
+  readonly savedTexts: () => ReadonlyArray<{ source: string; english: string | null }>;
   /**
    * Opens the game as the browser plays it, in a tab of its own. The test fails if the game logs
    * an error or throws one.
@@ -152,8 +152,24 @@ export const test = base.extend<
       const id = new URL(page.url()).pathname.slice("/games/".length);
       return {
         id,
-        saved: async () =>
-          JSON.parse(await readFile(path.join(rpgtl.state, "games", id, "catalog.json"), "utf8")),
+        savedTexts: () => {
+          const database = new DatabaseSync(path.join(rpgtl.state, "games", id, "game.db"), {
+            readOnly: true,
+          });
+          try {
+            return database
+              .prepare(
+                "select source, coalesce(user_translation, model_translation) as english from texts",
+              )
+              .all()
+              .map((row) => ({
+                source: String(row["source"]),
+                english: typeof row["english"] === "string" ? row["english"] : null,
+              }));
+          } finally {
+            database.close();
+          }
+        },
         play: async () => {
           const game = await context.newPage();
           const errors: string[] = [];

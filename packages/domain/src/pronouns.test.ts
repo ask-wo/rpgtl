@@ -1,23 +1,23 @@
 import { assert, it } from "@effect/vitest";
-import type { Entry, GlossaryTerm, SourceLanguage } from "@rpgtl/contracts";
+import type { SourceLanguage } from "@rpgtl/contracts";
 import { collectClues, linesAbout } from "./index.ts";
+import { testEntry, testTerm } from "./testUtils/catalog.ts";
 
 let counter = 0;
-const message = (source: string, speaker?: string): Entry => ({
-  id: `m${++counter}`,
-  location: {
-    _tag: "Message",
-    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
-    index: counter,
-  },
-  source: speaker ? `\\n<${speaker}>${source}` : source,
-  translation: {},
-});
-const name = (source: string, translation: string): GlossaryTerm => ({
-  source,
-  translation: translation ? { user: translation } : {},
-  kind: { guess: { value: "character" } },
-});
+const message = (source: string, speaker?: string) =>
+  testEntry(
+    {
+      _tag: "Message",
+      list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+      index: ++counter,
+    },
+    speaker ? `\\n<${speaker}>${source}` : source,
+  );
+const name = (source: string, translation: string) =>
+  testTerm(source, {
+    rulesKind: "character",
+    ...(translation && { userTranslation: translation }),
+  });
 const clues = (
   sources: string[],
   names: string[],

@@ -15,10 +15,10 @@ When the game's data asks for a face, character sprite or picture that the game 
 
 Preconditions:
 
-- Fixture game open. The fixture's actor uses `Actor1` with no `img/characters/` folder, so the overview's warning shows `img/characters/Actor1` asked for in `Actors.json`.
+- The fixture ships every image it asks for. Remove `img/characters/Actor1.png` from `run.game` before opening the game; the actor and an event of `Map002.json` ask for it. `examples/missing-images.ts` is a complete, passing steps file for both sub-features.
 
-- **List.** `page.waitUntil('document.body.textContent.includes("img/characters/Actor1")')`, with `Actors.json` beside it and "Replaced with a blank image." in the title.
-- **Case.** Before launch, or with the game reopened, add `actor1.png`: `mkdir -p $RUN/game/img/characters && cp <any png> $RUN/game/img/characters/actor1.png`, open the game again by path; `Actor1` is no longer listed.
+- **List.** `page.waitUntil('document.body.textContent.includes("img/characters/Actor1, asked for in Actors.json, Map002.json")')`, and "Replaced with a blank image." in the title.
+- **Case.** Rename the file back as `actor1.png` and open the game again by path; `Actor1` is no longer listed.
 - **Proof.** Screenshots of the warning before and after.
 
 ## Gotchas

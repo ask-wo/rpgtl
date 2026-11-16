@@ -1,20 +1,12 @@
 import { assert, it } from "@effect/vitest";
-import type { Entry, GlossaryTerm, Location } from "@rpgtl/contracts";
+import type { GlossaryTerm, Location } from "@rpgtl/contracts";
 import { termInputs } from "./index.ts";
+import { testEntry, testTerm } from "./testUtils/catalog.ts";
 
-const entry = (location: Location, source: string, speaker?: string): Entry => ({
-  id: JSON.stringify(location),
-  location,
-  source,
-  translation: {},
-  ...(speaker && { speaker }),
-});
-const glossaryTerm = (source: string, extra: Partial<GlossaryTerm> = {}): GlossaryTerm => ({
-  source,
-  translation: { user: source },
-  kind: { guess: { value: "name" } },
-  ...extra,
-});
+const entry = (location: Location, source: string, speaker?: string) =>
+  testEntry(location, source, speaker ? { speaker } : {});
+const glossaryTerm = (source: string, extra: Partial<GlossaryTerm> = {}) =>
+  testTerm(source, { userTranslation: source, rulesKind: "name", ...extra });
 
 const entries = [
   entry({ _tag: "RecordField", table: "actors", record: 1, field: "name" }, "菲奥娜"),

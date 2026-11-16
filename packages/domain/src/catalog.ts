@@ -1,18 +1,69 @@
-import type { Catalog, Entry, GlossaryTerm, Pronoun, RunModels } from "@rpgtl/contracts";
-import * as Struct from "effect/Struct";
+import type { Catalog, Entry, Operation, Text } from "@rpgtl/contracts";
 import { splitVersion } from "./gameIdentity.ts";
-import { entryTranslation, isUserValue, withUser } from "./guesses.ts";
+import { cleared, isUserTranslation, translationInUse } from "./inUse.ts";
 import { isImageText } from "./location.ts";
 
+/** An entry with the fields of its text, as checks, applying and runs read it. */
+export type EntryText = Entry & Omit<Text, "id">;
+
+/** What reading a game's files gives for each entry, before it has a text. */
+export type ReadEntry = Pick<EntryText, "id" | "location" | "source"> &
+  Partial<Pick<EntryText, "speaker" | "builtinTranslation">>;
+
+/** The catalog's texts by id. */
+export const textsById = ({ texts }: Pick<Catalog, "texts">) =>
+  new Map(texts.map((text) => [text.id, text]));
+
+/** Each entry of the catalog with the fields of its text, in the catalog's order. */
+export function entryTexts(catalog: Pick<Catalog, "entries" | "texts">): EntryText[] {
+  const texts = textsById(catalog);
+  return catalog.entries.flatMap((entry) => {
+    const text = texts.get(entry.textId);
+    return text ? [{ ...text, ...entry }] : [];
+  });
+}
+
+/** The catalog with the texts that `f` changes, keeping each text `f` gives back unchanged. */
+export const withTexts = <C extends Pick<Catalog, "texts">>(
+  catalog: C,
+  f: (text: Text) => Text,
+): C => ({ ...catalog, texts: catalog.texts.map(f) });
+
+/** A text's key: no two of the catalog's texts share one. */
+export const textKey = ({
+  source,
+  speaker,
+  isInImage,
+}: Pick<Text, "source" | "speaker" | "isInImage">) =>
+  JSON.stringify([source, speaker ?? null, isInImage]);
+
+/**
+ * The catalog with the text of `key`, added without translations when it has none, and its id. An
+ * added text's id is below 0 until it is saved, which gives it one.
+ */
+export function withTextOf<C extends Pick<Catalog, "texts">>(
+  catalog: C,
+  key: Pick<Text, "source" | "speaker" | "isInImage">,
+): { readonly catalog: C; readonly id: number } {
+  const wanted = textKey(key);
+  const found = catalog.texts.find((text) => textKey(text) === wanted);
+  if (found) return { catalog, id: found.id };
+  const id = Math.min(0, ...catalog.texts.map((text) => text.id)) - 1;
+  const { source, speaker, isInImage } = key;
+  const text: Text = { id, source, isInImage, ...(speaker !== undefined && { speaker }) };
+  return { catalog: { ...catalog, texts: [...catalog.texts, text] }, id };
+}
+
 /** The English of the game's title in System.json without its version, if it has any. */
-export const titleTranslation = ({ entries }: Pick<Catalog, "entries">) => {
-  const entry = entries.find(
+export const titleTranslation = (catalog: Pick<Catalog, "entries" | "texts">) => {
+  const entry = catalog.entries.find(
     ({ location }) =>
       location._tag === "SystemText" &&
       location.keys.length === 1 &&
       location.keys[0] === "gameTitle",
   );
-  return entry ? splitVersion(entryTranslation(entry)).name.trim() || undefined : undefined;
+  const text = entry && textsById(catalog).get(entry.textId);
+  return text ? splitVersion(translationInUse(text)).name.trim() || undefined : undefined;
 };
 
 /**
@@ -30,50 +81,20 @@ export function sameGame(
   return text.filter((entry) => found.has(entry.id)).length * 2 >= text.length;
 }
 
-/** An entry-like `T` whose English the user or a rule just changed. */
-type ChangedTranslation<T> = Omit<T, "translation" | "previous"> &
-  Pick<Entry, "translation" | "previous">;
-
-/** The entry with its English cleared, so the next run translates it; `previous` keeps it. */
-export function cleared<T extends Pick<Entry, "translation" | "previous">>(
-  entry: T,
-): ChangedTranslation<T> {
-  const was = entryTranslation(entry);
-  const { previous, translation: _, ...rest } = entry;
-  return { ...rest, translation: {}, ...((was || previous) && { previous: was || previous }) };
-}
-
 /**
- * The entry with the English the user typed: empty clears it, and the run's guess is kept beside
- * other English, to go back to.
+ * The catalog with the translations that runs gave the texts of these entries cleared,
+ * so the next run translates them again; translations the user typed stay.
  */
-export function withTranslation<T extends Pick<Entry, "translation" | "previous">>(
-  entry: T,
-  typed: string,
-): ChangedTranslation<T> {
-  if (!typed) return cleared(entry);
-  const { previous, translation, ...rest } = entry;
+export function withTranslationsCleared(catalog: Catalog, ids: ReadonlyArray<string>) {
+  const of = new Set(ids);
+  const wanted = new Set(
+    catalog.entries.filter((entry) => of.has(entry.id)).map((entry) => entry.textId),
+  );
+  const clears = (text: Text) =>
+    wanted.has(text.id) && !isUserTranslation(text) && translationInUse(text) !== "";
   return {
-    ...rest,
-    translation: withUser(translation, typed),
-    ...(previous !== undefined && previous !== typed && { previous }),
-  };
-}
-
-/**
- * The catalog with the English that runs gave these entries cleared, so the next run translates
- * them again; English the user typed stays.
- */
-export function withGuessesCleared(catalog: Catalog, ids: ReadonlyArray<string>) {
-  const wanted = new Set(ids);
-  const clears = (entry: Entry) =>
-    wanted.has(entry.id) && !isUserValue(entry.translation) && entryTranslation(entry) !== "";
-  return {
-    cleared: catalog.entries.filter(clears).length,
-    catalog: {
-      ...catalog,
-      entries: catalog.entries.map((entry) => (clears(entry) ? cleared(entry) : entry)),
-    } satisfies Catalog,
+    cleared: catalog.texts.filter(clears).length,
+    catalog: withTexts(catalog, (text) => (clears(text) ? cleared(text) : text)),
   };
 }
 
@@ -87,83 +108,28 @@ export const namedRuns = <R>(
   return kept.length ? { runs: Object.fromEntries(kept) } : {};
 };
 
-/**
- * The catalog with every translation cleared, and with what runs left on its entries. The switch
- * stays as it was.
- */
-export const restoredCatalog = (catalog: Catalog): Catalog => ({
-  ...catalog,
-  entries: catalog.entries.map((entry) => cleared(Struct.omit(entry, ["suggestion"]))),
-});
+/** The catalog with every translation and rejected answer cleared. */
+export const restoredCatalog = (catalog: Catalog): Catalog =>
+  withTexts(catalog, (text) => {
+    const { rejectedTranslation: _, rejectionReason: __, ...rest } = text;
+    return cleared(rest);
+  });
 
-/** A guessed value in the catalog, with what it is the value of. */
-export type GuessedOf =
-  | { readonly of: "translation"; readonly entry: Entry; readonly value: Entry["translation"] }
-  | {
-      readonly of: "termTranslation";
-      readonly term: GlossaryTerm;
-      readonly value: GlossaryTerm["translation"];
-    }
-  | { readonly of: "kind"; readonly term: GlossaryTerm; readonly value: GlossaryTerm["kind"] }
-  | { readonly of: "pronoun"; readonly term: GlossaryTerm; readonly value: Pronoun };
+/** The catalog's operations by id. */
+export const operationsById = ({ operations }: Pick<Catalog, "operations">) =>
+  new Map(operations.map((operation) => [operation.id, operation]));
 
-/** Every guessed value of the catalog's entries and glossary. */
-export function* guessedValues({
-  entries,
-  glossary,
-}: Pick<Catalog, "entries" | "glossary">): Generator<GuessedOf> {
-  for (const entry of entries) yield { of: "translation", entry, value: entry.translation };
-  for (const term of glossary) {
-    yield { of: "termTranslation", term, value: term.translation };
-    yield { of: "kind", term, value: term.kind };
-    if (term.pronoun) yield { of: "pronoun", term, value: term.pronoun };
-  }
-}
+/** Whether the operation with this id was a run, whose model gave the value it wrote. */
+export const byRun = (operations: ReadonlyMap<number, Operation>, id: number | undefined) =>
+  id !== undefined && operations.get(id)?.kind === "run";
 
-/** The catalog's runs that one of its guesses names, so a run none names any more is dropped. */
-export const guessRuns = <R>(
-  catalog: Pick<Catalog, "entries" | "glossary">,
-  runs: Readonly<Record<string, R>> | undefined,
-) =>
-  namedRuns(
-    [...guessedValues(catalog)].map(({ value }) => value.guess ?? {}),
-    runs,
+/** The id of the last run that gave a text or a glossary term its translation, if any did. */
+export function lastRun(catalog: Pick<Catalog, "texts" | "glossary" | "operations">) {
+  const runs = new Set(
+    catalog.operations.filter((operation) => operation.kind === "run").map(({ id }) => id),
   );
-
-/**
- * The catalog with the run that started at `started`, using `models`, among its runs, and as its
- * last run once the run translated an entry.
- */
-export function withRunMarks(
-  catalog: Catalog,
-  { started, models }: { readonly started: string; readonly models: RunModels },
-): Catalog {
-  const { runs, ...rest } = catalog;
-  return {
-    ...rest,
-    ...(catalog.entries.some((entry) => entry.translation.guess?.run === started) && {
-      lastRun: started,
-    }),
-    ...guessRuns(catalog, { ...runs, [started]: models }),
-  };
+  let last: number | undefined;
+  for (const { modelOperationId: id } of [...catalog.texts, ...catalog.glossary])
+    if (id !== undefined && runs.has(id) && (last === undefined || id > last)) last = id;
+  return last;
 }
-
-/**
- * Whether the guess is the run's that started at `started` and still in use, leaving out English
- * that is the entry's own text, as a line without words keeps.
- */
-const inUseFrom = (started: string) => (guessed: GuessedOf) =>
-  guessed.value.guess?.run === started &&
-  !isUserValue(guessed.value) &&
-  !(guessed.of === "translation" && guessed.value.guess.value === guessed.entry.source);
-
-/** The catalog's runs, each with how many of its guesses are still in use. */
-export const runsWithCounts = (catalog: Catalog) => {
-  const all = [...guessedValues(catalog)];
-  return Object.fromEntries(
-    Object.entries(catalog.runs ?? {}).map(([started, models]) => [
-      started,
-      { ...models, guesses: all.filter(inUseFrom(started)).length },
-    ]),
-  );
-};

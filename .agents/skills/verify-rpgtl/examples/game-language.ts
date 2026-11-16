@@ -1,13 +1,14 @@
 // The Translation card's Game language: the guess from the text, a chosen language saved in the
-// catalog, and going back to the guess.
-import { readFileSync, writeFileSync } from "node:fs";
+// game's settings, and going back to the language the text looks like.
+import { writeFileSync } from "node:fs";
+import { savedCatalog } from "./saved.ts";
 
 export default async ({ page, run, log }: any) => {
   await page.fill("#game-path", run.game);
   await page.clickText("Open");
   await page.waitUntil(`document.querySelector("h1")?.textContent === "Fixture Adventure"`);
   const id = (await page.eval("location.pathname")).slice("/games/".length);
-  const saved = () => JSON.parse(readFileSync(`${run.state}/games/${id}/catalog.json`, "utf8"));
+  const saved = () => savedCatalog(run.state, id).settings;
   const shown = () => page.text("#game-language");
   // Where the Translation card is in each screenshot, for cropping them to it.
   const cards: Record<string, unknown> = {};
@@ -24,7 +25,7 @@ export default async ({ page, run, log }: any) => {
 
   await page.click('label[for="translate-game"]');
   await page.waitFor("#game-language");
-  log(`shown: ${await shown()}; saved language: ${saved().language}`);
+  log(`shown: ${await shown()}; saved language: ${saved().sourceLanguage}`);
   if ((await shown()) !== "Chinese (Automatic)") throw new Error("no guess shown");
   await shot("guessed");
 
@@ -43,15 +44,15 @@ export default async ({ page, run, log }: any) => {
 
   await page.select("#game-language", "Korean");
   await page.waitUntil(`document.querySelector("#game-language")?.textContent === "Korean"`);
-  log(`shown: ${await shown()}; saved language: ${saved().language}`);
-  if (saved().language !== "korean") throw new Error("Korean wasn't saved");
+  log(`shown: ${await shown()}; saved language: ${saved().sourceLanguage}`);
+  if (saved().sourceLanguage !== "korean") throw new Error("Korean wasn't saved");
   await shot("korean-chosen");
 
   await page.select("#game-language", "Chinese (Automatic)");
   await page.waitUntil(
     `document.querySelector("#game-language")?.textContent === "Chinese (Automatic)"`,
   );
-  log(`shown: ${await shown()}; saved language: ${saved().language}`);
-  if ("language" in saved()) throw new Error("the choice wasn't removed");
+  log(`shown: ${await shown()}; saved language: ${saved().sourceLanguage}`);
+  if ("sourceLanguage" in saved()) throw new Error("the choice wasn't removed");
   writeFileSync(`${run.evidence}/cards.json`, JSON.stringify(cards));
 };

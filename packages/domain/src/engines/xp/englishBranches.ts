@@ -1,4 +1,4 @@
-import type { Entry } from "@rpgtl/contracts";
+import type { ReadEntry } from "../../catalog.ts";
 import { shownText } from "../../controlCodes.ts";
 import { sourceText } from "../mvmz/extract.ts";
 import type { RubyLiteral } from "./rubyLiterals.ts";
@@ -131,9 +131,11 @@ const wide = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han
  * ("Yes" for a choice to cut or replace). None when the English has no letters, as a `"????"` the
  * author left to fill in.
  */
-export function gameEnglishLimit(entry: Pick<Entry, "source" | "gameEnglish">) {
+export function builtinTranslationLimit(entry: Pick<ReadEntry, "source" | "builtinTranslation">) {
   const english =
-    entry.gameEnglish === undefined ? "" : shownText(entry.gameEnglish.replace(interpolation, "0"));
+    entry.builtinTranslation === undefined
+      ? ""
+      : shownText(entry.builtinTranslation.replace(interpolation, "0"));
   if (!/[A-Za-z]/.test(english)) return undefined;
   let source = 0;
   for (const char of shownText(entry.source.replace(interpolation, "0")))

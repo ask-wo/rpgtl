@@ -1,4 +1,4 @@
-import type { Catalog } from "@rpgtl/contracts";
+import { testCatalog } from "@rpgtl/domain/testUtils/catalog";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { page } from "vite-plus/test/browser";
 import { beforeAll, expect, test } from "vite-plus/test";
@@ -8,26 +8,23 @@ import { game, idle } from "./testUtils/game.ts";
 
 beforeAll(() => page.viewport(1280, 800));
 
-const saved: Catalog = {
-  version: 1,
+const saved = testCatalog({
   game: { id: game.id, title: game.title, engine: "MV" },
   entries: [
     {
       id: "1",
       location: { _tag: "MapName", map: 1 },
       source: "你好",
-      translation: { user: "Hello" },
+      userTranslation: "Hello",
     },
     {
       id: "2",
       location: { _tag: "RecordField", table: "items", record: 2, field: "name" },
       source: "药水",
-      translation: {},
     },
   ],
-  glossary: [],
-  translate: true,
-};
+  settings: { isTranslationOn: true },
+});
 
 test("the bar's link after a run opens the Text page on the failed entries, and the address keeps it", async () => {
   const stream = events();

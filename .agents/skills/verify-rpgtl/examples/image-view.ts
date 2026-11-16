@@ -98,7 +98,8 @@ export default async ({ page, api, run, log }: any) => {
     await page.shot("image-view-whole-kept");
     await until(
       "the kept image's save",
-      async () => (await api(`catalog?id=${id}`)).unchangedImages?.[0] === "img/pictures/Test",
+      async () =>
+        (await api(`catalog?id=${id}`)).settings.untranslatedImages?.[0] === "img/pictures/Test",
     );
     if (await served(id)) throw new Error("the kept image is still drawn in the game");
     log("whole image kept: saved, and the game gets no blocks for it");

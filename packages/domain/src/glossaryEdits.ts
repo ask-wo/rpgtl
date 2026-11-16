@@ -1,12 +1,13 @@
-import type { Catalog, Entry, GlossaryTerm, TermEdit } from "@rpgtl/contracts";
+import type { Catalog, GlossaryTerm, TermEdit, Text } from "@rpgtl/contracts";
 import * as Result from "effect/Result";
+import * as Struct from "effect/Struct";
 import * as Schema from "effect/Schema";
-import { cleared } from "./catalog.ts";
+import { entryTexts, withTexts } from "./catalog.ts";
 import { wordPattern } from "./checks.ts";
 import { keepsTags, withoutTags } from "./engines/xp/databaseTags.ts";
 import { hasTerm } from "./termMatch.ts";
-import { entriesToClear } from "./shortNames.ts";
-import { entryTranslation, inUse, mapInUse, termTranslation, termKind } from "./guesses.ts";
+import { textsToClear } from "./shortNames.ts";
+import { cleared, termKind, translationInUse, withTranslationMapped } from "./inUse.ts";
 
 /** A glossary that lists the same source twice. */
 export class GlossaryTermRepeated extends Schema.TaggedError<GlossaryTermRepeated>()(
@@ -29,53 +30,66 @@ export const repeatedSource = (glossary: ReadonlyArray<Pick<GlossaryTerm, "sourc
 };
 
 /** Only characters keep a pronoun. */
-export const withoutStrayPronoun = ({ pronoun, ...term }: GlossaryTerm): GlossaryTerm => ({
-  ...term,
-  ...(termKind(term) === "character" && pronoun && { pronoun }),
-});
+export const withoutStrayPronoun = (term: GlossaryTerm): GlossaryTerm => {
+  if (termKind(term) === "character") return term;
+  const {
+    rulesPronoun: _,
+    modelPronoun: __,
+    userPronoun: ___,
+    sheClues: ____,
+    heClues: _____,
+    ...rest
+  } = term;
+  return rest;
+};
 
 /** The user's own values of a term, as the Glossary page saves them. */
-export const termEdit = ({ source, translation, kind, pronoun }: GlossaryTerm): TermEdit => ({
+export const termEdit = ({
   source,
-  ...(translation.user !== undefined && { translation: translation.user }),
-  ...(kind.user !== undefined && { kind: kind.user }),
-  ...(pronoun?.user !== undefined && { pronoun: pronoun.user }),
-});
-
-const withOwn = <A, G>(guess: G | undefined, user: A | undefined) => ({
-  ...(guess !== undefined && { guess }),
-  ...(user !== undefined && { user }),
+  userTranslation,
+  userKind,
+  userPronoun,
+}: GlossaryTerm): TermEdit => ({
+  source,
+  ...(userTranslation !== undefined && { userTranslation }),
+  ...(userKind !== undefined && { userKind }),
+  ...(userPronoun !== undefined && { userPronoun }),
 });
 
 /**
- * The term the user saved, with the guesses of `saved`, the term of its source before. Empty
- * English leaves the term without any. A term the user adds is a name, as the rules guess until a
- * run's model sorts it.
+ * The term the user saved, with the rules' and the model's values of `saved`, the term of its
+ * source before. Empty English leaves the term without any, and English typed drops the one it
+ * had before it was cleared. A term the user adds is a name, as the
+ * rules say until a run's model sorts it; it has an id below 0 until it is saved.
  */
-export function savedTerm(saved: GlossaryTerm | undefined, edit: TermEdit): GlossaryTerm {
-  const translation = edit.translation?.trim();
-  const pronoun = withOwn(saved?.pronoun?.guess, edit.pronoun);
-  const english = translation === "" ? {} : withOwn(saved?.translation.guess, translation);
-  const previous =
-    translation === "" && saved ? termTranslation(saved) || saved.previous : saved?.previous;
+export function savedTerm(
+  saved: GlossaryTerm | undefined,
+  edit: TermEdit,
+  newId: number,
+): GlossaryTerm {
+  const typed = edit.userTranslation?.trim();
+  const before: GlossaryTerm = saved ?? { id: newId, source: edit.source, rulesKind: "name" };
+  const { userTranslation: _, ...untyped } = before;
+  const { userKind: __, userPronoun: ___, ...kept } = typed === "" ? cleared(before) : untyped;
+  const values = typed ? Struct.omit(kept, ["previousTranslation"]) : kept;
   return withoutStrayPronoun({
+    ...values,
     source: edit.source,
-    translation: english,
-    kind: { guess: saved?.kind.guess ?? { value: "name" }, ...withOwn(undefined, edit.kind) },
-    ...((pronoun.guess || pronoun.user) && { pronoun }),
-    ...(previous !== undefined && previous !== inUse(english) && { previous }),
+    ...(typed && { userTranslation: typed }),
+    ...(edit.userKind !== undefined && { userKind: edit.userKind }),
+    ...(edit.userPronoun !== undefined && { userPronoun: edit.userPronoun }),
   });
 }
 
 /** The terms whose English changed from `old` to `next` to other English, by source. */
 const renames = (old: ReadonlyArray<GlossaryTerm>, next: ReadonlyArray<GlossaryTerm>) => {
-  const after = new Map(next.map((term) => [term.source, termTranslation(term).trim()]));
+  const after = new Map(next.map((term) => [term.source, translationInUse(term).trim()]));
   return new Map(
     old.flatMap((before) => {
       const to = after.get(before.source);
-      const from = termTranslation(before).trim();
+      const from = translationInUse(before).trim();
       return to && to !== from
-        ? [[before.source, { from, to, previous: before.previous }] as const]
+        ? [[before.source, { from, to, previous: before.previousTranslation }] as const]
         : [];
     }),
   );
@@ -83,8 +97,8 @@ const renames = (old: ReadonlyArray<GlossaryTerm>, next: ReadonlyArray<GlossaryT
 
 /**
  * The glossary `next` with each term that contains a renamed term's source, such as an item
- * named after a character, following the rename in English a run or rule gave. A term typed
- * again after clearing renames from the English it had before.
+ * named after a character, following the rename in English a run gave. A term typed again after
+ * clearing renames from the English it had before.
  */
 export function withRenamesFollowed(
   old: ReadonlyArray<GlossaryTerm>,
@@ -93,19 +107,18 @@ export function withRenamesFollowed(
   const renamed = [...renames(old, next)];
   if (!renamed.length) return next;
   return next.map((term) => {
-    if (term.translation.user !== undefined) return term;
-    const translation = renamed.reduce((english, [source, { from, to, previous }]) => {
+    if (term.userTranslation !== undefined) return term;
+    return renamed.reduce((english, [source, { from, to, previous }]) => {
       const was = from || previous;
       return was && source !== term.source && hasTerm(term.source, source)
-        ? mapInUse(english, (value) => value.replace(wordPattern(was), () => to))
+        ? withTranslationMapped(english, (value) => value.replace(wordPattern(was), () => to))
         : english;
-    }, term.translation);
-    return translation === term.translation ? term : { ...term, translation };
+    }, term);
   });
 }
 
 /**
- * The English an entry gets when the glossary changes from `old` to `next`: an entry that is
+ * The translation a text gets when the glossary changes from `old` to `next`: a text that is
  * exactly a term whose English changed to another one follows it.
  */
 export function renamedTranslation(
@@ -113,11 +126,11 @@ export function renamedTranslation(
   next: ReadonlyArray<GlossaryTerm>,
 ) {
   const renamed = renames(old, next);
-  return <T extends Pick<Entry, "source" | "translation">>(entry: T): T => {
-    const term = renamed.get(entry.source.trim());
-    return term && entryTranslation(entry).trim() === term.from
-      ? { ...entry, translation: mapInUse(entry.translation, () => term.to) }
-      : entry;
+  return (text: Text): Text => {
+    const term = renamed.get(text.source.trim());
+    return term && translationInUse(text).trim() === term.from
+      ? withTranslationMapped(text, () => term.to)
+      : text;
   };
 }
 
@@ -129,13 +142,14 @@ export function withGlossary(
   const repeated = repeatedSource(edited);
   if (repeated !== undefined) return Result.fail(new GlossaryTermRepeated({ source: repeated }));
   const saved = new Map(current.glossary.map((term) => [term.source, term]));
+  let added = Math.min(0, ...current.glossary.map((term) => term.id));
   const glossary = withRenamesFollowed(
     current.glossary,
-    edited.map((edit) => savedTerm(saved.get(edit.source), edit)),
+    edited.map((edit) => savedTerm(saved.get(edit.source), edit, (added -= 1))),
   );
   return Result.succeed({
     ...current,
-    entries: current.entries.map(renamedTranslation(current.glossary, glossary)),
+    texts: current.texts.map(renamedTranslation(current.glossary, glossary)),
     glossary,
   });
 }
@@ -154,54 +168,53 @@ export function withTermLinesCleared(
   const ids = new Set(
     catalog.glossary
       .filter(
-        (term) => wanted.has(term.source) && (!mismatchesOnly || termTranslation(term).trim()),
+        (term) => wanted.has(term.source) && (!mismatchesOnly || translationInUse(term).trim()),
       )
-      .flatMap((term) => entriesToClear(catalog, term, mismatchesOnly).map((entry) => entry.id)),
+      .flatMap((term) => textsToClear(catalog, term, mismatchesOnly).map((text) => text.id)),
   );
   return {
     cleared: ids.size,
-    catalog: {
-      ...catalog,
-      entries: catalog.entries.map((entry) => (ids.has(entry.id) ? cleared(entry) : entry)),
-    } satisfies Catalog,
+    catalog: withTexts(catalog, (text) => (ids.has(text.id) ? cleared(text) : text)),
   };
 }
 
 /**
- * The catalog with the English that runs gave these terms cleared, and the run's English of the
- * entries that are a cleared term or contain it, so the next run translates them again. English
- * the user typed stays. A term without an entry of its own stays too: only an entry's answer fills
- * a term again.
+ * The catalog with the English that runs gave these terms cleared, and that of the texts
+ * that are a cleared term or contain it, so the next run translates them again. English the user
+ * typed stays. A term without an entry of its own stays too: only an entry's answer fills a term
+ * again.
  */
-export function withTermGuessesCleared(catalog: Catalog, sources: ReadonlyArray<string>) {
+export function withTermTranslationsCleared(catalog: Catalog, sources: ReadonlyArray<string>) {
   const wanted = new Set(sources);
   const ownEntry = new Set(
-    catalog.entries.map((entry) =>
+    entryTexts(catalog).map((entry) =>
       (keepsTags(catalog.game.engine, entry) ? withoutTags(entry.source) : entry.source).trim(),
     ),
   );
   const clears = (term: GlossaryTerm) =>
     wanted.has(term.source) &&
-    term.translation.user === undefined &&
-    termTranslation(term) !== "" &&
+    term.userTranslation === undefined &&
+    translationInUse(term) !== "" &&
     ownEntry.has(term.source.trim());
   const terms = catalog.glossary.filter(clears);
   const ids = new Set(
     terms.flatMap((term) =>
-      entriesToClear(catalog, term, false)
-        .filter((entry) => entry.translation.user === undefined)
-        .map((entry) => entry.id),
+      textsToClear(catalog, term, false)
+        .filter((text) => text.userTranslation === undefined)
+        .map((text) => text.id),
     ),
   );
   return {
     terms: terms.length,
-    entries: ids.size,
-    catalog: {
-      ...catalog,
-      glossary: catalog.glossary.map((term) =>
-        clears(term) ? { ...term, translation: {}, previous: termTranslation(term) } : term,
-      ),
-      entries: catalog.entries.map((entry) => (ids.has(entry.id) ? cleared(entry) : entry)),
-    } satisfies Catalog,
+    texts: ids.size,
+    catalog: withTexts(
+      {
+        ...catalog,
+        glossary: catalog.glossary.map((term): GlossaryTerm =>
+          clears(term) ? cleared(term) : term,
+        ),
+      },
+      (text) => (ids.has(text.id) ? cleared(text) : text),
+    ),
   };
 }

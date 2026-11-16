@@ -1,8 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import {
-  type Catalog,
-  type Entry,
   type Location,
   RunLogLine,
   type RunStatus,
@@ -26,18 +24,18 @@ import * as Stream from "effect/Stream";
 import * as Catalogs from "../games/Catalogs.ts";
 import * as Games from "../games/Games.ts";
 import { httpClientAnswering } from "../testUtils/ollama.ts";
-import { game, runServices, servicesWith, StateDir } from "../testUtils/state.ts";
+import { game, runServices, servicesWith, StateDir, storedCatalog } from "../testUtils/state.ts";
 import * as Ollama from "../localModels/Ollama.ts";
 import * as RunKinds from "../runs/RunKinds.ts";
 import * as SavedSettings from "../settings/Settings.ts";
 import * as Runs from "./Runs.ts";
-import { entryTranslation, termTranslation } from "@rpgtl/domain";
+import { entryTexts, translationInUse } from "@rpgtl/domain";
+import type { TestEntry } from "@rpgtl/domain/testUtils/catalog";
 
-const entry = (id: string, location: Location, source: string): Entry => ({
+const entry = (id: string, location: Location, source: string): TestEntry => ({
   id,
   location,
   source,
-  translation: {},
 });
 const dialogue = (id: string, index: number, source: string) =>
   entry(
@@ -46,17 +44,11 @@ const dialogue = (id: string, index: number, source: string) =>
     source,
   );
 
-const catalog: Catalog = {
-  version: 1,
-  game: { id: game.id, title: game.title, engine: "MV" },
-  translate: true,
-  entries: [
-    entry("actor", { _tag: "RecordField", table: "actors", record: 1, field: "name" }, "艾琳"),
-    dialogue("hello", 0, "你好"),
-    dialogue("arrives", 1, "艾琳来了"),
-  ],
-  glossary: [],
-};
+const entries = [
+  entry("actor", { _tag: "RecordField", table: "actors", record: 1, field: "name" }, "艾琳"),
+  dialogue("hello", 0, "你好"),
+  dialogue("arrives", 1, "艾琳来了"),
+];
 
 const english: Record<string, string> = {
   艾琳: "Arlene",
@@ -133,13 +125,13 @@ const fakeOllama = Layer.unwrap(
         const { messages, options } = chat;
         // A question about a term's kind or a character's pronoun gets an answer that doesn't fit,
         // which the run carries on without.
-        const entries = Option.match(
+        const asked = Option.match(
           Schema.decodeUnknownOption(TranslationRequest)(messages.at(-1)?.content),
           { onNone: () => [], onSome: (request) => request.entries },
         );
         const given = yield* Effect.flatMap(Ref.get(answer), (answerOf) =>
           answerOf(
-            entries.map(({ text }) => text),
+            asked.map(({ text }) => text),
             options?.temperature,
             chat,
           ),
@@ -150,7 +142,7 @@ const fakeOllama = Layer.unwrap(
           Option.filter(given, (text) => typeof text === "string"),
           () =>
             JSON.stringify(
-              Object.fromEntries(entries.map(({ id, text }) => [id, english[text] ?? "{}"])),
+              Object.fromEntries(asked.map(({ id, text }) => [id, english[text] ?? "{}"])),
             ),
         );
         return Option.some(
@@ -161,8 +153,8 @@ const fakeOllama = Layer.unwrap(
   }),
 );
 
-/** The run services over a state folder holding the game, its catalog and `files`. */
-const runServicesWith = (files: Record<string, string> = {}) =>
+/** The run services over a state folder holding the game with `saved` as its entries, and `files`. */
+const runServicesWith = (files: Record<string, string> = {}, saved = entries) =>
   runServices.pipe(
     Layer.provideMerge(Ollama.layer),
     Layer.provideMerge(fakeOllama),
@@ -176,12 +168,15 @@ const runServicesWith = (files: Record<string, string> = {}) =>
       ),
     ),
     Layer.provideMerge(
-      servicesWith({
-        "games.json": JSON.stringify([game]),
-        [gameFiles(game.id).catalog]: JSON.stringify(catalog),
-        "config/rpgtl/settings.json": JSON.stringify(qwenSettings),
-        ...files,
-      }),
+      Layer.effectDiscard(storedCatalog(game, { entries: saved })).pipe(
+        Layer.provideMerge(
+          servicesWith({
+            "games.json": JSON.stringify([game]),
+            "config/rpgtl/settings.json": JSON.stringify(qwenSettings),
+            ...files,
+          }),
+        ),
+      ),
     ),
     Layer.provideMerge(NodeServices.layer),
   );
@@ -200,8 +195,10 @@ const ended = (runs: Runs.Runs["Service"]) =>
 
 const translations = Effect.gen(function* () {
   const catalogs = yield* Catalogs.Catalogs;
-  const { entries } = yield* catalogs.get(game.id);
-  return Object.fromEntries(entries.map((saved) => [saved.id, entryTranslation(saved)]));
+  const catalog = yield* catalogs.get(game.id);
+  return Object.fromEntries(
+    entryTexts(catalog).map((saved) => [saved.id, translationInUse(saved)]),
+  );
 });
 
 const logLines = Effect.gen(function* () {
@@ -251,7 +248,7 @@ layer(Services)((it) => {
         });
         const { glossary } = yield* (yield* Catalogs.Catalogs).get(game.id);
         assert.deepStrictEqual(
-          glossary.map((term) => [term.source, termTranslation(term)]),
+          glossary.map((term) => [term.source, translationInUse(term)]),
           [["艾琳", "Arlene"]],
         );
 
@@ -263,22 +260,20 @@ layer(Services)((it) => {
         assert.include(text?.request.messages.at(-1)?.content, '"translation":"Arlene"');
         assert.include(lines.at(-1), { type: "end", translated: 3, stopped: false });
 
-        // The catalog keeps what the run used under the start time its entries name.
+        // The catalog keeps what the run used under the operation that wrote its English.
         const saved = yield* (yield* Catalogs.Catalogs).get(game.id);
-        const started = lines[0]?.type === "run" ? lines[0].started : "";
-        assert.deepStrictEqual(saved.runs, {
-          [started]: {
-            translator: "ollama",
-            model: "qwen",
-            glossaryModel: "qwen",
-            numCtx: 4096,
-            sampling: "temperature-0",
-            retrySampling: "model",
-            effort: "off",
-          },
+        const run = saved.operations.find((operation) => operation.kind === "run");
+        assert.deepStrictEqual(run?.models, {
+          translator: "ollama",
+          model: "qwen",
+          glossaryModel: "qwen",
+          numCtx: 4096,
+          sampling: "temperature-0",
+          retrySampling: "model",
+          effort: "off",
         });
-        assert.strictEqual(saved.glossary[0]?.translation.guess?.run, started);
-        assert.strictEqual(saved.entries[0]?.translation.guess?.run, started);
+        assert.strictEqual(saved.glossary[0]?.modelOperationId, run?.id);
+        assert.strictEqual(saved.texts[0]?.modelOperationId, run?.id);
 
         // The game is free again once the run ended.
         yield* (yield* Games.Games).exclusive(game.id, Effect.void);
@@ -360,13 +355,11 @@ layer(Services)((it) => {
   );
 });
 
-layer(Services)((it) => {
+layer(
+  runServicesWith({}, [...entries, { ...dialogue("kept", 2, "回头见"), isLeftUntranslated: true }]),
+)((it) => {
   it.effect("a run counts only the entries it translates", () =>
     Effect.gen(function* () {
-      yield* (yield* Catalogs.Catalogs).save({
-        ...catalog,
-        entries: [...catalog.entries, { ...dialogue("kept", 2, "回头见"), keepOriginal: true }],
-      });
       const runs = yield* Runs.Runs;
       yield* Ref.set(yield* Answers, () => Effect.succeedNone);
       assert.include(yield* runs.start(game.id, "translate"), { total: 3, left: 3 });
@@ -565,27 +558,20 @@ layer(Services)((it) => {
   );
 });
 
-layer(
-  runServicesWith({
-    [gameFiles(game.id).catalog]: JSON.stringify({
-      ...catalog,
-      entries: [...catalog.entries, { ...dialogue("greets", 2, "你好"), speaker: "米娅" }],
-    }),
-  }),
-)((it) => {
-  it.effect("a Build glossary run counts the speakers it translates with the names", () =>
-    Effect.gen(function* () {
-      const runs = yield* Runs.Runs;
-      yield* runs.start(game.id, "build-glossary");
-      const last = yield* ended(runs);
-      assert.deepInclude(last, { names: { total: 2, done: 2, failed: 0 } });
-      const { glossary } = yield* (yield* Catalogs.Catalogs).get(game.id);
-      assert.isNotEmpty(
-        termTranslation(glossary.find((term) => term.source === "米娅") ?? { translation: {} }),
-      );
-    }),
-  );
-});
+layer(runServicesWith({}, [...entries, { ...dialogue("greets", 2, "你好"), speaker: "米娅" }]))(
+  (it) => {
+    it.effect("a Build glossary run counts the speakers it translates with the names", () =>
+      Effect.gen(function* () {
+        const runs = yield* Runs.Runs;
+        yield* runs.start(game.id, "build-glossary");
+        const last = yield* ended(runs);
+        assert.deepInclude(last, { names: { total: 2, done: 2, failed: 0 } });
+        const { glossary } = yield* (yield* Catalogs.Catalogs).get(game.id);
+        assert.isNotEmpty(translationInUse(glossary.find((term) => term.source === "米娅") ?? {}));
+      }),
+    );
+  },
+);
 
 layer(Services)((it) => {
   it.effect("a run asks in the language chosen for the game", () =>

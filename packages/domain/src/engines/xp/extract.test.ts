@@ -204,7 +204,7 @@ it.effect(
         "Scripts.rxdata": xpScripts({ Window_Pace: englishModeScript }),
       });
       assert.deepStrictEqual(
-        entries.map(({ source, gameEnglish }) => [source, gameEnglish]),
+        entries.map(({ source, builtinTranslation }) => [source, builtinTranslation]),
         [
           ["歩幅", "Strd"],
           ["帆布", "Barrow"],

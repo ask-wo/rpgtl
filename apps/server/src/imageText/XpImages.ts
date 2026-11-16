@@ -157,10 +157,10 @@ const make = Effect.gen(function* () {
     const cache = gameFiles(game.id).letteredImages;
     const catalog = yield* catalogs.get(game.id);
     const results = yield* imageTexts.results(game.id);
-    const font = imageFontOf(game.engine, catalog.imageFont);
+    const font = imageFontOf(game.engine, catalog.settings.letteringFont);
     const hints = imageTextHints(
       results,
-      { ...catalog, ...(font && { imageFont: font }) },
+      { ...catalog, settings: { ...catalog.settings, ...(font && { letteringFont: font }) } },
       (erased) => erased,
     );
     const kept = new Set<string>();

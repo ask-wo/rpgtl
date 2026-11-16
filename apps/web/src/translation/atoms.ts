@@ -1,11 +1,10 @@
-import { Catalog, ExportedImageText, GameNotInspected, StateFileFailed } from "@rpgtl/contracts";
-import { type CheckedCatalog, exportedRuns, withCatalogChange } from "@rpgtl/domain";
+import { GameNotInspected, StateFileFailed, TranslationFile } from "@rpgtl/contracts";
+import { type CheckedCatalog, translationFile as fileOf, withCatalogChange } from "@rpgtl/domain";
 import * as Effect from "effect/Effect";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Atom from "effect/reactivity/Atom";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as Struct from "effect/Struct";
 import * as Reactivity from "effect/reactivity/Reactivity";
 import { following } from "../app/following.ts";
 import { Rpgtl } from "../app/Rpgtl.ts";
@@ -66,7 +65,7 @@ export const invalidateCatalog = Rpgtl.runtime.fn((id: string) =>
 
 export const setTranslate = Rpgtl.mutation("catalogs", "setTranslate");
 export const setLanguage = Rpgtl.mutation("catalogs", "setLanguage");
-export const setOriginalScripts = Rpgtl.mutation("catalogs", "setOriginalScripts");
+export const setScriptTranslation = Rpgtl.mutation("catalogs", "setScriptTranslation");
 export const importFile = Rpgtl.mutation("catalogs", "import");
 export const previewImport = Rpgtl.mutation("catalogs", "previewImport");
 export const clearAll = Rpgtl.mutation("catalogs", "restore");
@@ -87,16 +86,7 @@ export const translationFile = Rpgtl.runtime.fn(({ id, images }: { id: string; i
       images ? client.images.export({ query: { id } }) : Effect.succeed(null),
     ]).pipe(
       Effect.flatMap(([saved, exported]) =>
-        Effect.all([
-          Schema.encodeEffect(Catalog)(saved),
-          Schema.encodeEffect(Schema.NullOr(ExportedImageText))(exported),
-        ]).pipe(
-          Effect.map(([encoded, imageText]) => ({
-            ...Struct.omit(encoded, ["runs"]),
-            ...exportedRuns(saved, exported ?? undefined),
-            ...(imageText && { images: imageText.images }),
-          })),
-        ),
+        Schema.encodeEffect(TranslationFile)(fileOf(saved, exported ?? undefined)),
       ),
     ),
   ),

@@ -1,17 +1,13 @@
 import { assert, it } from "@effect/vitest";
-import type { Entry } from "@rpgtl/contracts";
 import { batchRequest, CatalogDraft, packGroups, sharedNames, textGroups } from "./index.ts";
+import { testCatalog, testEntry } from "./testUtils/catalog.ts";
 
-const line = (id: string, index: number, list: number): Entry => ({
-  id,
-  location: {
-    _tag: "Message",
-    list: { _tag: "MapEventPage", map: 1, event: list, page: 0 },
-    index: index,
-  },
-  source: "你好",
-  translation: {},
-});
+const line = (id: string, index: number, list: number, source = "你好") =>
+  testEntry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: list, page: 0 }, index },
+    source,
+    { id },
+  );
 
 const scene = (list: number, count: number) =>
   Array.from({ length: count }, (_, index) => line(`${list}-${index}`, index, list));
@@ -24,12 +20,8 @@ it("short scenes are packed together up to a batch, and a long one goes alone", 
   );
 });
 
-const button = (file: string, source: string): Entry => ({
-  id: file,
-  location: { _tag: "ImageLines", image: file, lines: [0] },
-  source,
-  translation: {},
-});
+const button = (file: string, source: string) =>
+  testEntry({ _tag: "ImageLines", image: file, lines: [0] }, source, { id: file });
 
 it("a menu's button images go to the translator together, each naming its image", () => {
   const entries = [
@@ -43,16 +35,7 @@ it("a menu's button images go to the translator together, each naming its image"
     groups.map((group) => group.map((entry) => entry.source)),
     [["开始冒险", "读取存档"], ["菜单"], ["退出"]],
   );
-  const draft = new CatalogDraft(
-    {
-      version: 1,
-      game: { id: "0123456789abcdef0123", title: "雨", engine: "MV" },
-      translate: true,
-      entries,
-      glossary: [],
-    },
-    new Map(),
-  );
+  const draft = new CatalogDraft(testCatalog({ entries }), new Map());
   const menu = (groups[0] ?? []).map((entry) => draft.prepare(entry));
   assert.deepStrictEqual(batchRequest(draft, menu, menu, 10).entries, [
     { id: "1", text: "开始冒险", image: "titles1/Command_0" },
@@ -60,12 +43,10 @@ it("a menu's button images go to the translator together, each naming its image"
   ]);
 });
 
-const description = (record: number): Entry => ({
-  id: `skill-${record}`,
-  location: { _tag: "RecordField", table: "skills", record, field: "description" },
-  source: "火を放つ。",
-  translation: {},
-});
+const description = (record: number) =>
+  testEntry({ _tag: "RecordField", table: "skills", record, field: "description" }, "火を放つ。", {
+    id: `skill-${record}`,
+  });
 
 it("a long table goes a batch at a time side by side, while an event list stays whole in order", () => {
   const groups = textGroups(
@@ -78,7 +59,7 @@ it("a long table goes a batch at a time side by side, while an event list stays 
   );
 });
 
-const name = (id: string, source: string): Entry => ({ ...line(id, 0, 1), source });
+const name = (id: string, source: string) => line(id, 0, 1, source);
 
 it("a name two other names contain is shared once, even when a speaker has it too", () => {
   const shared = sharedNames([

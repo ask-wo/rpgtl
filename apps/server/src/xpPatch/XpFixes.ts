@@ -50,7 +50,7 @@ const described = (catalog: Catalog, found: ReadonlyArray<RubyScript>) =>
   found.map(({ name, code }): XpFix => ({
     name,
     description: descriptionOf(code),
-    on: !catalog.disabledFixes?.includes(name),
+    on: !catalog.settings.disabledFixes.includes(name),
   }));
 
 const make = Effect.gen(function* () {
@@ -80,7 +80,7 @@ const make = Effect.gen(function* () {
 
   const active = Effect.fn("XpFixes.active")(function* (catalog: Catalog) {
     const found = yield* files(catalog.game.id);
-    return found.filter(({ name }) => !catalog.disabledFixes?.includes(name));
+    return found.filter(({ name }) => !catalog.settings.disabledFixes.includes(name));
   });
 
   const set = Effect.fn("XpFixes.set")(function* (id: string, name: string, on: boolean) {

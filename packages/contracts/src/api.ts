@@ -390,18 +390,18 @@ export class CatalogsApi extends HttpApiGroup.make("catalogs")
     HttpApiEndpoint.get("get", "/catalog", {
       query: GameId,
       success: Catalog,
-      error: [GameNotInspected, StateFileFailed],
+      error: [GameNotInspected],
     }),
     HttpApiEndpoint.get("checks", "/checks", {
       query: GameId,
       success: Findings,
-      error: [GameNotInspected, StateFileFailed],
+      error: [GameNotInspected],
     }),
     /** The game's catalog and what the checks find in it, then every change to them. */
     HttpApiEndpoint.get("changes", "/catalog/changes", {
       query: GameId,
       success: HttpApiSchema.StreamSse({ data: CatalogChange }),
-      error: [GameNotInspected, StateFileFailed],
+      error: [GameNotInspected],
     }),
     /** Takes the translations, glossary and settings of a translation file, and its image text. */
     HttpApiEndpoint.post("import", "/import", {
@@ -419,32 +419,32 @@ export class CatalogsApi extends HttpApiGroup.make("catalogs")
     HttpApiEndpoint.post("setTranslate", "/catalog/translate", {
       payload: Schema.Struct({ id: Schema.String, on: Schema.Boolean }),
       success: Catalog,
-      error: [GameNotInspected, GameBusy, StateFileFailed],
+      error: [GameNotInspected, GameBusy],
     }),
-    /** Sets whether an XP game plays with its scripts unchanged; their translations stay. */
-    HttpApiEndpoint.post("setOriginalScripts", "/catalog/scripts", {
+    /** Sets whether an XP game plays with its scripts translated; their translations stay. */
+    HttpApiEndpoint.post("setScriptTranslation", "/catalog/scripts", {
       payload: Schema.Struct({ id: Schema.String, on: Schema.Boolean }),
       success: Catalog,
-      error: [GameNotInspected, GameBusy, StateFileFailed],
+      error: [GameNotInspected, GameBusy],
     }),
     /** Sets the language of the game's text; null goes back to the one its text looks like. */
     HttpApiEndpoint.post("setLanguage", "/catalog/language", {
       payload: Schema.Struct({ id: Schema.String, language: Schema.NullOr(SourceLanguage) }),
       success: Catalog,
-      error: [GameNotInspected, GameBusy, StateFileFailed],
+      error: [GameNotInspected, GameBusy],
     }),
     /**
-     * Saves the glossary as the Glossary page edited it, without a backup; an entry that is
-     * exactly a term whose English changed follows it.
+     * Saves the glossary as the Glossary page edited it; a text that is exactly a term whose
+     * English changed follows it.
      */
     HttpApiEndpoint.post("setGlossary", "/glossary", {
       payload: Schema.Struct({ id: Schema.String, glossary: Schema.Array(TermEdit) }),
-      error: [GameNotInspected, GameBusy, GlossaryRejected, StateFileFailed],
+      error: [GameNotInspected, GameBusy, GlossaryRejected],
     }),
     /**
      * Saves the English the Text and Images pages edited, an image's text the user corrected
-     * (`text`; the text read undoes the correction), and whether an image text keeps its original
-     * artwork, without a backup; an absent field stays as saved.
+     * (`source`; the text read undoes the correction), and whether an image text keeps its
+     * original artwork; an absent field stays as saved.
      */
     HttpApiEndpoint.post("setEntries", "/entries", {
       payload: Schema.Struct({
@@ -452,31 +452,30 @@ export class CatalogsApi extends HttpApiGroup.make("catalogs")
         entries: Schema.Array(
           Schema.Struct({
             id: Schema.String,
-            translation: Schema.optionalKey(Schema.String),
-            text: Schema.optionalKey(Schema.String),
-            keepOriginal: Schema.optionalKey(Schema.Boolean),
+            userTranslation: Schema.optionalKey(Schema.String),
+            source: Schema.optionalKey(Schema.String),
+            isLeftUntranslated: Schema.optionalKey(Schema.Boolean),
           }),
         ),
       }),
-      error: [GameNotInspected, GameBusy, EntryRejected, StateFileFailed],
+      error: [GameNotInspected, GameBusy, EntryRejected],
     }),
     /**
-     * Saves the game's lettering and the images it shows unchanged, without a backup; an absent
-     * field stays as saved and null removes it.
+     * Saves the game's lettering and the images it shows untranslated; an absent field stays as
+     * saved and null removes it.
      */
     HttpApiEndpoint.post("setImageOptions", "/catalog/images", {
       payload: Schema.Struct({
         id: Schema.String,
-        imageBold: Schema.optionalKey(Schema.NullOr(Schema.Literals(["always", "never"]))),
-        imageFont: Schema.optionalKey(Schema.NullOr(LetteringFont)),
-        unchangedImages: Schema.optionalKey(Schema.Array(Schema.String)),
+        letteringWeight: Schema.optionalKey(Schema.NullOr(Schema.Literals(["bold", "regular"]))),
+        letteringFont: Schema.optionalKey(Schema.NullOr(LetteringFont)),
+        untranslatedImages: Schema.optionalKey(Schema.Array(Schema.String)),
       }),
-      error: [GameNotInspected, GameBusy, StateFileFailed],
+      error: [GameNotInspected, GameBusy],
     }),
     /**
      * Clears the translations that contain one of the terms with these sources, or with
-     * `mismatchesOnly` only those that don't use its English, backing up first; gives how many it
-     * cleared.
+     * `mismatchesOnly` only those that don't use its English; gives how many texts it cleared.
      */
     HttpApiEndpoint.post("clearTermLines", "/glossary/clear-lines", {
       payload: Schema.Struct({
@@ -485,32 +484,32 @@ export class CatalogsApi extends HttpApiGroup.make("catalogs")
         mismatchesOnly: Schema.Boolean,
       }),
       success: Schema.Struct({ cleared: Schema.Int }),
-      error: [GameNotInspected, GameBusy, StateFileFailed],
+      error: [GameNotInspected, GameBusy],
     }),
     /**
-     * Clears the English that runs gave the terms with these sources, and the run's English of the
-     * entries that are such a term or contain it, backing up first. English the user typed stays,
-     * and so does a term no entry has as its source. Gives how many terms and entries it cleared.
+     * Clears the English that runs gave the terms with these sources, and that of the texts that
+     * are such a term or contain it. English the user typed stays, and so does a term no entry has
+     * as its source. Gives how many terms and texts it cleared.
      */
-    HttpApiEndpoint.post("clearTermGuesses", "/glossary/clear-guesses", {
+    HttpApiEndpoint.post("clearTermTranslations", "/glossary/clear-translations", {
       payload: Schema.Struct({ id: Schema.String, sources: Schema.Array(Schema.String) }),
-      success: Schema.Struct({ terms: Schema.Int, entries: Schema.Int }),
-      error: [GameNotInspected, GameBusy, StateFileFailed],
+      success: Schema.Struct({ terms: Schema.Int, texts: Schema.Int }),
+      error: [GameNotInspected, GameBusy],
     }),
     /**
-     * Clears the English that runs gave these entries, keeping it as `previous` and the English the
-     * user typed, backing up first; gives how many it cleared.
+     * Clears the English that runs gave the texts of these entries, keeping the English the user
+     * typed; gives how many texts it cleared.
      */
-    HttpApiEndpoint.post("clearEntries", "/entries/clear", {
+    HttpApiEndpoint.post("clearTranslations", "/entries/clear", {
       payload: Schema.Struct({ id: Schema.String, ids: Schema.Array(Schema.String) }),
       success: Schema.Struct({ cleared: Schema.Int }),
-      error: [GameNotInspected, GameBusy, StateFileFailed],
+      error: [GameNotInspected, GameBusy],
     }),
-    /** Clears every translation and what runs left on entries, keeping the English as `previous`. */
+    /** Clears every translation and rejected answer. */
     HttpApiEndpoint.post("restore", "/restore", {
       payload: GameId,
       success: Catalog,
-      error: [GameNotInspected, GameBusy, StateFileFailed],
+      error: [GameNotInspected, GameBusy],
     }),
   )
   .middleware(LocalRequest)
@@ -584,7 +583,7 @@ export class TranslationApi extends HttpApiGroup.make("translation")
     }),
     /**
      * Starts translating the game's untranslated entries in the background, with the saved
-     * settings as they are once its turn comes; until then the run waits.
+     * settings as they are now; a run that can't start yet waits its turn.
      */
     HttpApiEndpoint.post("start", "/translate", {
       payload: Schema.Struct({ id: Schema.String, kind: RunKind }),
@@ -623,7 +622,7 @@ export class ImagesApi extends HttpApiGroup.make("images")
     }),
     /**
      * Starts reading the game's images in the background, with the saved settings as they are
-     * once its turn comes; until then the reading waits. `again` reads those images from scratch.
+     * now; a reading that can't start yet waits its turn. `again` reads those images from scratch.
      */
     HttpApiEndpoint.post("start", "/images/read", {
       payload: Schema.Struct({ id: Schema.String, again: Schema.optionalKey(ReadAgain) }),

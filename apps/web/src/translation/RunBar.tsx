@@ -79,7 +79,7 @@ function GameRunBar({ fits, onShowFailed }: RunBarProps) {
     if (reader.attempt === following) readAfterSetup(reader, gameLanguage(saved), reading);
   }, [following, reader, saved]);
 
-  if (saved === undefined || (!saved.translate && !runPending(now))) return null;
+  if (saved === undefined || (!saved.settings.isTranslationOn && !runPending(now))) return null;
   const setup =
     reader?.phase._tag === "SettingUp" ? (
       <SetupProgress
@@ -512,7 +512,9 @@ function TranslationEnded({
   const { phase } = run;
   const summary =
     phase._tag === "Failed"
-      ? `${phase.error} The ${translated} translated before that are saved.`
+      ? run.done === 0
+        ? phase.error
+        : `${phase.error} The ${translated} translated before that ${run.done === 1 ? "is" : "are"} saved.`
       : phase._tag === "Stopped"
         ? `${glossaryOnly ? "Building the glossary" : "Translation"} stopped. ${translated} translated and saved; ${again} goes on with the rest.`
         : glossaryOnly

@@ -18,7 +18,7 @@ export function TranslationNav({
   readonly engine: Engine;
 }) {
   const saved = AsyncResult.getOrElse(useAtomValue(catalog(gameId)), () => undefined);
-  if (saved === undefined || !saved.translate) return null;
+  if (saved === undefined || !saved.settings.isTranslationOn) return null;
   const { text, names, images } = catalogCounts(saved);
   return (
     <SidebarMenuSub aria-label="Translation" className="mr-0 pr-0">

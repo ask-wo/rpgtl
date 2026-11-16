@@ -41,8 +41,8 @@ function OtherVersionDialog({
           </AlertDialogDescription>
           <p className="text-sm text-muted-foreground">
             <strong>Replace</strong> moves its translations to this version
-            {version && ` (${version})`}. Lines that changed lose theirs, and the old translations
-            are backed up first. <strong>Keep both</strong> adds this version as a new game.
+            {version && ` (${version})`}. Lines that changed lose theirs. <strong>Keep both</strong>
+            adds this version as a new game.
           </p>
         </AlertDialogHeader>
         <AlertDialogFooter>

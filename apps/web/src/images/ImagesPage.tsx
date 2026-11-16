@@ -1,14 +1,9 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import type { Catalog, Entry, Game, ImageReadResults, ImageResult } from "@rpgtl/contracts";
-import {
-  gameLanguage,
-  imageFontOf,
-  placeKey,
-  placeOf,
-  withTranslation,
-  withImageText,
-} from "@rpgtl/domain";
+import type { Catalog, Game, GameSettings, ImageReadResults, ImageResult } from "@rpgtl/contracts";
+import { gameLanguage, imageFontOf, placeKey, placeOf, withEntryEdits } from "@rpgtl/domain";
 import * as Exit from "effect/Exit";
+import * as Result from "effect/Result";
+import * as Struct from "effect/Struct";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
@@ -26,6 +21,7 @@ import { Pager } from "../app/Pager.tsx";
 import { clearImageText, imageReaderStatus, imageResults, setImageOptions } from "./atoms.ts";
 import { ImageEditor, type TextChange } from "./ImageEditor.tsx";
 import {
+  type ImageEntryText,
   type ImageFilter,
   imagesWithText,
   imageState,
@@ -119,38 +115,42 @@ function Images({
     [edits],
   );
 
-  const { imageBold } = lettering ?? saved;
-  const imageFont = imageFontOf(game.engine, (lettering ?? saved).imageFont);
-  const unchangedImages = keptImages ?? saved.unchangedImages;
-  const shown: ShownImages = {
-    entries: saved.entries.map((entry) => {
-      const change = typed.get(entry.id);
-      if (!change) return entry;
-      const corrected =
-        change.text === undefined ? entry : withImageText(entry, change.text.trim());
-      const typedTranslation =
-        change.translation === undefined
-          ? corrected
-          : withTranslation(corrected, change.translation);
-      return change.keepOriginal === undefined
-        ? typedTranslation
-        : { ...typedTranslation, keepOriginal: change.keepOriginal };
-    }),
-    ...(imageBold && { imageBold }),
-    ...(imageFont && { imageFont }),
-    ...(unchangedImages && { unchangedImages }),
+  const { letteringWeight } = lettering ?? saved.settings;
+  const letteringFont = imageFontOf(game.engine, (lettering ?? saved.settings).letteringFont);
+  const settings: GameSettings = {
+    ...Struct.omit(saved.settings, ["letteringWeight", "letteringFont"]),
+    untranslatedImages: keptImages ?? saved.settings.untranslatedImages,
+    ...(letteringWeight && { letteringWeight }),
+    ...(letteringFont && { letteringFont }),
   };
+  const changes = [...typed].map(([id, change]) => ({
+    id,
+    ...change,
+    ...(change.source !== undefined && { source: change.source.trim() }),
+  }));
+  // A change that can't be saved yet, such as an empty text, leaves the image as it was saved.
+  const edited = Result.getOrElse(withEntryEdits(saved, changes), () =>
+    changes.reduce(
+      (partly, change) => Result.getOrElse(withEntryEdits(partly, [change]), () => partly),
+      saved,
+    ),
+  );
+  const shown: ShownImages = { entries: edited.entries, texts: edited.texts, settings };
 
   const schedule = (key: string, save: () => Promise<string | undefined>, delay: number) => {
     keys.current.add(key);
     edits.schedule(key, save, delay);
   };
 
-  const changeText = (entry: Entry, change: TextChange, delay: number) => {
+  const changeText = (entry: ImageEntryText, change: TextChange, delay: number) => {
     setTyped((before) => new Map(before).set(entry.id, { ...before.get(entry.id), ...change }));
     // The English, the text and the artwork save apart, so a click doesn't drop a pause in typing.
     const part =
-      change.text !== undefined ? "text" : change.translation !== undefined ? "entry" : "keep";
+      change.source !== undefined
+        ? "text"
+        : change.userTranslation !== undefined
+          ? "entry"
+          : "keep";
     const key = `${part}:${entry.id}`;
     schedule(
       key,
@@ -171,12 +171,13 @@ function Images({
   };
 
   const keepWhole = (image: string, keep: boolean) => {
-    const others = (shown.unchangedImages ?? []).filter((kept) => kept !== image);
+    const others = shown.settings.untranslatedImages.filter((kept) => kept !== image);
     const next = keep ? [...others, image] : others;
     setKeptImages(next);
     schedule(
       "kept-images",
-      async () => failure(await saveOptions({ payload: { id: game.id, unchangedImages: next } })),
+      async () =>
+        failure(await saveOptions({ payload: { id: game.id, untranslatedImages: next } })),
       0,
     );
   };
@@ -190,8 +191,8 @@ function Images({
           await saveOptions({
             payload: {
               id: game.id,
-              imageBold: next.imageBold ?? null,
-              imageFont: next.imageFont ?? null,
+              letteringWeight: next.letteringWeight ?? null,
+              letteringFont: next.letteringFont ?? null,
             },
           }),
         ),

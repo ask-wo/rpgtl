@@ -1,15 +1,17 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { Catalog, GlossaryTerm, TermKind } from "@rpgtl/contracts";
 import {
-  entriesToClear,
+  entryTexts,
   glossaryFindings,
   glossaryOrder,
+  lastRun,
   savedTerm,
-  withRenamesFollowed,
   termEdit,
-  termTranslation,
   termKind,
   termPronoun,
+  textsToClear,
+  translationInUse,
+  withRenamesFollowed,
 } from "@rpgtl/domain";
 import * as Exit from "effect/Exit";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
@@ -29,7 +31,7 @@ import { useGameEdits } from "../games/edits.ts";
 import { useGame } from "../games/GameContext.ts";
 import { catalog } from "../translation/atoms.ts";
 import { counted, number } from "../translation/counts.ts";
-import { clearTermGuesses, clearTermLines, setGlossary } from "./atoms.ts";
+import { clearTermLines, clearTermTranslations, setGlossary } from "./atoms.ts";
 import { TermDetail } from "./TermDetail.tsx";
 
 const sections: ReadonlyArray<{ readonly kind: TermKind; readonly label: string }> = [
@@ -54,27 +56,55 @@ const filters: ReadonlyArray<{
 ];
 
 /** Whether the user set any of the term's values. */
-const isCustom = ({ translation, kind, pronoun }: GlossaryTerm) =>
-  translation.user !== undefined || kind.user !== undefined || pronoun?.user !== undefined;
+const isCustom = ({ userTranslation, userKind, userPronoun }: GlossaryTerm) =>
+  userTranslation !== undefined || userKind !== undefined || userPronoun !== undefined;
+
+/** An id for a term the user adds, below 0 and below every other new term's until it is saved. */
+const newTermId = (glossary: ReadonlyArray<GlossaryTerm>) =>
+  Math.min(0, ...glossary.map((term) => term.id)) - 1;
+
+/**
+ * The glossary the user typed, with the renames it makes followed from `saved`, and each term's
+ * English from a run as `saved` has it, since a run may have given other English since.
+ */
+const followed = (
+  saved: ReadonlyArray<GlossaryTerm>,
+  typed: ReadonlyArray<GlossaryTerm>,
+): ReadonlyArray<GlossaryTerm> => {
+  const before = new Map(saved.map((term) => [term.source, term]));
+  return withRenamesFollowed(
+    saved,
+    typed.map((term): GlossaryTerm => {
+      const { modelTranslation: _, modelOperationId: __, ...rest } = term;
+      const known = before.get(term.source);
+      return {
+        ...rest,
+        ...(known?.modelTranslation !== undefined && { modelTranslation: known.modelTranslation }),
+        ...(known?.modelOperationId !== undefined && { modelOperationId: known.modelOperationId }),
+      };
+    }),
+  );
+};
 
 /** What the filters need besides the term. */
 interface Seen {
-  readonly lastRun: string | undefined;
+  /** The operation id of the last run that gave a text its English. */
+  readonly lastRun: number | undefined;
   /** The saved glossary's findings, by term source. */
   readonly flagged: ReadonlyMap<string, ReadonlyArray<string>>;
 }
 
-function isShown(term: GlossaryTerm, show: Shown, { lastRun, flagged }: Seen) {
-  const english = termTranslation(term).trim();
+function isShown(term: GlossaryTerm, show: Shown, { lastRun: last, flagged }: Seen) {
+  const english = translationInUse(term).trim();
   switch (show) {
     case "all":
       return true;
     case "untranslated":
       return !english;
     case "last-run":
-      return lastRun !== undefined && term.translation.guess?.run === lastRun;
+      return last !== undefined && term.modelOperationId === last;
     case "changed":
-      return !!english && term.previous !== undefined && term.previous !== english;
+      return !!english && term.previousTranslation !== undefined;
     case "flagged":
       return flagged.has(term.source);
     case "custom":
@@ -87,7 +117,7 @@ function isListed(term: GlossaryTerm, show: Shown, seen: Seen, filter: string) {
   const query = filter.trim().toLowerCase();
   return (
     isShown(term, show, seen) &&
-    (!query || `${term.source} ${termTranslation(term)}`.toLowerCase().includes(query))
+    (!query || `${term.source} ${translationInUse(term)}`.toLowerCase().includes(query))
   );
 }
 
@@ -110,10 +140,11 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
   const edits = useGameEdits(game.id);
   const save = useAtomSet(setGlossary, { mode: "promiseExit" });
   const clear = useAtomSet(clearTermLines, { mode: "promiseExit" });
-  const clearGuesses = useAtomSet(clearTermGuesses, { mode: "promiseExit" });
+  const clearModelTranslations = useAtomSet(clearTermTranslations, { mode: "promiseExit" });
   const locked = gameHeld(AsyncResult.getOrElse(useAtomValue(activity(game.id)), () => undefined));
 
-  // The glossary as edited here, until a run takes over: the run changes the saved one.
+  // The glossary as typed here, until a run takes over: the run changes the saved one. The renames
+  // it makes are followed from the saved glossary, so a rename typed over doesn't stay in a term.
   const [draft, setDraft] = useState<ReadonlyArray<GlossaryTerm>>();
   // What waits for the user to confirm; a run that takes the game closes it.
   const [removingAll, setRemovingAll] = useState(false);
@@ -130,10 +161,16 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
       setClearingAll(false);
     }
   }
-  const glossary = (!locked && draft) || saved.glossary;
+  const typed = (!locked && draft) || saved.glossary;
+  const glossary = useMemo(
+    () => (typed === saved.glossary ? typed : followed(saved.glossary, typed)),
+    [typed, saved.glossary],
+  );
   // A large game's glossary takes a tenth of a second to check, too long to do on every key.
   const flagged = useMemo(() => glossaryFindings(saved.glossary), [saved.glossary]);
-  const seen: Seen = { lastRun: saved.lastRun, flagged };
+  const entries = useMemo(() => entryTexts(saved), [saved]);
+  const latestRun = lastRun(saved);
+  const seen: Seen = { lastRun: latestRun, flagged };
   useEffect(() => {
     if (locked) edits.discard("glossary");
   }, [edits, locked]);
@@ -153,19 +190,8 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
   const [clearing, setClearing] = useState(false);
 
   const edit = (edited: ReadonlyArray<GlossaryTerm>, delay: number) => {
-    const before = new Map(saved.glossary.map((term) => [term.source, term]));
-    const next = withRenamesFollowed(
-      saved.glossary,
-      edited.map((term) => {
-        const guess = before.get(term.source)?.translation.guess;
-        const { user } = term.translation;
-        return {
-          ...term,
-          translation: { ...(guess && { guess }), ...(user !== undefined && { user }) },
-        };
-      }),
-    );
-    setDraft(next);
+    const next = followed(saved.glossary, edited);
+    setDraft(edited);
     setNotice(undefined);
     edits.schedule(
       "glossary",
@@ -203,17 +229,17 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
   };
 
   const clearable = glossary.filter(
-    (each) => each.translation.user === undefined && isListed(each, "flagged", seen, filter),
+    (each) => each.userTranslation === undefined && isListed(each, "flagged", seen, filter),
   );
   const clearFlagged = async () => {
     setNotice(undefined);
     const unsaved = await edits.flush();
     if (unsaved) return setNotice({ text: unsaved, failed: true });
-    let cleared = { terms: 0, entries: 0 };
+    let cleared = { terms: 0, texts: 0 };
     setClearing(true);
     const error = await edits.run(async () => {
       const sources = clearable.map((each) => each.source);
-      const exit = await clearGuesses({ payload: { id: game.id, sources } });
+      const exit = await clearModelTranslations({ payload: { id: game.id, sources } });
       if (Exit.isFailure(exit)) return failureMessage(exit.cause);
       cleared = exit.value;
       // The edits were saved before clearing, so the saved glossary, cleared, is the one to show.
@@ -226,14 +252,14 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
         ? { text: error, failed: true }
         : {
             text: cleared.terms
-              ? `Cleared ${counted(cleared.terms, "term", "terms")} and ${counted(cleared.entries, "translation", "translations")} with them. Translate translates them again.`
+              ? `Cleared ${counted(cleared.terms, "term", "terms")} and ${counted(cleared.texts, "translation", "translations")} with them. Translate translates them again.`
               : "None of these terms has English from a run and a line of its own to translate it from.",
             failed: false,
           },
     );
   };
 
-  const order = glossaryOrder(glossary, saved.entries);
+  const order = glossaryOrder(glossary, entries);
   const current = selected ?? order[0];
   const term = current === undefined ? undefined : glossary[current];
   const custom = glossary.filter(isCustom).length;
@@ -305,7 +331,8 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
               disabled={locked}
               onClick={() => {
                 const blank = glossary.findIndex((each) => !each.source.trim());
-                if (blank === -1) edit([...glossary, savedTerm(undefined, { source: "" })], 0);
+                if (blank === -1)
+                  edit([...typed, savedTerm(undefined, { source: "" }, newTermId(typed))], 0);
                 setFilter("");
                 setShow("all");
                 setSelected(blank === -1 ? glossary.length : blank);
@@ -361,21 +388,22 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
         <div className="min-w-0 overflow-auto p-6">
           {term !== undefined && current !== undefined && (
             <TermDetail
-              lastRun={saved.lastRun}
+              lastRun={latestRun}
               missing={flagged.get(term.source) ?? []}
               key={current}
               term={term}
               glossary={glossary}
-              entries={saved.entries}
+              entries={entries}
+              texts={saved.texts}
               locked={locked || clearing}
-              onChange={(changed, delay) => edit(glossary.with(current, changed), delay)}
+              onChange={(changed, delay) => edit(typed.with(current, changed), delay)}
               onDone={() => edits.flush()}
               onClearAll={() => setClearingAll(true)}
               onClearMismatches={() =>
                 clearFor([term.source], true, (cleared) =>
                   cleared
-                    ? `Cleared ${counted(cleared, "translation", "translations")} of ${term.source} that didn't use ${termTranslation(term).trim()}. Translate translates ${cleared === 1 ? "it" : "them"} again.`
-                    : `Every translation with ${term.source} already uses ${termTranslation(term).trim()}.`,
+                    ? `Cleared ${counted(cleared, "translation", "translations")} of ${term.source} that didn't use ${translationInUse(term).trim()}. Translate translates ${cleared === 1 ? "it" : "them"} again.`
+                    : `Every translation with ${term.source} already uses ${translationInUse(term).trim()}.`,
                 )
               }
             />
@@ -389,7 +417,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
         keep="Keep it"
         confirm="Remove glossary"
         onConfirm={() => {
-          edit(keepCustom ? glossary.filter(isCustom) : [], 0);
+          edit(keepCustom ? typed.filter(isCustom) : [], 0);
           setSelected(undefined);
         }}
         options={
@@ -418,7 +446,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
         onConfirm={() => {
           const index = removing === undefined ? -1 : glossary.indexOf(removing);
           if (index === -1) return;
-          edit(glossary.toSpliced(index, 1), 0);
+          edit(typed.toSpliced(index, 1), 0);
           setSelected(undefined);
         }}
       >
@@ -439,7 +467,7 @@ function Glossary({ saved }: { readonly saved: Catalog }) {
             )
           }
         >
-          {`Clears ${counted(entriesToClear(saved, term, false).length, "translated line", "translated lines")}, after backing them up. Translate translates them again.`}
+          {`Clears ${counted(textsToClear(saved, term, false).length, "translated line", "translated lines")}. Translate translates them again.`}
         </ConfirmDialog>
       )}
     </div>
@@ -520,7 +548,7 @@ function TermList({
                       </Badge>
                     )}
                   </span>
-                  <span className="block text-muted-foreground">{termTranslation(each)}</span>
+                  <span className="block text-muted-foreground">{translationInUse(each)}</span>
                 </button>
                 <Button
                   variant="ghost"

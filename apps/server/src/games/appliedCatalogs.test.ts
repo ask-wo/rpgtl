@@ -5,7 +5,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import { folderWith, mvGame } from "../testUtils/gameFolder.ts";
-import { opened, servicesWith } from "../testUtils/state.ts";
+import { opened, servicesWith, typed } from "../testUtils/state.ts";
 import { appliedCatalogs } from "./appliedCatalogs.ts";
 import * as Catalogs from "./Catalogs.ts";
 
@@ -14,11 +14,8 @@ it.effect("a catalog that no longer applies to its game's files names the files"
     const catalogs = yield* Catalogs.Catalogs;
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const { game, catalog } = yield* opened(catalogs.inspect(yield* folderWith(mvGame)));
-    yield* catalogs.save({
-      ...catalog,
-      entries: catalog.entries.map((entry) => ({ ...entry, translation: { user: "Hi" } })),
-    });
+    const { game } = yield* opened(catalogs.inspect(yield* folderWith(mvGame)));
+    yield* typed(game.id, () => "Hi");
     assert.deepStrictEqual(
       (yield* appliedCatalogs()).map(({ problem }) => problem),
       [undefined],

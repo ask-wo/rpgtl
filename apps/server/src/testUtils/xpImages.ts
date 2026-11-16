@@ -77,13 +77,14 @@ export const translatedSign = Effect.fnUntraced(function* (english: string) {
       ]),
     ),
   });
-  const { game, catalog } = yield* opened(catalogs.inspect(dir));
+  const { game } = yield* opened(catalogs.inspect(dir));
   yield* imageTexts.saveErased(game.id, erased);
   yield* imageTexts.save(game.id, results);
-  yield* catalogs.save({
-    ...catalog,
-    translate: true,
-    entries: imageEntries(results).map((entry) => ({ ...entry, translation: { user: english } })),
-  });
+  yield* opened(catalogs.inspect(dir));
+  yield* catalogs.setEntries(
+    game.id,
+    imageEntries(results).map(({ id }) => ({ id, userTranslation: english })),
+  );
+  yield* catalogs.setTranslate(game.id, true);
   return game;
 });

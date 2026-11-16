@@ -1,7 +1,15 @@
 import { assert, it } from "@effect/vitest";
-import type { Entry, GlossaryTerm, TermKind } from "@rpgtl/contracts";
+import type { TermKind } from "@rpgtl/contracts";
 import { characterAliases, glossaryOrder, shortNameTranslations, termTexts } from "./index.ts";
+import { testEntry, testTerm } from "./testUtils/catalog.ts";
 
+const place = {
+  _tag: "CommandText",
+  list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+  index: 0,
+  parameter: 0,
+  keys: ["0"],
+} as const;
 const entries = [
   "美咲：走吧。",
   "美咲：好。",
@@ -10,23 +18,9 @@ const entries = [
   "武器",
   "武器店",
   "卡斯特拉",
-].map((source, index): Entry => ({
-  id: `${index}`,
-  location: {
-    _tag: "CommandText",
-    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
-    index: 0,
-    parameter: 0,
-    keys: ["0"],
-  },
-  source,
-  translation: {},
-}));
-const term = (source: string, translation: string, kind: TermKind): GlossaryTerm => ({
-  source,
-  translation: translation ? { user: translation } : {},
-  kind: { guess: { value: kind } },
-});
+].map((source, index) => testEntry(place, source, { id: `${index}` }));
+const term = (source: string, translation: string, kind: TermKind) =>
+  testTerm(source, { rulesKind: kind, ...(translation && { userTranslation: translation }) });
 
 it("the glossary lists new terms, then each kind by use, counting known short names", () => {
   const glossary = [
@@ -41,19 +35,8 @@ it("the glossary lists new terms, then each kind by use, counting known short na
 });
 
 it("a family name two characters share counts for neither, so each counts only its own lines", () => {
-  const lines = ["藤原·美咲来了", "藤原·雄一郎来了", "雄一郎：走吧。"].map(
-    (source, index): Entry => ({
-      id: `${index}`,
-      location: {
-        _tag: "CommandText",
-        list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
-        index: 0,
-        parameter: 0,
-        keys: ["0"],
-      },
-      source,
-      translation: {},
-    }),
+  const lines = ["藤原·美咲来了", "藤原·雄一郎来了", "雄一郎：走吧。"].map((source, index) =>
+    testEntry(place, source, { id: `${index}` }),
   );
   const misaki = term("藤原·美咲", "Fujiwara Misaki", "character");
   const yuichiro = term("藤原·雄一郎", "Fujiwara Yuichiro", "character");

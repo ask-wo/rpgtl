@@ -143,7 +143,8 @@ const make = Effect.gen(function* () {
       if (Result.isFailure(patched)) return yield* patched.failure;
       if (patched.success) files.set(name, patched.success);
     }
-    const images = catalog.originalScripts || !options.images ? [] : yield* xpImages.drawn(game);
+    const images =
+      !catalog.settings.isScriptTranslationOn || !options.images ? [] : yield* xpImages.drawn(game);
     const graphics = new Map(images.map((image) => [`${image.tiles}.png`, image.bytes]));
     if (images.length > 0) graphics.set(xpImageTableFile, xpImageTable(images));
     return xpPatchZip(

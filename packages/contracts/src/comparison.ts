@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { Engine, Entry, GlossaryTerm } from "./catalog.ts";
+import { Engine, Entry, GameSettings, GlossaryTerm, Text } from "./catalog.ts";
 import { RunLogLine } from "./runLog.ts";
 import { TranslationSettings } from "./translation.ts";
 
@@ -49,10 +49,16 @@ export const Comparison = Schema.Struct({
   game: Schema.Struct({ id: Schema.String, title: Schema.String, engine: Engine }),
   samples: Samples,
   /**
-   * The sample's entries, untranslated but for fixed ones, and the glossary with pronouns from
-   * the whole game, before a setup's `@read` adds names.
+   * The sample's entries and their texts, untranslated but for fixed ones, the glossary with
+   * pronouns from the whole game, before a setup's `@read` adds names, and the game's settings
+   * with the language of all its text.
    */
-  sample: Schema.Struct({ entries: Schema.Array(Entry), glossary: Schema.Array(GlossaryTerm) }),
+  sample: Schema.Struct({
+    entries: Schema.Array(Entry),
+    texts: Schema.Array(Text),
+    glossary: Schema.Array(GlossaryTerm),
+    settings: GameSettings,
+  }),
   setups: Schema.Array(ComparedSetup),
 });
 export type Comparison = typeof Comparison.Type;

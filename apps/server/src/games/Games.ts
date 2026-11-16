@@ -13,6 +13,7 @@ import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 import * as StateFolder from "../state/StateFolder.ts";
+import * as GameDatabases from "./GameDatabases.ts";
 
 export class GameNotInspectedError extends Schema.TaggedError<GameNotInspectedError>()(
   "GameNotInspectedError",
@@ -142,6 +143,7 @@ export class Games extends Context.Service<
 
 const make = Effect.gen(function* () {
   const folder = yield* StateFolder.StateFolder;
+  const databases = yield* GameDatabases.GameDatabases;
   const saved = yield* folder.read(listFile, GameList);
   const games = yield* SynchronizedRef.make(
     Option.getOrElse(saved, (): ReadonlyArray<SavedGame> => []),
@@ -251,6 +253,7 @@ const make = Effect.gen(function* () {
         // Unlisted first: a folder left half deleted is never opened as a game again, a listed
         // game without its catalog would be.
         const all = yield* update((current) => current.filter((game) => game.id !== id));
+        yield* databases.close(id);
         yield* folder.remove(gameFiles(id).folder);
         return shown(all);
       }),

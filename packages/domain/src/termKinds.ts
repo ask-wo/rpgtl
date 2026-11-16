@@ -1,8 +1,8 @@
-import type { Entry, GlossaryTerm, Table } from "@rpgtl/contracts";
+import type { GlossaryTerm, Table } from "@rpgtl/contracts";
+import type { EntryText } from "./catalog.ts";
 import { plainText, speakerTagPattern } from "./controlCodes.ts";
 import { isSettingText, isSystemText } from "./location.ts";
 import { isSpeakerNameEntry } from "./nameEntries.ts";
-import { showTextSpeakers } from "./reuse.ts";
 
 const maxLines = 3;
 const maxLineLength = 60;
@@ -18,7 +18,7 @@ const databaseRoles: Partial<Record<Table, string>> = {
 };
 
 /** What a game uses an entry's text as, when that says something about the kind of term it is. */
-function roleOf(entry: Entry) {
+function roleOf(entry: EntryText) {
   const { location } = entry;
   if (isSystemText(entry)) return "menu or system term";
   if (isSpeakerNameEntry(entry)) return "speaker";
@@ -39,7 +39,7 @@ export interface TermInput {
 
 /** What the kind question sends for each term: where the game uses it and a few lines with it. */
 export function termInputs(
-  entries: ReadonlyArray<Entry>,
+  entries: ReadonlyArray<EntryText>,
   terms: ReadonlyArray<Pick<GlossaryTerm, "source">>,
 ): TermInput[] {
   const sources = new Set(terms.map((term) => term.source.trim()));
@@ -51,7 +51,6 @@ export function termInputs(
     if (found) found.add(role);
     else roles.set(key, new Set([role]));
   };
-  const speakerOf = showTextSpeakers(entries);
   const lines: string[] = [];
   for (const entry of entries) {
     const role = roleOf(entry);
@@ -60,7 +59,7 @@ export function termInputs(
       continue;
     }
     if (isSettingText(entry)) continue;
-    addRole(speakerOf(entry), "speaker");
+    addRole(entry.speaker, "speaker");
     for (const [, name] of entry.source.matchAll(speakerTagPattern)) addRole(name, "speaker");
     lines.push(plainText(entry.source));
   }

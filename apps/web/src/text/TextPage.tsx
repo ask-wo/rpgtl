@@ -1,13 +1,14 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import type { Catalog, Entry } from "@rpgtl/contracts";
+import type { Catalog } from "@rpgtl/contracts";
 import {
-  entryTranslation,
-  isUserValue,
+  type EntryText,
+  isUserTranslation,
+  lastRun,
   type Place,
   placeKey,
   placeOf,
   runTranslates,
-  termTranslation,
+  translationInUse,
 } from "@rpgtl/domain";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import * as Exit from "effect/Exit";
@@ -25,7 +26,7 @@ import { useGame } from "../games/GameContext.ts";
 import { catalog, findings } from "../translation/atoms.ts";
 import { counted, number } from "../translation/counts.ts";
 import { Pager } from "../app/Pager.tsx";
-import { clearEntries, setEntries } from "./atoms.ts";
+import { clearTranslations, setEntries } from "./atoms.ts";
 import { EntryRow } from "./EntryRow.tsx";
 import { FileTree, type Selection, type TreeArea } from "./FileTree.tsx";
 import {
@@ -97,14 +98,14 @@ const selectionOf = ({ place, area }: TextSearch): Selection =>
       ? { kind: "area", area }
       : { kind: "all" };
 
-const inSelection = (entry: Entry, selection: Selection) =>
+const inSelection = (entry: EntryText, selection: Selection) =>
   selection.kind === "all" ||
   (selection.kind === "area"
     ? areaOf(placeOf(entry.location)) === selection.area
     : placeKey(placeOf(entry.location)) === selection.place);
 
 /** One edit of an entry: its English, or whether it keeps its original. */
-type EntryChange = { readonly translation: string } | { readonly keepOriginal: boolean };
+type EntryChange = { readonly userTranslation: string } | { readonly isLeftUntranslated: boolean };
 
 const oneLine = (text: string) => {
   const line = text.replace(/\s*\n\s*/g, " ");
@@ -123,7 +124,7 @@ function Text({
   const game = useGame();
   const edits = useGameEdits(game.id);
   const save = useAtomSet(setEntries, { mode: "promiseExit" });
-  const clear = useAtomSet(clearEntries, { mode: "promiseExit" });
+  const clear = useAtomSet(clearTranslations, { mode: "promiseExit" });
   const [clearing, setClearing] = useState(false);
   const [notice, setNotice] = useState<{ readonly text: string; readonly failed: boolean }>();
   const now = AsyncResult.getOrElse(useAtomValue(activity(game.id)), () => undefined);
@@ -174,16 +175,16 @@ function Text({
     [edits],
   );
 
-  const edit = (entry: Entry, change: EntryChange, delay: number) => {
-    if ("translation" in change) {
-      const { translation } = change;
+  const edit = (entry: EntryText, change: EntryChange, delay: number) => {
+    if ("userTranslation" in change) {
+      const { userTranslation } = change;
       typed.current.add(entry.id);
       setKept((before) => new Set(before).add(entry.id));
-      setDrafts((before) => new Map(before).set(entry.id, translation));
+      setDrafts((before) => new Map(before).set(entry.id, userTranslation));
     }
     // Typing replaces the save it hasn't made yet, so keeping the original saves apart from it.
     edits.schedule(
-      `${"translation" in change ? "entry" : "keep"}:${entry.id}`,
+      `${"userTranslation" in change ? "entry" : "keep"}:${entry.id}`,
       async () => {
         const exit = await save({
           payload: { id: game.id, entries: [{ id: entry.id, ...change }] },
@@ -217,11 +218,12 @@ function Text({
 
   const show = search.show ?? "all";
   const selection = selectionOf(search);
+  const latestRun = lastRun(saved);
   const context: ShownContext = {
     failed: new Set(now?.translation?.failed),
-    lastRun: saved.lastRun,
+    lastRun: latestRun,
     findings: found,
-    translates: runTranslates(saved),
+    translates: runTranslates(saved.settings),
   };
   const wanted = query.trim().toLowerCase();
   const text = textEntries(saved);
@@ -254,7 +256,7 @@ function Text({
     return [{ area, places: inArea, count: inArea.reduce((sum, place) => sum + place.count, 0) }];
   });
   const english = new Map(
-    saved.glossary.map((term) => [term.source, termTranslation(term).trim()]),
+    saved.glossary.map((term) => [term.source, translationInUse(term).trim()]),
   );
 
   const current = Math.min(page, pages - 1);
@@ -267,9 +269,7 @@ function Text({
   const selectedIn = searched.filter((entry) => inSelection(entry, selection));
   const clearable = selectedIn.filter(
     (entry) =>
-      isShown(entry, "flagged", context) &&
-      !isUserValue(entry.translation) &&
-      context.translates(entry),
+      isShown(entry, "flagged", context) && !isUserTranslation(entry) && context.translates(entry),
   );
   const clearFlagged = async () => {
     setNotice(undefined);
@@ -377,7 +377,7 @@ function Text({
                 <EntryRow
                   key={entry.id}
                   entry={entry}
-                  value={drafts.get(entry.id) ?? entryTranslation(entry)}
+                  value={drafts.get(entry.id) ?? translationInUse(entry)}
                   where={placeLabel(placeOf(entry.location), maps)}
                   speaker={
                     entry.speaker === undefined
@@ -385,13 +385,11 @@ function Text({
                       : english.get(entry.speaker) || entry.speaker
                   }
                   notes={checkNotes(entry, found)}
-                  fromLastRun={
-                    saved.lastRun !== undefined && entry.translation.guess?.run === saved.lastRun
-                  }
+                  fromLastRun={latestRun !== undefined && entry.modelOperationId === latestRun}
                   error={errors.get(entry.id)}
                   locked={locked}
-                  onChange={(translation, delay) => edit(entry, { translation }, delay)}
-                  onKeepOriginal={(keepOriginal) => edit(entry, { keepOriginal }, 0)}
+                  onChange={(userTranslation, delay) => edit(entry, { userTranslation }, delay)}
+                  onKeepOriginal={(isLeftUntranslated) => edit(entry, { isLeftUntranslated }, 0)}
                 />
               ))
           )}

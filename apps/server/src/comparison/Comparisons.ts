@@ -8,7 +8,7 @@ import {
   fileTime,
   gameFiles,
 } from "@rpgtl/contracts";
-import { CatalogDraft, entryTranslation, pickSamples, sampleCatalog } from "@rpgtl/domain";
+import { CatalogDraft, translationInUse, pickSamples, sampleCatalog } from "@rpgtl/domain";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -20,6 +20,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
+import * as Struct from "effect/Struct";
 import * as Catalogs from "../games/Catalogs.ts";
 import type * as Games from "../games/Games.ts";
 import * as FreeMemory from "../localModels/FreeMemory.ts";
@@ -160,7 +161,7 @@ const make = Effect.gen(function* () {
     const end: RunLogLine = {
       type: "end",
       at,
-      translated: draft.entries.filter((entry) => entryTranslation(entry)).length,
+      translated: draft.entries.filter((entry) => translationInUse(entry)).length,
       failed: [...draft.failed],
       stopped: false,
       ...(error !== undefined && { error }),
@@ -190,7 +191,7 @@ const make = Effect.gen(function* () {
       const comparison: Comparison = {
         game: { id, title: catalog.game.title, engine: catalog.game.engine },
         samples,
-        sample: { entries: sample.entries, glossary: sample.glossary },
+        sample: Struct.pick(sample, ["entries", "texts", "glossary", "settings"]),
         setups: yield* Ref.updateAndGet(done, (all) => [...all, setup]),
       };
       yield* folder.write(`${name}.json`, Comparison, comparison);
@@ -207,10 +208,7 @@ const make = Effect.gen(function* () {
             ComparisonEvent.Started({ label: setup.label, entries: sample.entries.length }),
           ),
           Stream.fromEffect(
-            Effect.map(DateTime.now, DateTime.formatIso).pipe(
-              Effect.flatMap((started) =>
-                runSetup(catalog, new CatalogDraft(sample, limits, started), setup, llamaLog),
-              ),
+            runSetup(catalog, new CatalogDraft(sample, limits), setup, llamaLog).pipe(
               Effect.flatMap(save),
             ),
           ),

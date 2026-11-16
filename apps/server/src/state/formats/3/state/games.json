@@ -1,0 +1,29 @@
+[
+  {
+    "id": "4d6f73734c616e746572",
+    "root": "/games/Moss Lantern v0.3",
+    "webRoot": "/games/Moss Lantern v0.3/www",
+    "engine": "MV",
+    "title": "苔灯小镇",
+    "files": ["Map001.json", "System.json", "plugins.js"],
+    "encryptedAssets": true,
+    "mediaWarnings": ["audio/bgm/Field.ogg"],
+    "missingImages": [{ "path": "img/faces/$Ivo", "files": ["Map001.json"] }],
+    "missingAudio": [{ "path": "audio/me/Fanfare", "files": ["System.json"] }],
+    "identity": { "encryptionKey": "0f1e2d3c4b5a69788796a5b4c3d2e1f0" },
+    "build": { "versionId": 81234567, "sha256": "5e1c0f6a", "version": "v0.3" }
+  },
+  {
+    "id": "5265656442616e6b0000",
+    "root": "/games/Reed Bank",
+    "webRoot": "/games/Reed Bank",
+    "engine": "MZ",
+    "title": "芦苇岸",
+    "files": [],
+    "encryptedAssets": false,
+    "mediaWarnings": [],
+    "missingImages": [],
+    "identity": { "gameId": 31415926 },
+    "removed": true
+  }
+]

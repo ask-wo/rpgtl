@@ -1,5 +1,5 @@
-import type { Catalog, Entry, GlossaryTerm, Pronoun } from "@rpgtl/contracts";
-import { inUse, entryTranslation, termTranslation, termKind } from "./guesses.ts";
+import type { Catalog, GlossaryTerm, Text } from "@rpgtl/contracts";
+import { termKind, termPronoun, translationInUse } from "./inUse.ts";
 
 export const nameParts = (name: string) => name.split(/[·・•]/);
 
@@ -68,7 +68,7 @@ function partTranslations(source: string, translation: string) {
 export function givenNameTranslation(
   source: string,
   translation: string,
-  entries: ReadonlyArray<Pick<Entry, "source">>,
+  entries: ReadonlyArray<Pick<Text, "source">>,
 ) {
   const texts = entries.map((entry) => entry.source.split(source).join("\n"));
   let best: { sure: string; uses: number } | undefined;
@@ -84,13 +84,13 @@ export function givenNameTranslation(
  * Shared short names are usable when every candidate gives them the same translation. A guess
  * by place agrees or blocks, but doesn't decide.
  */
-export function shortNameTranslations(glossary: ReadonlyArray<GlossaryTerm>) {
+export function shortNameTranslations(glossary: ReadonlyArray<Omit<GlossaryTerm, "id">>) {
   const candidates = new Map<string, { sure: Set<string | undefined>; guesses: Set<string> }>();
   for (const term of glossary) {
     if (termKind(term) !== "character") continue;
     const source = term.source.trim();
     if (nameParts(source).length < 2) continue;
-    for (const { part, sure, guess } of partTranslations(source, termTranslation(term))) {
+    for (const { part, sure, guess } of partTranslations(source, translationInUse(term))) {
       if (characters(part) < 2) continue;
       let candidate = candidates.get(part);
       if (!candidate) candidates.set(part, (candidate = { sure: new Set(), guesses: new Set() }));
@@ -103,7 +103,7 @@ export function shortNameTranslations(glossary: ReadonlyArray<GlossaryTerm>) {
     const explicit = glossary.find((term) => term.source.trim() === source);
     const agreed = sure.size === 1 ? [...sure][0] : undefined;
     const translation = explicit
-      ? termTranslation(explicit).trim()
+      ? translationInUse(explicit).trim()
       : agreed && [...guesses].every((guess) => guess === agreed)
         ? agreed
         : undefined;
@@ -117,17 +117,17 @@ const usesWord = (text: string, term: string) =>
   new RegExp(`(?<![\\p{L}\\p{N}])${RegExp.escape(term)}(?![\\p{L}\\p{N}])`, "iu").test(text);
 
 /**
- * Translated entries that contain a glossary term, for translating them again: its name, or a short
+ * Translated texts that contain a glossary term, for translating them again: its name, or a short
  * form of it that no other character shares. With `mismatchesOnly`, only those that don't use the
  * term's English, counting shared short forms too, since their English is the same for both.
  */
-export function entriesToClear<E extends Entry>(
-  catalog: { readonly entries: ReadonlyArray<E>; readonly glossary: Catalog["glossary"] },
+export function textsToClear<T extends Text>(
+  catalog: { readonly texts: ReadonlyArray<T>; readonly glossary: Catalog["glossary"] },
   term: GlossaryTerm,
   mismatchesOnly: boolean,
 ) {
   const key = term.source.trim();
-  const english = termTranslation(term).trim();
+  const english = translationInUse(term).trim();
   if (!key) return [];
   // Entries that call a dotted name by one part alone, such as 美咲 for 藤原·美咲.
   const translations =
@@ -142,13 +142,13 @@ export function entriesToClear<E extends Entry>(
             ? [{ key: part, english: short }]
             : [];
         });
-  return catalog.entries.filter((e) => {
-    if (!entryTranslation(e)) return false;
+  return catalog.texts.filter((e) => {
+    if (!translationInUse(e)) return false;
     const match = e.source.includes(key)
       ? { english }
       : shorts.find((s) => e.source.includes(s.key));
     if (!match) return false;
-    return !(mismatchesOnly && match.english && usesWord(entryTranslation(e), match.english));
+    return !(mismatchesOnly && match.english && usesWord(translationInUse(e), match.english));
   });
 }
 
@@ -156,15 +156,17 @@ export function entriesToClear<E extends Entry>(
  * Whether a pronoun is sent to the translator: she or he, unless the model chose it and the text's
  * clues lean the other way, which leaves it to the user.
  */
-export const sentPronoun = (pronoun: Pronoun | undefined) => {
-  const value = pronoun && inUse(pronoun);
-  return (value === "she" || value === "he") && !(pronoun && doubted(pronoun));
+export const sentPronoun = (term: Pronouns) => {
+  const value = termPronoun(term);
+  return (value === "she" || value === "he") && !doubted(term);
 };
 
+type Pronouns = Pick<
+  GlossaryTerm,
+  "rulesPronoun" | "modelPronoun" | "userPronoun" | "sheClues" | "heClues"
+>;
+
 /** Whether the model's pronoun is in use while the text's clues lean the other way. */
-export const doubted = ({ guess, user }: Pronoun) =>
-  user === undefined &&
-  guess?.run !== undefined &&
-  (guess.value === "she"
-    ? (guess.he ?? 0) > (guess.she ?? 0)
-    : guess.value === "he" && (guess.she ?? 0) > (guess.he ?? 0));
+export const doubted = ({ modelPronoun, userPronoun, sheClues = 0, heClues = 0 }: Pronouns) =>
+  userPronoun === undefined &&
+  (modelPronoun === "she" ? heClues > sheClues : modelPronoun === "he" && sheClues > heClues);

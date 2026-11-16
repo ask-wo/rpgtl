@@ -1,5 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import { type GameContents, missingText, newEntry, textInLogic } from "../../index.ts";
+import { testCatalog } from "../../testUtils/catalog.ts";
 
 const map = {
   events: [
@@ -38,35 +39,35 @@ const contents: GameContents = {
   ],
   pluginCode: new Map([["Credits", 'if (name === "致谢") show();\n/* "致谢" */']]),
 };
-const catalog = {
+const catalog = testCatalog({
   entries: [
     {
       ...newEntry({ _tag: "SystemText", keys: ["terms", "commands", "0"] }, "致谢"),
-      translation: { user: "Credits" },
+      userTranslation: "Credits",
     },
     {
       ...newEntry(
         { _tag: "Message", list: { _tag: "MapEventPage", map: 9, event: 1, page: 0 }, index: 1 },
         "人类",
       ),
-      translation: { user: "Human" },
+      userTranslation: "Human",
     },
     {
       ...newEntry(
         { _tag: "NoteTag", owner: { _tag: "Record", table: "items", record: 3 }, tag: 0 },
         "它在门后。",
       ),
-      translation: { user: "It is behind the door." },
+      userTranslation: "It is behind the door.",
     },
     {
       ...newEntry(
         { _tag: "NoteTag", owner: { _tag: "Record", table: "items", record: 3 }, tag: 1 },
         "河边住着一只老乌龟。\n它从不说话",
       ),
-      translation: { user: "An old turtle lives by the river.\nIt never speaks." },
+      userTranslation: "An old turtle lives by the river.\nIt never speaks.",
     },
   ],
-};
+});
 
 it("Coverage lists text no entry covers, by where it is, file and editor names last, and leaves out a script's own text", () => {
   assert.deepStrictEqual(missingText(contents, ["System.json"], catalog), [

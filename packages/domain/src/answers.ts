@@ -1,4 +1,5 @@
-import type { AnswerContext, Entry, RejectReason } from "@rpgtl/contracts";
+import type { AnswerContext, RejectReason } from "@rpgtl/contracts";
+import type { EntryText } from "./catalog.ts";
 import * as Result from "effect/Result";
 import { sourceLeft, sourceScript, withoutStrayNumber } from "./checks.ts";
 import { isColorCode, keepsControlCodes } from "./controlCodes.ts";
@@ -97,7 +98,7 @@ export interface AcceptedAnswer {
 
 /** Checks a model's answer for an entry, with the entry's control codes put back when it passes. */
 export function checkAnswer(
-  entry: Pick<Entry, "source"> & Placed,
+  entry: Pick<EntryText, "source"> & Placed,
   answer: string | undefined,
   { glossary = [], speaker, limit }: AnswerContext = {},
   keepTags = false,

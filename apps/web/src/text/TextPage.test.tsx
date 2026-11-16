@@ -1,5 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { Catalog, Entry, Findings, GameActivity, Location, RunStatus } from "@rpgtl/contracts";
+import type { Catalog, Findings, GameActivity, Location, RunStatus } from "@rpgtl/contracts";
+import { entryTexts, translationInUse, withTexts } from "@rpgtl/domain";
+import { testCatalog, type TestEntry, testTerm } from "@rpgtl/domain/testUtils/catalog";
 import { useState } from "react";
 import { page } from "vite-plus/test/browser";
 import { beforeAll, expect, test, vi } from "vite-plus/test";
@@ -9,7 +11,6 @@ import { catalogFeed, events, render, serveApi } from "../testUtils/fakeApi.tsx"
 import { game, idle } from "../testUtils/game.ts";
 import type { TextSearch } from "./search.ts";
 import { TextEditor } from "./TextPage.tsx";
-import { entryTranslation } from "@rpgtl/domain";
 
 // The file tree and the entries sit side by side, as on a desktop screen.
 beforeAll(() => page.viewport(1280, 800));
@@ -22,43 +23,46 @@ const message = (map: number, index: number): Location => ({
   index,
 });
 
-const line = (id: string, location: Location, source: string, translation: string): Entry => ({
+const line = (id: string, location: Location, source: string, translation: string): TestEntry => ({
   id,
   location,
   source,
-  translation: translation ? { user: translation } : {},
+  ...(translation && { userTranslation: translation }),
 });
 
-const saved: Catalog = {
-  version: 1,
-  game: { id: game.id, title: game.title, engine: "MV" },
-  entries: [
-    line(
-      "m1",
-      { _tag: "RecordField", table: "mapInfos", record: 1, field: "name" },
-      "客厅",
-      "Living Room",
-    ),
-    { ...line("1", message(1, 1), "你好", "Hello"), speaker: "阿琳" },
-    {
-      ...line("2", message(1, 2), "下雨了", ""),
-      suggestion: { text: "下雨 rain", reason: "source text left" },
-    },
-    {
-      ...line("3", message(2, 3), "再见", ""),
-      translation: { guess: { value: "Bye", run: lastRun } },
-      previous: "Farewell",
-    },
-    line("4", { _tag: "RecordField", table: "items", record: 4, field: "name" }, "药水", "Potion"),
-    line("5", { _tag: "SystemText", keys: ["terms", "commands", "0"] }, "开始", ""),
-    line("6", { _tag: "ImageLines", image: "img/pictures/Title", lines: [0] }, "标题", ""),
-  ],
-  glossary: [
-    { source: "阿琳", translation: { user: "Arlene" }, kind: { guess: { value: "character" } } },
-  ],
-  translate: true,
-  lastRun,
-};
+const savedEntries: ReadonlyArray<TestEntry> = [
+  line(
+    "m1",
+    { _tag: "RecordField", table: "mapInfos", record: 1, field: "name" },
+    "客厅",
+    "Living Room",
+  ),
+  { ...line("1", message(1, 1), "你好", "Hello"), speaker: "阿琳" },
+  {
+    ...line("2", message(1, 2), "下雨了", ""),
+    rejectedTranslation: "下雨 rain",
+    rejectionReason: "source text left",
+  },
+  {
+    ...line("3", message(2, 3), "再见", ""),
+    modelTranslation: "Bye",
+    modelOperationId: 1,
+    previousTranslation: "Farewell",
+  },
+  line("4", { _tag: "RecordField", table: "items", record: 4, field: "name" }, "药水", "Potion"),
+  line("5", { _tag: "SystemText", keys: ["terms", "commands", "0"] }, "开始", ""),
+  line("6", { _tag: "ImageLines", image: "img/pictures/Title", lines: [0] }, "标题", ""),
+];
+
+const catalogOf = (entries: ReadonlyArray<TestEntry>): Catalog =>
+  testCatalog({
+    game: { id: game.id, title: game.title, engine: "MV" },
+    entries,
+    glossary: [testTerm("阿琳", { userTranslation: "Arlene", rulesKind: "character" })],
+    settings: { isTranslationOn: true },
+    operations: [{ id: 1, kind: "run", startedAt: lastRun }],
+  });
+const saved = catalogOf(savedEntries);
 
 /**
  * RPGTL's server with the game's catalog, its checks and its activity, which the test sends;
@@ -71,15 +75,17 @@ const fakeServer = () => {
     catalog: saved,
     findings: { "4": [{ check: "length unlike the source" }] } as Findings,
     activity: (now: GameActivity) => stream.send(now),
-    saves: [] as Array<ReadonlyArray<{ id: string; translation?: string; keepOriginal?: boolean }>>,
+    saves: [] as Array<
+      ReadonlyArray<{ id: string; userTranslation?: string; isLeftUntranslated?: boolean }>
+    >,
     cleared: [] as Array<ReadonlyArray<string>>,
     feed: catalogFeed(
       (): Catalog => server.catalog,
       (): Findings => ({
         ...server.findings,
         ...Object.fromEntries(
-          server.catalog.entries
-            .filter((entry) => /\p{Script=Han}/u.test(entryTranslation(entry)))
+          entryTexts(server.catalog)
+            .filter((entry) => /\p{Script=Han}/u.test(translationInUse(entry)))
             .map((entry) => [entry.id, [{ check: "source text left" as const }]]),
         ),
       }),
@@ -100,17 +106,19 @@ const fakeServer = () => {
         const { entries } = await request.json();
         server.saves.push(entries);
         const [edit] = entries;
-        if (edit.keepOriginal !== undefined) {
+        if (edit.isLeftUntranslated !== undefined) {
           server.catalog = {
             ...server.catalog,
             entries: server.catalog.entries.map((entry) =>
-              entry.id === edit.id ? { ...entry, keepOriginal: edit.keepOriginal } : entry,
+              entry.id === edit.id
+                ? { ...entry, isLeftUntranslated: edit.isLeftUntranslated }
+                : entry,
             ),
           };
           server.feed.changed();
           return new Response(null, { status: 204 });
         }
-        if (edit.translation.includes("\\"))
+        if (edit.userTranslation.includes("\\"))
           return Response.json(
             {
               _tag: "EntryRejected",
@@ -120,12 +128,10 @@ const fakeServer = () => {
             },
             { status: 400 },
           );
-        server.catalog = {
-          ...server.catalog,
-          entries: server.catalog.entries.map((entry) =>
-            entry.id === edit.id ? { ...entry, translation: { user: edit.translation } } : entry,
-          ),
-        };
+        const textId = server.catalog.entries.find((entry) => entry.id === edit.id)?.textId;
+        server.catalog = withTexts(server.catalog, (text) =>
+          text.id === textId ? { ...text, userTranslation: edit.userTranslation } : text,
+        );
         server.feed.changed();
         return new Response(null, { status: 204 });
       }
@@ -206,7 +212,9 @@ test("an edit saves once typing pauses, and stays listed while it leaves the fil
   expect(searches.at(-1)).toEqual({ show: "untranslated" });
   const box = page.getByRole("textbox", { name: "English for 开始" });
   await box.fill("Start 开始");
-  await vi.waitFor(() => expect(server.saves).toEqual([[{ id: "5", translation: "Start 开始" }]]));
+  await vi.waitFor(() =>
+    expect(server.saves).toEqual([[{ id: "5", userTranslation: "Start 开始" }]]),
+  );
   await expect.element(page.getByRole("button", { name: "Untranslated 1" })).toBeVisible();
   await expect.element(box).toHaveValue("Start 开始");
   // The checks are read again once the edit saved.
@@ -234,14 +242,11 @@ const goldScript = (literal: number) =>
 
 test("keeping a script's string as it is saves apart from the English typed for it, and leaves Untranslated", async () => {
   const server = fakeServer();
-  server.catalog = {
-    ...saved,
-    entries: [
-      ...saved.entries,
-      line("7", goldScript(2), "金币", ""),
-      { ...line("8", goldScript(3), "银币", ""), keepOriginal: true },
-    ],
-  };
+  server.catalog = catalogOf([
+    ...savedEntries,
+    line("7", goldScript(2), "金币", ""),
+    { ...line("8", goldScript(3), "银币", ""), isLeftUntranslated: true },
+  ]);
   showText();
   server.activity(idle);
   await expect.element(page.getByRole("button", { name: "Untranslated 3" })).toBeVisible();
@@ -252,8 +257,8 @@ test("keeping a script's string as it is saves apart from the English typed for 
   await keep.click();
   await vi.waitFor(() =>
     expect(server.saves).toEqual([
-      [{ id: "7", keepOriginal: true }],
-      [{ id: "7", translation: "Gold" }],
+      [{ id: "7", isLeftUntranslated: true }],
+      [{ id: "7", userTranslation: "Gold" }],
     ]),
   );
   await expect.element(keep).toBeChecked();
@@ -324,13 +329,10 @@ test("Changed shows only the entries whose English differs from before clearing,
 
 test("a cleared line offers its English from before clearing, which a search finds", async () => {
   const server = fakeServer();
-  server.catalog = {
-    ...saved,
-    entries: [
-      ...saved.entries,
-      { ...line("7", message(2, 4), "晚安", ""), previous: "Good night" },
-    ],
-  };
+  server.catalog = catalogOf([
+    ...savedEntries,
+    { ...line("7", message(2, 4), "晚安", ""), previousTranslation: "Good night" },
+  ]);
   showText();
   server.activity(idle);
   const row = page.getByRole("group", { name: "晚安" });
@@ -340,7 +342,9 @@ test("a cleared line offers its English from before clearing, which a search fin
     .not.toBeInTheDocument();
   await expect.element(row.getByText("Before clearing:", { exact: false })).toBeVisible();
   await row.getByRole("button", { name: "Use the old one" }).click();
-  await vi.waitFor(() => expect(server.saves).toEqual([[{ id: "7", translation: "Good night" }]]));
+  await vi.waitFor(() =>
+    expect(server.saves).toEqual([[{ id: "7", userTranslation: "Good night" }]]),
+  );
   await expect
     .element(page.getByRole("textbox", { name: "English for 晚安" }))
     .toHaveValue("Good night");

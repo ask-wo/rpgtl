@@ -29,7 +29,7 @@ import { ScriptsField } from "./ScriptsField.tsx";
 import { LocalModelFields } from "./LocalModelFields.tsx";
 import { TranslationActions } from "./TranslationActions.tsx";
 import { TranslatorFields } from "./TranslatorFields.tsx";
-import { entryTranslation, isScriptText } from "@rpgtl/domain";
+import { entryTexts, isScriptText, translationInUse } from "@rpgtl/domain";
 
 /** The game's translation switch and, while it is on, what the game's translation holds. */
 export function TranslationCard() {
@@ -51,7 +51,7 @@ export function TranslationCard() {
   };
 
   const value = AsyncResult.getOrElse(saved, () => undefined);
-  const on = value !== undefined && value.translate;
+  const on = value !== undefined && value.settings.isTranslationOn;
   const now = AsyncResult.getOrElse(useAtomValue(activity(game.id)), () => undefined);
   return (
     <Card>
@@ -103,7 +103,7 @@ export function TranslationCard() {
 }
 
 function OffLine({ saved }: { readonly saved: Catalog }) {
-  const translated = saved.entries.filter((entry) => entryTranslation(entry)).length;
+  const translated = entryTexts(saved).filter((entry) => translationInUse(entry)).length;
   if (translated === 0) return "Switch on to translate or import.";
   return `Off: the game plays its original text. ${counted(translated, "translation is", "translations are")} kept.`;
 }

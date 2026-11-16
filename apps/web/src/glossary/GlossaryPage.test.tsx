@@ -1,13 +1,8 @@
-import type {
-  Catalog,
-  Entry,
-  GameActivity,
-  GlossaryTerm,
-  RunStatus,
-  TermEdit,
-} from "@rpgtl/contracts";
-import { withGlossary, withTermGuessesCleared } from "@rpgtl/domain";
+import type { Catalog, GameActivity, GlossaryTerm, RunStatus, TermEdit } from "@rpgtl/contracts";
+import { withGlossary, withTermTranslationsCleared } from "@rpgtl/domain";
+import { testCatalog, type TestEntry, testTerm } from "@rpgtl/domain/testUtils/catalog";
 import { Result } from "effect";
+import * as Struct from "effect/Struct";
 import { page } from "vite-plus/test/browser";
 import { beforeAll, expect, test, vi } from "vite-plus/test";
 import { GameContext } from "../games/GameContext.ts";
@@ -18,7 +13,7 @@ import { GlossaryPage } from "./GlossaryPage.tsx";
 // The list and the term's details sit side by side, as on a desktop screen.
 beforeAll(() => page.viewport(1280, 800));
 
-const line = (id: string, source: string, translation: string): Entry => ({
+const line = (id: string, source: string, translation: string): TestEntry => ({
   id,
   location: {
     _tag: "Message",
@@ -26,32 +21,42 @@ const line = (id: string, source: string, translation: string): Entry => ({
     index: Number(id),
   },
   source,
-  translation: translation ? { user: translation } : {},
+  ...(translation && { userTranslation: translation }),
 });
 
-const arlene: GlossaryTerm = {
-  source: "阿琳",
-  translation: { guess: { value: "Arlene", run: "r" } },
-  kind: { guess: { value: "character", run: "r" } },
-  pronoun: { guess: { value: "she", she: 3, he: 0 } },
-};
-const rain: GlossaryTerm = {
-  source: "雨",
-  translation: { user: "Rain" },
-  kind: { guess: { value: "name" } },
-};
+/** The id of the run that gave the model's values in these tests. */
+const run = 1;
+const arlene: GlossaryTerm = testTerm("阿琳", {
+  modelTranslation: "Arlene",
+  modelOperationId: run,
+  rulesKind: "character",
+  modelKind: "character",
+  rulesPronoun: "she",
+  sheClues: 3,
+  heClues: 0,
+});
+const rain = testTerm("雨", { userTranslation: "Rain", rulesKind: "name" });
 
-const saved: Catalog = {
-  version: 1,
-  game: { id: game.id, title: game.title, engine: "MV" },
-  entries: [
-    line("1", "阿琳来了", "Arlene is here"),
-    line("2", "阿琳走了", "Irene left"),
-    line("3", "下雨了", ""),
-  ],
-  glossary: [rain, arlene],
-  translate: true,
-};
+const savedEntries = [
+  line("1", "阿琳来了", "Arlene is here"),
+  line("2", "阿琳走了", "Irene left"),
+  line("3", "下雨了", ""),
+];
+const catalogOf = ({
+  entries = savedEntries,
+  glossary = [rain, arlene],
+}: {
+  readonly entries?: ReadonlyArray<TestEntry>;
+  readonly glossary?: ReadonlyArray<GlossaryTerm>;
+} = {}): Catalog =>
+  testCatalog({
+    game: { id: game.id, title: game.title, engine: "MV" },
+    entries,
+    glossary,
+    settings: { isTranslationOn: true },
+    operations: [{ id: run, kind: "run", startedAt: "2026-11-04T10:00:00.000Z" }],
+  });
+const saved = catalogOf();
 
 const busy = () =>
   Response.json(
@@ -72,7 +77,7 @@ const fakeServer = () => {
     glossaries: [] as Array<ReadonlyArray<TermEdit>>,
     cleared: [] as Array<ReadonlyArray<string>>,
     clearedAll: [] as Array<ReadonlyArray<string>>,
-    clearedGuesses: [] as Array<ReadonlyArray<string>>,
+    clearedTranslations: [] as Array<ReadonlyArray<string>>,
     /** Whether the next save or clear is refused as if a run held the game. */
     busy: false,
     /** What a refused save waits for before it answers. */
@@ -107,13 +112,13 @@ const fakeServer = () => {
         }
         return Response.json({ cleared: 1 });
       }
-      case "/api/glossary/clear-guesses": {
+      case "/api/glossary/clear-translations": {
         const { sources } = await request.json();
-        server.clearedGuesses.push(sources);
-        const { catalog, terms, entries } = withTermGuessesCleared(server.catalog, sources);
+        server.clearedTranslations.push(sources);
+        const { catalog, terms, texts } = withTermTranslationsCleared(server.catalog, sources);
         server.catalog = catalog;
         server.feed.changed();
-        return Response.json({ terms, entries });
+        return Response.json({ terms, texts });
       }
     }
     return new Response(null, { status: 404 });
@@ -152,8 +157,7 @@ test("terms are listed by kind, and a term shows where it came from and the entr
 
 test("a character's uses count the short forms of its name the translator knows", async () => {
   const server = fakeServer();
-  server.catalog = {
-    ...saved,
+  server.catalog = catalogOf({
     entries: [
       line("1", "藤原·美咲来了", ""),
       line("2", "美咲走了", ""),
@@ -161,13 +165,9 @@ test("a character's uses count the short forms of its name the translator knows"
       line("4", "下雨了", ""),
     ],
     glossary: [
-      {
-        source: "藤原·美咲",
-        translation: { user: "Fujiwara Misaki" },
-        kind: { guess: { value: "character" } },
-      },
+      testTerm("藤原·美咲", { userTranslation: "Fujiwara Misaki", rulesKind: "character" }),
     ],
-  };
+  });
   server.feed.changed();
   showGlossary();
   server.activity(idle);
@@ -189,8 +189,8 @@ test("typing saves once it pauses, and a new kind saves at once without the pron
   expect(server.glossaries).toEqual([]);
   await vi.waitFor(() => expect(server.glossaries).toHaveLength(1));
   expect(server.glossaries[0]).toEqual([
-    { source: "雨", translation: "Rain" },
-    { source: "阿琳", translation: "Arlena" },
+    { source: "雨", userTranslation: "Rain" },
+    { source: "阿琳", userTranslation: "Arlena" },
   ]);
 
   await page.getByRole("combobox", { name: "Kind" }).click();
@@ -198,20 +198,20 @@ test("typing saves once it pauses, and a new kind saves at once without the pron
   await vi.waitFor(() => expect(server.glossaries).toHaveLength(2));
   expect(server.glossaries[1]?.[1]).toEqual({
     source: "阿琳",
-    translation: "Arlena",
-    kind: "name",
+    userTranslation: "Arlena",
+    userKind: "name",
   });
   await expect.element(page.getByText("Set by you.")).toBeVisible();
 });
 
 test("renaming a term renames it in the terms that contain it", async () => {
   const server = fakeServer();
-  const umbrella = {
-    ...rain,
-    source: "阿琳的伞",
-    translation: { guess: { value: "Arlene's Umbrella" } },
-  };
-  server.catalog = { ...saved, glossary: [arlene, umbrella] };
+  const umbrella = testTerm("阿琳的伞", {
+    modelTranslation: "Arlene's Umbrella",
+    modelOperationId: run,
+    rulesKind: "name",
+  });
+  server.catalog = catalogOf({ glossary: [arlene, umbrella] });
   showGlossary();
   server.activity(idle);
   const english = page.getByLabelText("English");
@@ -219,7 +219,7 @@ test("renaming a term renames it in the terms that contain it", async () => {
   await expect.element(page.getByText("Arlena's Umbrella")).toBeVisible();
   await english.fill("");
   await vi.waitFor(() =>
-    expect(server.glossaries.at(-1)?.[0]).toEqual({ source: "阿琳", translation: "" }),
+    expect(server.glossaries.at(-1)?.[0]).toEqual({ source: "阿琳", userTranslation: "" }),
   );
   await english.fill("Irene");
   await expect.element(page.getByText("Irene's Umbrella")).toBeVisible();
@@ -227,30 +227,22 @@ test("renaming a term renames it in the terms that contain it", async () => {
 
 test("a cleared term offers its English from before, and using it saves that", async () => {
   const server = fakeServer();
-  server.catalog = {
-    ...saved,
-    glossary: [rain, { ...arlene, translation: {}, previous: "Arlene" }],
-  };
+  const untranslated = Struct.omit(arlene, ["modelTranslation", "modelOperationId"]);
+  server.catalog = catalogOf({
+    glossary: [rain, { ...untranslated, previousTranslation: "Arlene" }],
+  });
   showGlossary();
   server.activity(idle);
   await expect.element(page.getByText(/Before clearing/)).toBeVisible();
   await page.getByRole("button", { name: "Use it" }).click();
   await vi.waitFor(() => expect(server.glossaries).toHaveLength(1));
-  expect(server.glossaries[0]?.[1]).toEqual({ source: "阿琳", translation: "Arlene" });
+  expect(server.glossaries[0]?.[1]).toEqual({ source: "阿琳", userTranslation: "Arlene" });
   await expect.element(page.getByText(/Before clearing/)).not.toBeInTheDocument();
 });
 
 test("Untranslated and Last run show only the terms without English and those the last run gave", async () => {
   const server = fakeServer();
-  server.catalog = {
-    ...saved,
-    lastRun: "r",
-    glossary: [
-      rain,
-      arlene,
-      { source: "米娅", translation: {}, kind: { guess: { value: "name" } } },
-    ],
-  };
+  server.catalog = catalogOf({ glossary: [rain, arlene, testTerm("米娅", { rulesKind: "name" })] });
   showGlossary();
   server.activity(idle);
   const terms = page.getByRole("region", { name: "Glossary terms" });
@@ -264,33 +256,25 @@ test("Untranslated and Last run show only the terms without English and those th
 
 test("Changed shows only the terms whose English differs from before clearing, with the old one", async () => {
   const server = fakeServer();
-  server.catalog = {
-    ...saved,
-    glossary: [rain, { ...arlene, previous: "Irene" }],
-  };
+  server.catalog = catalogOf({ glossary: [rain, { ...arlene, previousTranslation: "Irene" }] });
   showGlossary();
   server.activity(idle);
   const terms = page.getByRole("region", { name: "Glossary terms" });
   await page.getByRole("button", { name: "Changed 1" }).click();
   await expect.element(terms.getByText("阿琳")).toBeVisible();
   await expect.element(terms.getByText("雨")).not.toBeInTheDocument();
-  await expect.element(page.getByText(/Before:/)).toBeVisible();
+  await expect.element(page.getByText(/Before the last run:/)).toBeVisible();
 });
 
 test("Flagged shows the terms whose English leaves out a name inside them, and names it", async () => {
   const server = fakeServer();
-  server.catalog = {
-    ...saved,
+  server.catalog = catalogOf({
     glossary: [
       rain,
       arlene,
-      {
-        source: "阿琳之歌",
-        translation: { user: "Irene's Song" },
-        kind: { guess: { value: "name" } },
-      },
+      testTerm("阿琳之歌", { userTranslation: "Irene's Song", rulesKind: "name" }),
     ],
-  };
+  });
   showGlossary();
   server.activity(idle);
   const terms = page.getByRole("region", { name: "Glossary terms" });
@@ -300,19 +284,20 @@ test("Flagged shows the terms whose English leaves out a name inside them, and n
   await expect.element(page.getByText(/inside it: 阿琳 → Arlene/)).toBeVisible();
 });
 
-const song = (source: string, english: string, typed: boolean): GlossaryTerm => ({
-  source,
-  translation: typed ? { user: english } : { guess: { value: english, run: "r" } },
-  kind: { guess: { value: "name" } },
-});
+const song = (source: string, english: string, typed: boolean) =>
+  testTerm(source, {
+    rulesKind: "name",
+    ...(typed
+      ? { userTranslation: english }
+      : { modelTranslation: english, modelOperationId: run }),
+  });
 
 test("Clear flagged clears the flagged terms listed that a run gave English, not those the user typed, and shows them cleared after an edit", async () => {
   const server = fakeServer();
-  server.catalog = {
-    ...saved,
+  server.catalog = catalogOf({
     entries: [
-      ...saved.entries,
-      { ...line("4", "阿琳之歌", ""), translation: { guess: { value: "Irene's Song", run: "r" } } },
+      ...savedEntries,
+      { ...line("4", "阿琳之歌", ""), modelTranslation: "Irene's Song", modelOperationId: run },
     ],
     glossary: [
       rain,
@@ -320,7 +305,7 @@ test("Clear flagged clears the flagged terms listed that a run gave English, not
       song("阿琳之歌", "Irene's Song", false),
       song("阿琳之梦", "Irene's Dream", true),
     ],
-  };
+  });
   showGlossary();
   server.activity(idle);
   await page.getByLabelText("English").fill("Arlena");
@@ -330,7 +315,7 @@ test("Clear flagged clears the flagged terms listed that a run gave English, not
   await expect
     .element(page.getByText("Cleared 1 term and 1 translation", { exact: false }))
     .toBeVisible();
-  expect(server.clearedGuesses).toEqual([["阿琳之歌"]]);
+  expect(server.clearedTranslations).toEqual([["阿琳之歌"]]);
   await page.getByRole("button", { name: /^All/ }).click();
   const terms = page.getByRole("region", { name: "Glossary terms" });
   await expect.element(terms.getByText("阿琳之歌")).toBeVisible();
@@ -351,16 +336,15 @@ test("Custom shows the terms you set, and removing the glossary can keep them", 
     .toBeChecked();
   await page.getByRole("button", { name: "Remove glossary", exact: true }).click();
   await vi.waitFor(() =>
-    expect(server.glossaries.at(-1)).toEqual([{ source: "雨", translation: "Rain" }]),
+    expect(server.glossaries.at(-1)).toEqual([{ source: "雨", userTranslation: "Rain" }]),
   );
 });
 
 test("a term used in more entries than the list holds shows the rest on request", async () => {
   const server = fakeServer();
-  server.catalog = {
-    ...saved,
+  server.catalog = catalogOf({
     entries: Array.from({ length: 101 }, (_, i) => line(String(i), `阿琳${i}号`, "")),
-  };
+  });
   showGlossary();
   server.activity(idle);
   const uses = page.getByRole("region", { name: "Entries that use the term" });
@@ -379,16 +363,19 @@ test("a new term saves once it has an original", async () => {
     .element(page.getByText("Type the original to see where the game uses it"))
     .toBeVisible();
   await vi.waitFor(() => expect(server.glossaries).toHaveLength(1));
-  expect(server.glossaries[0]).toEqual([{ source: "雨", translation: "Rain" }, { source: "阿琳" }]);
+  expect(server.glossaries[0]).toEqual([
+    { source: "雨", userTranslation: "Rain" },
+    { source: "阿琳" },
+  ]);
 
   await page.getByLabelText("Original").fill("下雨");
   await page.getByLabelText("English").fill("Raining");
   await page.getByLabelText("Filter terms").click();
   await vi.waitFor(() =>
     expect(server.glossaries.at(-1)).toEqual([
-      { source: "雨", translation: "Rain" },
+      { source: "雨", userTranslation: "Rain" },
       { source: "阿琳" },
-      { source: "下雨", translation: "Raining" },
+      { source: "下雨", userTranslation: "Raining" },
     ]),
   );
 });
@@ -459,10 +446,9 @@ test("an edit a run refused after taking over is dropped with the draft, and doe
 
 test("a model's pronoun the text argues against waits for you to confirm it", async () => {
   const server = fakeServer();
-  server.catalog = {
-    ...saved,
-    glossary: [{ ...arlene, pronoun: { guess: { value: "he", run: "r", she: 3, he: 0 } } }],
-  };
+  server.catalog = catalogOf({
+    glossary: [{ ...arlene, modelPronoun: "he" }],
+  });
   server.feed.changed();
   showGlossary();
   server.activity(idle);
@@ -471,7 +457,7 @@ test("a model's pronoun the text argues against waits for you to confirm it", as
     .toBeVisible();
   await page.getByRole("button", { name: "Confirm he" }).click();
   await vi.waitFor(() => expect(server.glossaries).toHaveLength(1));
-  expect(server.glossaries[0]).toEqual([{ source: "阿琳", pronoun: "he" }]);
+  expect(server.glossaries[0]).toEqual([{ source: "阿琳", userPronoun: "he" }]);
 });
 
 test("Remove glossary without keeping your terms empties the glossary and closes its dialog", async () => {
@@ -576,7 +562,7 @@ test("Clear all text asks first with how many lines, then clears every line with
   server.activity(idle);
   await page.getByRole("button", { name: "Clear all text…" }).click();
   await expect
-    .element(page.getByText("Clears 2 translated lines, after backing them up.", { exact: false }))
+    .element(page.getByText("Clears 2 translated lines.", { exact: false }))
     .toBeVisible();
   await page.getByRole("button", { name: "Clear all text", exact: true }).click();
   await expect

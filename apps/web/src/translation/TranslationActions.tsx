@@ -83,8 +83,8 @@ function previewLines({ translations, glossary, images }: ImportPreview) {
 type Action = "export" | "preview" | "import" | "clear";
 
 /**
- * Export, Import… and Clear all…, which back up the saved translations before changing them and
- * wait while a run goes. Import first shows what the file would change.
+ * Export, Import… and Clear all…, which wait while a run goes. Import first shows what the file
+ * would change.
  */
 export function TranslationActions(props: TranslationActionsProps) {
   // Keyed by the game, so a preview that answers after another game opened can't open its
@@ -178,7 +178,7 @@ function GameTranslationActions({ gameId, locked }: TranslationActionsProps) {
           // A translation file can carry image text too.
           reactivityKeys: { ...catalogKey(gameId), ...imageResultsKey(gameId) },
         }),
-      "Imported, after backing up the previous translations. The game shows them from its next start or F5.",
+      "Imported the translations. The game shows them from its next start or F5.",
     );
   };
 
@@ -186,7 +186,7 @@ function GameTranslationActions({ gameId, locked }: TranslationActionsProps) {
     run(
       "clear",
       () => clear({ payload: { id: gameId }, reactivityKeys: catalogKey(gameId) }),
-      "Cleared all translations, after backing them up. The game shows its original text from its next start or F5.",
+      "Cleared all translations. The game shows its original text from its next start or F5.",
     );
 
   const busy = working !== undefined;
@@ -245,8 +245,7 @@ function GameTranslationActions({ gameId, locked }: TranslationActionsProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Import {pending?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              The saved translations are backed up first. Entries the file leaves out keep their
-              translation.
+              Entries the file leaves out keep their translation.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {pending && (
@@ -268,9 +267,7 @@ function GameTranslationActions({ gameId, locked }: TranslationActionsProps) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Clear all translations?</AlertDialogTitle>
-            <AlertDialogDescription>
-              They are backed up first. The glossary stays.
-            </AlertDialogDescription>
+            <AlertDialogDescription>The glossary stays.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep them</AlertDialogCancel>

@@ -1,20 +1,25 @@
-import type { Entry, ImageReadResults, ImageResult } from "@rpgtl/contracts";
+import type { ImageReadResults, ImageResult, Location } from "@rpgtl/contracts";
 import type { ShownImages } from "./InGameImage.tsx";
-import { entryTranslation, isImageText } from "@rpgtl/domain";
+import { type EntryText, entryTexts, isImageText, translationInUse } from "@rpgtl/domain";
 
 /** Which images the Images page lists. */
 export type ImageFilter = "all" | "untranslated" | "kept";
 
+/** An entry of text read in an image. */
+export type ImageEntryText = EntryText & {
+  readonly location: Extract<Location, { readonly _tag: "ImageLines" }>;
+};
+
 export interface ListedImage {
   readonly image: string;
   readonly result: ImageResult;
-  readonly entries: ReadonlyArray<Entry>;
+  readonly entries: ReadonlyArray<ImageEntryText>;
 }
 
 /** The read images that hold text entries, each with its entries. */
 export const imagesWithText = (results: ImageReadResults, shown: ShownImages) => {
-  const byImage = new Map<string, Array<Entry>>();
-  for (const entry of shown.entries) {
+  const byImage = new Map<string, Array<ImageEntryText>>();
+  for (const entry of entryTexts(shown)) {
     if (!isImageText(entry)) continue;
     const entries = byImage.get(entry.location.image) ?? [];
     entries.push(entry);
@@ -27,7 +32,7 @@ export const imagesWithText = (results: ImageReadResults, shown: ShownImages) =>
 };
 
 export const keptWhole = (image: string, shown: ShownImages) =>
-  shown.unchangedImages?.includes(image) === true;
+  shown.settings.untranslatedImages.includes(image);
 
 /** Whether the filter and the search, in lower case, let the image through. */
 export const isListed = (
@@ -38,7 +43,7 @@ export const isListed = (
 ) => {
   if (
     query &&
-    ![image, ...entries.flatMap((entry) => [entry.source, entryTranslation(entry)])]
+    ![image, ...entries.flatMap((entry) => [entry.source, translationInUse(entry)])]
       .join(" ")
       .toLowerCase()
       .includes(query)
@@ -49,17 +54,19 @@ export const isListed = (
     case "all":
       return true;
     case "untranslated":
-      return !kept && entries.some((entry) => !entryTranslation(entry) && !entry.keepOriginal);
+      return (
+        !kept && entries.some((entry) => !translationInUse(entry) && !entry.isLeftUntranslated)
+      );
     case "kept":
-      return kept || entries.some((entry) => entry.keepOriginal === true);
+      return kept || entries.some((entry) => entry.isLeftUntranslated === true);
   }
 };
 
 /** One line on how far the image's English is, or that the game shows the original. */
 export const imageState = ({ image, entries }: ListedImage, shown: ShownImages) => {
   if (keptWhole(image, shown)) return { text: "Original kept", done: true };
-  const open = entries.filter((entry) => !entry.keepOriginal);
-  const done = open.filter((entry) => entryTranslation(entry)).length;
+  const open = entries.filter((entry) => !entry.isLeftUntranslated);
+  const done = open.filter((entry) => translationInUse(entry)).length;
   return open.length === 0
     ? { text: "Original kept", done: true }
     : { text: `${done} of ${open.length} translated`, done: done === open.length };

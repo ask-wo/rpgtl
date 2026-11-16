@@ -9,6 +9,7 @@ import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpRouter from "effect/http/HttpRouter";
 import * as HttpServer from "effect/http/HttpServer";
 import * as Layer from "effect/Layer";
+import * as Reactivity from "effect/reactivity/Reactivity";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as Schema from "effect/Schema";
@@ -18,6 +19,7 @@ import * as Catalogs from "./games/Catalogs.ts";
 import * as FolderBrowser from "./games/FolderBrowser.ts";
 import * as GameFolder from "./games/GameFolder.ts";
 import * as Games from "./games/Games.ts";
+import * as GameDatabases from "./games/GameDatabases.ts";
 import * as ImageReader from "./imageText/ImageReader.ts";
 import * as ImageReaderSetup from "./imageText/ImageReaderSetup.ts";
 import * as ImageReading from "./imageText/ImageReading.ts";
@@ -80,7 +82,8 @@ const services = <E, R>(frontend: Layer.Layer<Frontend.Frontend, E, R>) =>
         Settings.layer,
       ),
     ),
-    Layer.provideMerge(StateFolder.layer),
+    Layer.provideMerge(GameDatabases.layer),
+    Layer.provideMerge(Layer.mergeAll(StateFolder.layer, Reactivity.layer)),
     Layer.provideMerge(SessionToken.layer),
     Layer.provide(SecureRandom.layerWebCrypto),
     // A translation endpoint must be on this computer, so its redirects aren't followed and the

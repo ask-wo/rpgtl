@@ -6,6 +6,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./testUtils/catalog": "./src/testUtils/catalog.ts",
     "./testUtils/gguf": "./src/testUtils/gguf.ts",
     "./testUtils/xpGame": "./src/testUtils/xpGame.ts"
   },

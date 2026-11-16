@@ -1,8 +1,9 @@
-import type { Entry, Table } from "@rpgtl/contracts";
+import type { Table } from "@rpgtl/contracts";
+import type { EntryText } from "./catalog.ts";
 import type { Placed } from "./location.ts";
 import { controlCodePattern } from "./controlCodes.ts";
 
-type Located = Pick<Entry, "source"> & Placed;
+type Located = Pick<EntryText, "source"> & Placed;
 
 const databaseNames = new Set<Table>([
   "classes",

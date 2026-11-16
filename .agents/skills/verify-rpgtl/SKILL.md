@@ -32,7 +32,7 @@ RUN=$($S/scripts/launch.sh <name> [MV|MZ|real-MV])   # prints /…/rpgtl/.verify
 
 It writes a fixture game to `/tmp/rpgtl-verify-<random>/game`, a path that names no user since the page shows it, and links `$RUN/game/` to it; `run.game` in a steps file is the real path. `MV` and `MZ` write the game from `packages/game/src/testUtils/fixture.ts` plus two Chinese dialogue lines, on a stubbed engine that only has what the runtime touches. `real-MV` writes the game from `packages/game/src/testUtils/mvGame.ts`: MV's real engine ([rpgtkoolmv/corescript](https://github.com/rpgtkoolmv/corescript), MIT, a dev dependency pinned to one commit) with made-up data, blank images and three made-up plugins (`FixtureCore` changes the screen to 960×540, the font to 22 and lines to 30px like YEP_CoreEngine; `FixtureMessage` shows three message rows and adds `\AN[n]`; `Credits` adds a title command named by a Chinese plugin parameter). Use `real-MV` when a change meets the engine's own order of loading, windows, keys or saving; `examples/real-mv.ts` shows how to start it, and `e2e/` (`pnpm run e2e`) holds the checks that play it through. Nothing in it comes from a real game, so it's fine to drive. The server starts with:
 
-- `RPGTL_DIR=$RUN/state` (games list, catalogs, backups, logs)
+- `RPGTL_DIR=$RUN/state` (games list, each game's `game.db`, logs)
 - `XDG_CONFIG_HOME=$RUN/config` (translator settings; without it the run would overwrite the real `~/.config/rpgtl/settings.json`)
 - `XDG_STATE_HOME=$RUN/state-home` (Claude's sessions and RPGTL's Codex login), or the folder `RPGTL_VERIFY_STATE_HOME` names; see `features/machine-translation.md` for a Codex run
 - `PORT=0`, so the OS picks a free port
@@ -94,7 +94,7 @@ Proof standards:
 - Capture before and after: a screenshot of the action and of the resulting state, not only the end screen.
 - Look at each screenshot as a reviewer would: a mark or column added to a list lines up across rows whose titles differ in length, and nothing is cut off or overlaps.
 - Screenshots for a pull request show only made-up paths and names: put copies of the fixture next to `run.game`, not in the run folder, and crop to the part that matters with `page.shot(name, selector)`.
-- Check side effects next to what's visible: `$RUN/state/games/<id>/catalog.json` (catalog), `$RUN/state/games/<id>/backups/`, `$RUN/state/games/<id>/logs/translation-<start>.log`, `$RUN/config/rpgtl/settings.json`, and what `/game/<id>/data/*.json` serves. Copy the files you rely on into `$RUN/evidence/` before cleanup, which deletes `state/`.
+- Check side effects next to what's visible: `$RUN/state/games/<id>/game.db` (the catalog with its operations; `examples/saved.ts` reads it), `$RUN/state/games/<id>/logs/translation-<start>.log`, `$RUN/config/rpgtl/settings.json`, and what `/game/<id>/data/*.json` serves. Copy the files you rely on into `$RUN/evidence/` before cleanup, which deletes `state/`.
 - Translation runs use the real local Ollama, Claude or Codex. The fake servers in `apps/server/src/testUtils/` are for `pnpm test` only.
 - For checks only a real game can answer (fonts, wrapping in real windows, plugins), list what to look at in your report instead of driving it.
 

@@ -1,11 +1,17 @@
-import { gameFiles } from "@rpgtl/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import { Catalog } from "@rpgtl/contracts";
-import type { Entry, ImageReadResults, ImageResult } from "@rpgtl/contracts";
-import { imageHash, newEntry, inUse, entryTranslation } from "@rpgtl/domain";
+import {
+  type Catalog,
+  gameFiles,
+  type ImageReadResults,
+  type ImageResult,
+  type Location,
+  type TranslationFile,
+} from "@rpgtl/contracts";
+import { entryTexts, imageHash, newEntry, withTexts } from "@rpgtl/domain";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Struct from "effect/Struct";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -14,91 +20,38 @@ import * as Path from "effect/Path";
 import * as Stream from "effect/Stream";
 import { folderWith, mvGame } from "../testUtils/gameFolder.ts";
 import { greyPng, pixelsOf } from "../testUtils/png.ts";
-import { game, opened, other, servicesWith, StateDir } from "../testUtils/state.ts";
-import * as StateFolder from "../state/StateFolder.ts";
+import { game, opened, other, servicesWith, StateDir, storedCatalog } from "../testUtils/state.ts";
 import * as Catalogs from "./Catalogs.ts";
+import { writeChanged, writeOperation } from "./catalogRows.ts";
+import * as GameDatabases from "./GameDatabases.ts";
 import * as Games from "./Games.ts";
 
-const hello: Entry = {
-  id: "a",
-  location: {
-    _tag: "Message",
-    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
-    index: 0,
-  },
-  source: "你好",
-  translation: { user: "Hello 你" },
-};
-const catalog: Catalog = {
-  version: 1,
-  game: { id: game.id, title: game.title, engine: "MV" },
-  translate: true,
-  entries: [hello],
-  glossary: [],
-};
+const message = (index: number): Location => ({
+  _tag: "Message",
+  list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+  index,
+});
+const hello = { id: "a", location: message(0), source: "你好", userTranslation: "Hello 你" };
 
 const servicesOver = (files: Record<string, string>) =>
   servicesWith(files).pipe(Layer.provideMerge(NodeServices.layer));
+const listed = servicesOver({ "games.json": JSON.stringify([game]) });
 
-const backups = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const games = path.join(yield* StateDir, "games");
-  if (!(yield* fs.exists(games))) return [];
-  const found: Array<string> = [];
-  for (const id of yield* fs.readDirectory(games)) {
-    const dir = path.join(games, id, "backups");
-    if (yield* fs.exists(dir)) found.push(...(yield* fs.readDirectory(dir)));
-  }
-  return found;
-});
-
-it.effect("a game without a catalog file, or a catalog of a game not listed, isn't inspected", () =>
+it.effect("a game never read, or one not listed, isn't inspected", () =>
   Effect.gen(function* () {
     const catalogs = yield* Catalogs.Catalogs;
     assert.strictEqual((yield* Effect.flip(catalogs.get(game.id)))._tag, "GameNotInspectedError");
     const unlisted = yield* Effect.flip(catalogs.checks(other.id));
     assert.strictEqual(unlisted._tag, "GameNotInspectedError");
-  }).pipe(
-    Effect.provide(
-      servicesOver({
-        "games.json": JSON.stringify([game]),
-        [gameFiles(other.id).catalog]: JSON.stringify({
-          ...catalog,
-          game: { ...catalog.game, id: other.id },
-        }),
-      }),
-    ),
-  ),
+  }).pipe(Effect.provide(listed)),
 );
 
-it.effect("saving backs up the catalog it replaces, and the first save backs up nothing", () =>
+it.effect("a follower gets the whole catalog, then only the texts each write changes", () =>
   Effect.gen(function* () {
     const catalogs = yield* Catalogs.Catalogs;
-    yield* catalogs.save(catalog);
-    assert.deepStrictEqual(yield* backups, []);
-    const edited = {
-      ...catalog,
-      glossary: [
-        {
-          source: "雨",
-          translation: { user: "Rain" },
-          kind: { guess: { value: "name" as const } },
-        },
-      ],
-    };
-    yield* catalogs.save(edited);
-    assert.strictEqual((yield* backups).length, 1);
-    assert.deepStrictEqual(yield* catalogs.get(game.id), edited);
-    assert.deepStrictEqual(yield* catalogs.checks(game.id), { a: [{ check: "source text left" }] });
-  }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game]) }))),
-);
-
-it.effect("a follower gets the whole catalog, then only the entries each write changes", () =>
-  Effect.gen(function* () {
-    const catalogs = yield* Catalogs.Catalogs;
-    const bye: Entry = { ...hello, id: "b", source: "再见", translation: {} };
-    yield* catalogs.save({ ...catalog, entries: [hello, bye] });
+    const saved = yield* storedCatalog(game, {
+      entries: [hello, { id: "b", location: message(1), source: "再见" }],
+    });
     const first = yield* Deferred.make<void>();
     const followed = yield* (yield* catalogs.changes(game.id)).pipe(
       Stream.tap(() => Deferred.succeed(first, undefined)),
@@ -107,203 +60,193 @@ it.effect("a follower gets the whole catalog, then only the entries each write c
       Effect.forkChild,
     );
     yield* Deferred.await(first);
-    yield* catalogs.write({
-      ...catalog,
-      entries: [hello, { ...bye, translation: { user: "Bye 再" } }],
-    });
+    yield* catalogs.setEntries(game.id, [{ id: "b", userTranslation: "Bye 再" }]);
     const [whole, changed] = yield* Fiber.join(followed);
     assert.deepStrictEqual(whole, {
       _tag: "whole",
-      catalog: { ...catalog, entries: [hello, bye] },
+      catalog: saved,
       findings: { a: [{ check: "source text left" }] },
     });
-    assert.deepStrictEqual(changed, {
-      _tag: "entries",
-      catalog: { version: 1, game: catalog.game, translate: true, glossary: [] },
-      entries: [{ ...bye, translation: { user: "Bye 再" } }],
-      findings: { a: [{ check: "source text left" }], b: [{ check: "source text left" }] },
-    });
-    assert.deepStrictEqual(yield* catalogs.checks(game.id), {
-      a: [{ check: "source text left" }],
-      b: [{ check: "source text left" }],
-    });
-  }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game]) }))),
+    assert.strictEqual(changed?._tag, "texts");
+    if (changed?._tag !== "texts") return;
+    assert.deepStrictEqual(changed.texts, [
+      { id: 2, source: "再见", isInImage: false, userTranslation: "Bye 再" },
+    ]);
+    const left = [{ check: "source text left" as const }];
+    const findings = { a: left, b: left };
+    assert.deepStrictEqual(changed.findings, findings);
+    assert.deepStrictEqual(yield* catalogs.checks(game.id), findings);
+  }).pipe(Effect.provide(listed)),
 );
 
-it.effect("once no one follows a game, the next follower reads its catalog file again", () =>
+it.effect("once no one follows a game, the next follower reads its database again", () =>
   Effect.gen(function* () {
     const catalogs = yield* Catalogs.Catalogs;
-    yield* catalogs.save(catalog);
+    const saved = yield* storedCatalog(game, { entries: [hello] });
     // A request that ends before its stream starts follows nothing.
     const neverRun = yield* catalogs.changes(game.id);
     assert.isDefined(neverRun);
-    const first = (yield* catalogs.changes(game.id)).pipe(Stream.take(1), Stream.runCollect);
-    yield* first;
+    yield* (yield* catalogs.changes(game.id)).pipe(Stream.take(1), Stream.runCollect);
     // As a command-line tool in another process writes it.
-    const elsewhere = { ...catalog, entries: [{ ...hello, translation: { user: "Hello." } }] };
-    yield* (yield* StateFolder.StateFolder).write(gameFiles(game.id).catalog, Catalog, elsewhere);
+    const elsewhere = withTexts(saved, (text) => ({ ...text, userTranslation: "Hello." }));
+    yield* (yield* GameDatabases.GameDatabases)
+      .use(
+        game.id,
+        writeOperation("edit", (operationId) => writeChanged(saved, elsewhere, operationId)),
+      )
+      .pipe(Effect.orDie);
     const [whole] = yield* (yield* catalogs.changes(game.id)).pipe(
       Stream.take(1),
       Stream.runCollect,
     );
-    assert.deepStrictEqual(whole, { _tag: "whole", catalog: elsewhere, findings: {} });
+    assert.deepStrictEqual(whole, {
+      _tag: "whole",
+      catalog: yield* catalogs.get(game.id),
+      findings: {},
+    });
     assert.deepStrictEqual(yield* catalogs.checks(game.id), {});
-  }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game]) }))),
+  }).pipe(Effect.provide(listed)),
 );
 
-const title = (translation: string): Entry => ({
-  id: "t",
-  location: { _tag: "SystemText", keys: ["gameTitle"] },
-  source: "雨",
-  translation: translation ? { user: translation } : {},
-});
-
-it.effect(
-  "the list gives each game's title translation from its saved catalog, following each save",
-  () =>
-    Effect.gen(function* () {
-      const catalogs = yield* Catalogs.Catalogs;
-      const titles = Effect.map(catalogs.list, (listed) =>
-        listed.map(({ id, titleTranslation }) => [id, titleTranslation]),
-      );
-      assert.deepStrictEqual(yield* titles, [
-        [game.id, undefined],
-        [other.id, undefined],
-      ]);
-      yield* catalogs.save({ ...catalog, entries: [hello, title("Rain Ver 0.2")] });
-      assert.deepStrictEqual(yield* titles, [
-        [game.id, "Rain"],
-        [other.id, undefined],
-      ]);
-      yield* catalogs.write({ ...catalog, entries: [hello, title("")] });
-      assert.deepStrictEqual((yield* titles)[0], [game.id, undefined]);
-    }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game, other]) }))),
+it.effect("the list gives each game's title translation, following each write", () =>
+  Effect.gen(function* () {
+    const catalogs = yield* Catalogs.Catalogs;
+    const titles = Effect.map(catalogs.list, (all) =>
+      all.map(({ id, titleTranslation }) => [id, titleTranslation]),
+    );
+    assert.deepStrictEqual(yield* titles, [
+      [game.id, undefined],
+      [other.id, undefined],
+    ]);
+    yield* storedCatalog(game, {
+      entries: [
+        hello,
+        { id: "t", location: { _tag: "SystemText", keys: ["gameTitle"] }, source: "雨" },
+      ],
+    });
+    assert.deepStrictEqual((yield* titles)[0], [game.id, undefined]);
+    yield* catalogs.setEntries(game.id, [{ id: "t", userTranslation: "Rain Ver 0.2" }]);
+    assert.deepStrictEqual(yield* titles, [
+      [game.id, "Rain"],
+      [other.id, undefined],
+    ]);
+  }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game, other]) }))),
 );
 
 it.effect("the list marks only the games whose folder no longer holds them", () =>
   Effect.gen(function* () {
     const catalogs = yield* Catalogs.Catalogs;
     const { game: found } = yield* opened(catalogs.inspect(yield* folderWith(mvGame), "keepBoth"));
-    const listed = yield* catalogs.list;
+    const all = yield* catalogs.list;
     assert.deepStrictEqual(
-      listed.map(({ id, folderMissing }) => [id, folderMissing]),
+      all.map(({ id, folderMissing }) => [id, folderMissing]),
       [
         [game.id, true],
         [found.id, undefined],
       ],
     );
-  }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game]) }))),
+  }).pipe(Effect.provide(listed)),
 );
 
-it.effect("the game's language is saved as chosen, and null goes back to the guess", () =>
-  Effect.gen(function* () {
-    const catalogs = yield* Catalogs.Catalogs;
-    yield* catalogs.save(catalog);
-    assert.strictEqual((yield* catalogs.setLanguage(game.id, "korean")).language, "korean");
-    assert.strictEqual((yield* catalogs.get(game.id)).language, "korean");
-    yield* catalogs.setLanguage(game.id, null);
-    assert.notProperty(yield* catalogs.get(game.id), "language");
-  }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game]) }))),
+it.effect(
+  "the game's settings are saved as chosen, and null goes back to the language the text looks like",
+  () =>
+    Effect.gen(function* () {
+      const catalogs = yield* Catalogs.Catalogs;
+      yield* storedCatalog(game, { entries: [hello] });
+      const korean = yield* catalogs.setLanguage(game.id, "korean");
+      assert.strictEqual(korean.settings.sourceLanguage, "korean");
+      assert.strictEqual((yield* catalogs.get(game.id)).settings.sourceLanguage, "korean");
+      yield* catalogs.setLanguage(game.id, null);
+      assert.notProperty((yield* catalogs.get(game.id)).settings, "sourceLanguage");
+      yield* catalogs.setFix(game.id, "Fix A", false);
+      yield* catalogs.setTranslate(game.id, true);
+      const { settings } = yield* catalogs.setScriptTranslation(game.id, false);
+      assert.deepNestedInclude(settings, {
+        disabledFixes: ["Fix A"],
+        isTranslationOn: true,
+        isScriptTranslationOn: false,
+      });
+    }).pipe(Effect.provide(listed)),
 );
 
-it.effect("adding terms keeps the glossary's own, and needs the game free", () =>
+it.effect(
+  "clearing translations clears only English a run gave, and writes nothing when none",
+  () =>
+    Effect.gen(function* () {
+      const catalogs = yield* Catalogs.Catalogs;
+      yield* storedCatalog(game, {
+        entries: [
+          hello,
+          { id: "b", location: message(1), source: "嗨", modelTranslation: "Hi" },
+          { id: "c", location: message(2), source: "再见" },
+        ],
+      });
+      const ids = ["a", "b", "c"];
+      assert.strictEqual(yield* catalogs.clearTranslations(game.id, ids), 1);
+      const after = yield* catalogs.get(game.id);
+      assert.deepStrictEqual(
+        after.texts.map((text) => Struct.omit(text, ["id"])),
+        [
+          { source: "你好", isInImage: false, userTranslation: "Hello 你" },
+          { source: "嗨", isInImage: false, previousTranslation: "Hi" },
+          { source: "再见", isInImage: false },
+        ],
+      );
+      assert.strictEqual(yield* catalogs.clearTranslations(game.id, ids), 0);
+      assert.strictEqual((yield* catalogs.get(game.id)).operations.length, after.operations.length);
+    }).pipe(Effect.provide(listed)),
+);
+
+it.effect("the edited glossary saves, and clearing its mismatches clears their texts", () =>
   Effect.gen(function* () {
     const catalogs = yield* Catalogs.Catalogs;
     const games = yield* Games.Games;
-    yield* catalogs.save({
-      ...catalog,
-      glossary: [
-        { source: "雨", translation: { user: "Rain" }, kind: { guess: { value: "name" } } },
+    yield* storedCatalog(game, {
+      entries: [
+        hello,
+        { id: "b", location: message(1), source: "你好，雨", userTranslation: "Hi, Drizzle" },
       ],
     });
-    const added = yield* catalogs.addTerms(game.id, [
-      { source: "雨", translation: "Drizzle", kind: "name" },
-      { source: "星澜", translation: "Xinglan", kind: "character" },
-    ]);
+    const rain = { source: "雨", userTranslation: "Rain" };
+    yield* catalogs.setGlossary(game.id, [rain]);
     assert.deepStrictEqual(
-      added.map((term) => term.source),
-      ["星澜"],
+      (yield* catalogs.get(game.id)).glossary.map(({ source, userTranslation }) => [
+        source,
+        userTranslation,
+      ]),
+      [["雨", "Rain"]],
     );
-    assert.deepStrictEqual(
-      (yield* catalogs.get(game.id)).glossary.map((term) => inUse(term.translation)),
-      ["Rain", "Xinglan"],
-    );
-    const busy = yield* Effect.flip(games.exclusive(game.id, catalogs.addTerms(game.id, [])));
+    const repeated = yield* Effect.flip(catalogs.setGlossary(game.id, [rain, rain]));
+    assert.strictEqual(repeated._tag, "GlossaryTermRepeated");
+
+    assert.strictEqual(yield* catalogs.clearTermLines(game.id, ["雨"], true), 1);
+    const cleared = (yield* catalogs.get(game.id)).texts[1];
+    assert.deepStrictEqual(cleared, {
+      id: 2,
+      source: "你好，雨",
+      isInImage: false,
+      previousTranslation: "Hi, Drizzle",
+    });
+    assert.strictEqual(yield* catalogs.clearTermLines(game.id, ["雨"], true), 0);
+
+    const busy = yield* Effect.flip(games.exclusive(game.id, catalogs.setGlossary(game.id, [])));
     assert.strictEqual(busy._tag, "GameBusyError");
-  }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game]) }))),
+  }).pipe(Effect.provide(listed)),
 );
 
-it.effect("clearing entries backs up first and clears only English a run gave", () =>
+it.effect("edited English saves, but not while another operation holds the game", () =>
   Effect.gen(function* () {
     const catalogs = yield* Catalogs.Catalogs;
-    const guessed: Entry = { ...hello, id: "b", translation: { guess: { value: "Hi" } } };
-    const untranslated: Entry = { ...hello, id: "c", translation: {} };
-    yield* catalogs.save({ ...catalog, entries: [hello, guessed, untranslated] });
-    const ids = ["a", "b", "c"];
-    assert.strictEqual(yield* catalogs.clearEntries(game.id, ids), 1);
-    assert.strictEqual((yield* backups).length, 1);
-    assert.deepStrictEqual((yield* catalogs.get(game.id)).entries, [
-      hello,
-      { ...guessed, translation: {}, previous: "Hi" },
-      untranslated,
-    ]);
-    assert.strictEqual(yield* catalogs.clearEntries(game.id, ids), 0);
-    assert.strictEqual((yield* backups).length, 1);
-  }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game]) }))),
-);
-
-it.effect(
-  "the edited glossary saves without a backup, and clearing mismatches backs up first",
-  () =>
-    Effect.gen(function* () {
-      const catalogs = yield* Catalogs.Catalogs;
-      const games = yield* Games.Games;
-      const greeting: Entry = {
-        ...hello,
-        id: "b",
-        source: "你好，雨",
-        translation: { user: "Hi, Drizzle" },
-      };
-      yield* catalogs.save({ ...catalog, entries: [hello, greeting] });
-      const rain = { source: "雨", translation: "Rain" };
-      yield* catalogs.setGlossary(game.id, [rain]);
-      assert.deepStrictEqual((yield* catalogs.get(game.id)).glossary, [
-        { source: "雨", translation: { user: "Rain" }, kind: { guess: { value: "name" } } },
-      ]);
-      assert.deepStrictEqual(yield* backups, []);
-      const repeated = yield* Effect.flip(catalogs.setGlossary(game.id, [rain, rain]));
-      assert.strictEqual(repeated._tag, "GlossaryTermRepeated");
-
-      assert.strictEqual(yield* catalogs.clearTermLines(game.id, ["雨"], true), 1);
-      assert.strictEqual((yield* backups).length, 1);
-      const cleared = (yield* catalogs.get(game.id)).entries[1];
-      assert.deepStrictEqual(cleared, { ...greeting, translation: {}, previous: "Hi, Drizzle" });
-      assert.strictEqual(yield* catalogs.clearTermLines(game.id, ["雨"], true), 0);
-      assert.strictEqual((yield* backups).length, 1);
-
-      const busy = yield* Effect.flip(games.exclusive(game.id, catalogs.setGlossary(game.id, [])));
-      assert.strictEqual(busy._tag, "GameBusyError");
-    }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game]) }))),
-);
-
-it.effect(
-  "edited English saves without a backup, and not while another operation holds the game",
-  () =>
-    Effect.gen(function* () {
-      const catalogs = yield* Catalogs.Catalogs;
-      const games = yield* Games.Games;
-      yield* catalogs.save(catalog);
-      const before = (yield* backups).length;
-      yield* catalogs.setEntries(game.id, [{ id: "a", translation: "Hello" }]);
-      assert.deepStrictEqual((yield* catalogs.get(game.id)).entries, [
-        { ...hello, translation: { user: "Hello" } },
-      ]);
-      assert.strictEqual((yield* backups).length, before);
-      const busy = yield* Effect.flip(
-        games.exclusive(game.id, catalogs.setEntries(game.id, [{ id: "a", translation: "Hi" }])),
-      );
-      assert.strictEqual(busy._tag, "GameBusyError");
-    }).pipe(Effect.provide(servicesOver({ "games.json": JSON.stringify([game]) }))),
+    const games = yield* Games.Games;
+    yield* storedCatalog(game, { entries: [hello] });
+    yield* catalogs.setEntries(game.id, [{ id: "a", userTranslation: "Hello" }]);
+    assert.strictEqual((yield* catalogs.get(game.id)).texts[0]?.userTranslation, "Hello");
+    const busy = yield* Effect.flip(
+      games.exclusive(game.id, catalogs.setEntries(game.id, [{ id: "a", userTranslation: "Hi" }])),
+    );
+    assert.strictEqual(busy._tag, "GameBusyError");
+  }).pipe(Effect.provide(listed)),
 );
 
 const noticeImage: ImageResult = {
@@ -339,8 +282,17 @@ const writeState = Effect.fnUntraced(function* (file: string, text: string) {
   yield* fs.writeFileString(path.join(dir, file), text);
 });
 
+/** Gives the game's first entry the user's English. */
+const translateFirst = Effect.fnUntraced(function* (id: string) {
+  const catalogs = yield* Catalogs.Catalogs;
+  const [first] = (yield* catalogs.get(id)).entries;
+  if (first) yield* catalogs.setEntries(id, [{ id: first.id, userTranslation: "Hello" }]);
+});
+
+const firstTranslation = (catalog: Catalog) => entryTexts(catalog)[0]?.userTranslation;
+
 it.effect(
-  "inspecting lists the game and rebuilds its catalog, keeping translations and adding image text",
+  "inspecting lists the game and reads its text again, keeping translations and adding image text",
   () =>
     Effect.gen(function* () {
       const catalogs = yield* Catalogs.Catalogs;
@@ -349,21 +301,19 @@ it.effect(
       const first = yield* opened(catalogs.inspect(root));
       assert.deepStrictEqual(yield* games.list, [first.game]);
       assert.deepStrictEqual(
-        first.catalog.entries.map((entry) => entry.source),
+        entryTexts(first.catalog).map((entry) => entry.source),
         ["你好", "门开了", "雨", "标题"],
       );
-      yield* catalogs.save({
-        ...first.catalog,
-        entries: first.catalog.entries.map((entry, index) =>
-          index === 0 ? { ...entry, translation: { user: "Hello" } } : entry,
-        ),
-      });
+      yield* translateFirst(first.game.id);
       yield* writeState(gameFiles(first.game.id).imageResults, JSON.stringify(notice));
       const second = yield* opened(catalogs.inspect(root));
-      assert.strictEqual(inUse(second.catalog.entries[0]?.translation ?? {}), "Hello");
-      assert.deepStrictEqual(second.catalog.entries.at(-1), noticeEntry);
+      assert.strictEqual(firstTranslation(second.catalog), "Hello");
+      assert.deepNestedInclude(entryTexts(second.catalog).at(-1), {
+        id: noticeEntry.id,
+        source: "开始",
+        isInImage: true,
+      });
       assert.deepStrictEqual(yield* catalogs.get(first.game.id), second.catalog);
-      assert.strictEqual((yield* backups).length, 2);
     }).pipe(Effect.provide(servicesOver({}))),
 );
 
@@ -373,16 +323,11 @@ it.effect("opening a removed game's folder again brings it back with its id and 
     const games = yield* Games.Games;
     const root = yield* folderWith(mvGame);
     const first = yield* opened(catalogs.inspect(root));
-    yield* catalogs.save({
-      ...first.catalog,
-      entries: first.catalog.entries.map((entry, index) =>
-        index === 0 ? { ...entry, translation: { user: "Hello" } } : entry,
-      ),
-    });
+    yield* translateFirst(first.game.id);
     yield* games.forget(first.game.id);
     const again = yield* opened(catalogs.inspect(root));
     assert.strictEqual(again.game.id, first.game.id);
-    assert.strictEqual(inUse(again.catalog.entries[0]?.translation ?? {}), "Hello");
+    assert.strictEqual(firstTranslation(again.catalog), "Hello");
     assert.deepStrictEqual(yield* games.list, [again.game]);
   }).pipe(Effect.provide(servicesOver({}))),
 );
@@ -394,12 +339,7 @@ it.effect("moving a game points it at the new folder, keeping its id, state and 
     const first = yield* opened(catalogs.inspect(yield* folderWith(mvGame)));
     const another = { ...mvGame, "www/data/System.json": JSON.stringify({ gameTitle: "雪" }) };
     const second = yield* opened(catalogs.inspect(yield* folderWith(another)));
-    yield* catalogs.save({
-      ...first.catalog,
-      entries: first.catalog.entries.map((entry, index) =>
-        index === 0 ? { ...entry, translation: { user: "Hello" } } : entry,
-      ),
-    });
+    yield* translateFirst(first.game.id);
     yield* writeState(gameFiles(first.game.id).imageResults, JSON.stringify(notice));
 
     yield* games.forget(second.game.id);
@@ -420,8 +360,8 @@ it.effect("moving a game points it at the new folder, keeping its id, state and 
     assert.strictEqual(moved.game.id, first.game.id);
     assert.strictEqual(moved.game.root, root);
     assert.deepStrictEqual(yield* games.list, [moved.game, third.game]);
-    assert.strictEqual(inUse(moved.catalog.entries[0]?.translation ?? {}), "Hello");
-    assert.deepStrictEqual(moved.catalog.entries.at(-1), noticeEntry);
+    assert.strictEqual(firstTranslation(moved.catalog), "Hello");
+    assert.strictEqual(moved.catalog.entries.at(-1)?.id, noticeEntry.id);
     assert.strictEqual((yield* opened(catalogs.inspect(root))).game.id, first.game.id);
   }).pipe(Effect.provide(servicesOver({}))),
 );
@@ -437,22 +377,19 @@ const version = (door: string) => ({
 });
 
 it.effect(
-  "a new version of a saved game in another folder asks first, and replacing keeps the game's id and the translations of its unchanged lines, after a backup",
+  "a new version of a saved game in another folder asks first, and replacing keeps the game's id and the translations of its unchanged lines",
   () =>
     Effect.gen(function* () {
       const catalogs = yield* Catalogs.Catalogs;
       const games = yield* Games.Games;
       const first = yield* opened(catalogs.inspect(yield* folderWith(version("门开了"))));
-      const kept = first.catalog.entries.find((entry) => entry.source !== "门开了");
-      yield* catalogs.save({
-        ...first.catalog,
-        entries: first.catalog.entries.map((entry) =>
-          entry === kept || entry.source === "门开了"
-            ? { ...entry, translation: { user: "Hello" } }
-            : entry,
-        ),
-      });
-      const before = (yield* backups).length;
+      const kept = entryTexts(first.catalog).find((entry) => entry.source !== "门开了");
+      yield* catalogs.setEntries(
+        first.game.id,
+        entryTexts(first.catalog)
+          .filter((entry) => entry.id === kept?.id || entry.source === "门开了")
+          .map(({ id }) => ({ id, userTranslation: "Hello" })),
+      );
       const root = yield* folderWith(version("门关了"));
       const asked = yield* catalogs.inspect(root);
       assert.deepNestedInclude(asked, {
@@ -472,18 +409,17 @@ it.effect(
       assert.strictEqual(replaced.game.id, first.game.id);
       assert.strictEqual(replaced.game.root, root);
       const translations = new Map(
-        replaced.catalog.entries.map((entry) => [entry.source, entryTranslation(entry)]),
+        entryTexts(replaced.catalog).map((entry) => [entry.source, entry.userTranslation]),
       );
       assert.strictEqual(translations.get(kept?.source ?? ""), "Hello");
-      assert.strictEqual(translations.get("门关了"), "");
+      assert.isUndefined(translations.get("门关了"));
       assert.deepStrictEqual(yield* games.list, [replaced.game]);
-      assert.strictEqual((yield* backups).length, before + 1);
 
       const separate = yield* opened(
         catalogs.inspect(yield* folderWith(version("门开了")), "keepBoth"),
       );
       assert.notStrictEqual(separate.game.id, first.game.id);
-      assert.deepStrictEqual(separate.catalog.entries[0]?.translation, {});
+      assert.isUndefined(firstTranslation(separate.catalog));
       assert.strictEqual((yield* games.list).length, 2);
     }).pipe(Effect.provide(servicesOver({}))),
 );
@@ -531,6 +467,14 @@ it.effect("while another operation holds a listed game, inspecting gives its sav
   }).pipe(Effect.provide(servicesOver({}))),
 );
 
+const emptyFile: TranslationFile = {
+  version: 2,
+  texts: [],
+  entries: [],
+  glossary: [],
+  settings: {},
+};
+
 it.effect(
   "an import with image text saves its read results and backgrounds, and drops unused ones, counting the images as it goes",
   () =>
@@ -550,9 +494,9 @@ it.effect(
         file: "img/pictures/Notice.png",
         sha256: imageHash(picture),
       };
-      const file = {
-        ...before,
-        entries: [{ ...noticeEntry, translation: { user: "Begin" } }],
+      const file: TranslationFile = {
+        ...emptyFile,
+        texts: [{ source: "开始", isInImage: true, userTranslation: "Begin" }],
         images: {
           "img/pictures/Notice": {
             ...read,
@@ -581,9 +525,9 @@ it.effect(
         Option.some({ done: 0, total: 1 }),
         Option.none(),
       ]);
-      assert.deepStrictEqual(imported.entries.at(-1), {
-        ...noticeEntry,
-        translation: { user: "Begin" },
+      assert.deepNestedInclude(entryTexts(imported).at(-1), {
+        id: noticeEntry.id,
+        userTranslation: "Begin",
       });
       assert.deepStrictEqual(yield* catalogs.get(inspected.id), imported);
       const [name = ""] = yield* fs.readDirectory(erasedDir);
@@ -607,21 +551,14 @@ it.effect(
 it.effect("an import that doesn't fit the catalog changes nothing", () =>
   Effect.gen(function* () {
     const catalogs = yield* Catalogs.Catalogs;
+    const saved = yield* storedCatalog(game, { entries: [hello] });
     const error = yield* Effect.flip(
       catalogs.import(game.id, {
-        ...catalog,
-        entries: [hello, hello],
+        ...emptyFile,
+        entries: [{ id: "a" }, { id: "a" }],
       }),
     );
     assert.strictEqual(error._tag, "TranslationFileInvalid");
-    assert.deepStrictEqual(yield* catalogs.get(game.id), catalog);
-    assert.deepStrictEqual(yield* backups, []);
-  }).pipe(
-    Effect.provide(
-      servicesOver({
-        "games.json": JSON.stringify([game]),
-        [gameFiles(game.id).catalog]: JSON.stringify(catalog),
-      }),
-    ),
-  ),
+    assert.deepStrictEqual(yield* catalogs.get(game.id), saved);
+  }).pipe(Effect.provide(listed)),
 );

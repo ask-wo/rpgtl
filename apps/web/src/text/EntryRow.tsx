@@ -1,5 +1,4 @@
-import type { Entry } from "@rpgtl/contracts";
-import { canKeepOriginal, entryTranslation } from "@rpgtl/domain";
+import { canKeepOriginal, type EntryText, translationInUse } from "@rpgtl/domain";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Field, FieldLabel } from "~/components/ui/field";
@@ -18,7 +17,7 @@ export function EntryRow({
   onChange,
   onKeepOriginal,
 }: {
-  readonly entry: Entry;
+  readonly entry: EntryText;
   /** The English as typed here, saved or not. */
   readonly value: string;
   /** The entry's file, as the tree names it. */
@@ -35,9 +34,13 @@ export function EntryRow({
   readonly onChange: (translation: string, delay: number) => void;
   readonly onKeepOriginal: (keep: boolean) => void;
 }) {
-  const edited = value !== entryTranslation(entry);
-  const { suggestion, previous } = entry;
-  const { guess } = entry.translation;
+  const edited = value !== translationInUse(entry);
+  const {
+    rejectedTranslation: rejected,
+    rejectionReason,
+    modelTranslation: model,
+    previousTranslation: previous,
+  } = entry;
   return (
     <div
       className="grid grid-cols-2 gap-4 border-b px-6 py-3"
@@ -66,34 +69,37 @@ export function EntryRow({
           <Field orientation="horizontal">
             <Checkbox
               id={`keep-original-${entry.id}`}
-              checked={entry.keepOriginal === true}
+              checked={entry.isLeftUntranslated === true}
               disabled={locked}
               onCheckedChange={onKeepOriginal}
             />
             <FieldLabel htmlFor={`keep-original-${entry.id}`}>Keep original</FieldLabel>
           </Field>
         )}
-        {!value && suggestion && (
-          <Note label={`Rejected answer (${suggestion.reason}):`} text={suggestion.text}>
+        {!value && rejected !== undefined && (
+          <Note
+            label={rejectionReason ? `Rejected answer (${rejectionReason}):` : "Rejected answer:"}
+            text={rejected}
+          >
             <Button
               variant="link"
               size="xs"
               disabled={locked}
               title="Copies it into the English to fix it there"
-              onClick={() => onChange(suggestion.text, 0)}
+              onClick={() => onChange(rejected, 0)}
             >
               Use
             </Button>
           </Note>
         )}
-        {guess && value !== guess.value && (
-          <Note label={guess.run ? "The run's answer:" : "RPGTL's English:"} text={guess.value}>
+        {model !== undefined && value !== model && (
+          <Note label="The run's answer:" text={model}>
             <Button
               variant="link"
               size="xs"
               disabled={locked}
               title="Puts it back in place of your English"
-              onClick={() => onChange(guess.value, 0)}
+              onClick={() => onChange(model, 0)}
             >
               Use it
             </Button>

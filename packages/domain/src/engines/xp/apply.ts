@@ -1,8 +1,9 @@
 import { dump, load, RubyHash, RubyInteger, RubyObject } from "@hyrious/marshal";
-import { type Catalog, type Entry, EventListRef, type Location } from "@rpgtl/contracts";
+import { type Catalog, EventListRef, type Location } from "@rpgtl/contracts";
+import { type EntryText, entryTexts } from "../../catalog.ts";
 import * as Result from "effect/Result";
 import { measuredText } from "../../controlCodes.ts";
-import { entryTranslation } from "../../guesses.ts";
+import { translationInUse } from "../../inUse.ts";
 import { isScriptText } from "../../location.ts";
 import { GameDataChanged } from "../mvmz/apply.ts";
 import { GameFileInvalid } from "../mvmz/gameFile.ts";
@@ -237,12 +238,13 @@ function setText(data: unknown, location: Location, source: string, text: string
  * `Map001.rxdata`, and its scripts, which get the script that fits the English, unless it plays
  * them unchanged.
  */
-export function translatedByXpFile({ entries, originalScripts }: Catalog) {
-  const files = new Map<string, Array<Entry>>(originalScripts ? [] : [[scriptsFile, []]]);
-  for (const entry of entries) {
+export function translatedByXpFile(catalog: Pick<Catalog, "entries" | "texts" | "settings">) {
+  const originalScripts = !catalog.settings.isScriptTranslationOn;
+  const files = new Map<string, Array<EntryText>>(originalScripts ? [] : [[scriptsFile, []]]);
+  for (const entry of entryTexts(catalog)) {
     if (originalScripts && isScriptText(entry)) continue;
     const file = xpFileOf(entry.location);
-    if (file === undefined || !entryTranslation(entry) || entry.keepOriginal) continue;
+    if (file === undefined || !translationInUse(entry) || entry.isLeftUntranslated) continue;
     const listed = files.get(file);
     if (listed) listed.push(entry);
     else files.set(file, [entry]);
@@ -258,7 +260,7 @@ export function translatedByXpFile({ entries, originalScripts }: Catalog) {
 export const patchXpFile = (
   file: string,
   bytes: Uint8Array,
-  entries: ReadonlyArray<Entry> | undefined,
+  entries: ReadonlyArray<EntryText> | undefined,
   fixes: ReadonlyArray<RubyScript>,
 ): Result.Result<Uint8Array | undefined, GameDataChanged | GameFileInvalid> =>
   entries
@@ -276,12 +278,12 @@ export const patchXpFile = (
 export function applyXpTranslations(
   file: string,
   bytes: Uint8Array,
-  entries: ReadonlyArray<Entry>,
+  entries: ReadonlyArray<EntryText>,
   fixes: ReadonlyArray<RubyScript> = [],
 ): Result.Result<Uint8Array | undefined, GameDataChanged | GameFileInvalid> {
   const translated = entries.flatMap((entry) => {
-    const text = entryTranslation(entry);
-    return text && !entry.keepOriginal && xpFileOf(entry.location) === file
+    const text = translationInUse(entry);
+    return text && !entry.isLeftUntranslated && xpFileOf(entry.location) === file
       ? [{ entry, text }]
       : [];
   });

@@ -1,8 +1,11 @@
-import type { Entry } from "@rpgtl/contracts";
+import type { EntryText } from "@rpgtl/domain";
 import { test, expect } from "vite-plus/test";
 import { appliedSystem, loadRuntime } from "../testUtils/fixture.ts";
 
-const variableTextEntry = (source: string, translation: string): Entry => ({
+const variableTextEntry = (
+  source: string,
+  translation: string,
+): Pick<EntryText, "id" | "location" | "source" | "userTranslation"> => ({
   id: source,
   location: {
     _tag: "ScriptText",
@@ -12,7 +15,7 @@ const variableTextEntry = (source: string, translation: string): Entry => ({
     literal: 0,
   },
   source,
-  translation: translation ? { user: translation } : {},
+  ...(translation && { userTranslation: translation }),
 });
 
 test("runtime translates text that a save stored before it was translated", async () => {
@@ -23,7 +26,7 @@ test("runtime translates text that a save stored before it was translated", asyn
       id: "a",
       location: { _tag: "RecordField", table: "actors", record: 1, field: "name" },
       source: "优斗",
-      translation: { user: "Yuto" },
+      userTranslation: "Yuto",
     },
     {
       id: "b",
@@ -35,7 +38,7 @@ test("runtime translates text that a save stored before it was translated", asyn
         keys: [],
       },
       source: "小优",
-      translation: { user: "Little Yuto" },
+      userTranslation: "Little Yuto",
     },
   ]);
   expect(system.rpgtlSaveText).toEqual({ 人类: "Human", 优斗: "Yuto", 小优: "Little Yuto" });

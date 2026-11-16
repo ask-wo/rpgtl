@@ -1,4 +1,4 @@
-import type { Entry, Game, ImageResult } from "@rpgtl/contracts";
+import type { Game, ImageResult } from "@rpgtl/contracts";
 import { ChevronLeftIcon, ChevronRightIcon, PencilIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
@@ -8,17 +8,12 @@ import { Field, FieldLabel } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/textarea";
 import { number } from "../translation/counts.ts";
 import { imageAssets } from "./assets.ts";
-import { keptWhole, type ListedImage } from "./imageList.ts";
+import { type ImageEntryText, keptWhole, type ListedImage } from "./imageList.ts";
 import { InGameImage, type ShownImages } from "./InGameImage.tsx";
-import { entryTranslation } from "@rpgtl/domain";
+import { type EntryEdit, readText, translationInUse } from "@rpgtl/domain";
 
 /** What the user changed on one of the image's texts. */
-export interface TextChange {
-  readonly translation?: string;
-  /** The text the image shows, where the reader got it wrong. */
-  readonly text?: string;
-  readonly keepOriginal?: boolean;
-}
+export type TextChange = Omit<EntryEdit, "id">;
 
 /**
  * One image with its texts: the original beside the image as the game shows it, each text as read,
@@ -54,7 +49,7 @@ export function ImageEditor({
   readonly errors: ReadonlyMap<string, string>;
   readonly locked: boolean;
   /** Saves a text's change after `delay` ms, so typing saves once it pauses. */
-  readonly onChange: (entry: Entry, change: TextChange, delay: number) => void;
+  readonly onChange: (entry: ImageEntryText, change: TextChange, delay: number) => void;
   readonly onKeepWhole: (keep: boolean) => void;
   /** Opens the previous (-1) or next (1) listed image. */
   readonly onStep: (by: -1 | 1) => void;
@@ -155,6 +150,7 @@ export function ImageEditor({
               <ImageText
                 key={entry.id}
                 entry={entry}
+                read={readText({ version: 1, images: { [image]: result } }, entry)}
                 error={errors.get(`entry:${entry.id}`) ?? errors.get(`keep:${entry.id}`)}
                 textError={errors.get(`text:${entry.id}`)}
                 locked={locked}
@@ -206,11 +202,14 @@ const typingPause = 600;
  */
 function SourceText({
   entry,
+  read,
   error,
   locked,
   onCorrect,
 }: {
-  readonly entry: Entry;
+  readonly entry: ImageEntryText;
+  /** What the image reader read, when it isn't the entry's text. */
+  readonly read: string | undefined;
   readonly error: string | undefined;
   readonly locked: boolean;
   readonly onCorrect: (text: string) => void;
@@ -233,16 +232,10 @@ function SourceText({
           </Button>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {entry.readerText !== undefined && (
+        {read !== undefined && (
           <p className="text-sm text-muted-foreground">
-            You corrected it. The image reader read{" "}
-            <span className="text-foreground">{entry.readerText}</span>{" "}
-            <Button
-              variant="link"
-              size="xs"
-              disabled={locked}
-              onClick={() => onCorrect(entry.readerText ?? entry.source)}
-            >
+            You corrected it. The image reader read <span className="text-foreground">{read}</span>{" "}
+            <Button variant="link" size="xs" disabled={locked} onClick={() => onCorrect(read)}>
               Use it
             </Button>
           </p>
@@ -283,36 +276,41 @@ function SourceText({
 
 function ImageText({
   entry,
+  read,
   error,
   textError,
   locked,
   onChange,
 }: {
-  readonly entry: Entry;
+  readonly entry: ImageEntryText;
+  /** What the image reader read at the entry's place. */
+  readonly read: string | undefined;
   readonly error: string | undefined;
   readonly textError: string | undefined;
   readonly locked: boolean;
   readonly onChange: (change: TextChange, delay: number) => void;
 }) {
-  const translation = entryTranslation(entry);
-  const { guess } = entry.translation;
-  const choice = !guess
-    ? undefined
-    : guess.long !== undefined && translation === guess.value
-      ? { says: "Shortened to fit the image. The first answer was", other: guess.long }
-      : guess.long !== undefined && translation === guess.long
-        ? { says: "Too long for the image. The shorter answer is", other: guess.value }
-        : translation !== guess.value
-          ? { says: guess.run ? "The run's answer is" : "RPGTL's English is", other: guess.value }
-          : undefined;
+  const translation = translationInUse(entry);
+  const { modelTranslation: model, unshortenedTranslation: long } = entry;
+  const choice =
+    model === undefined
+      ? undefined
+      : long !== undefined && translation === model
+        ? { says: "Shortened to fit the image. The first answer was", other: long }
+        : long !== undefined && translation === long
+          ? { says: "Too long for the image. The shorter answer is", other: model }
+          : translation !== model
+            ? { says: "The run's answer is", other: model }
+            : undefined;
   const keepId = `keep-artwork-${entry.id}`;
   return (
     <div className="grid grid-cols-2 gap-4 border-t py-3" role="group" aria-label={entry.source}>
       <SourceText
         entry={entry}
+        read={read === entry.source ? undefined : read}
         error={textError}
         locked={locked}
-        onCorrect={(text) => onChange({ text }, 0)}
+        onCorrect={(source) => onChange({ source }, 0)}
       />
       <div className="flex min-w-0 flex-col gap-1.5">
         <Textarea
@@ -322,15 +320,15 @@ function ImageText({
           placeholder="Translation"
           aria-label={`English for ${entry.source}`}
           aria-invalid={error !== undefined || undefined}
-          onChange={(event) => onChange({ translation: event.target.value }, typingPause)}
+          onChange={(event) => onChange({ userTranslation: event.target.value }, typingPause)}
         />
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Field orientation="horizontal">
           <Checkbox
             id={keepId}
-            checked={entry.keepOriginal === true}
+            checked={entry.isLeftUntranslated === true}
             disabled={locked}
-            onCheckedChange={(keepOriginal) => onChange({ keepOriginal }, 0)}
+            onCheckedChange={(isLeftUntranslated) => onChange({ isLeftUntranslated }, 0)}
           />
           <FieldLabel htmlFor={keepId}>Keep original artwork</FieldLabel>
         </Field>
@@ -341,7 +339,7 @@ function ImageText({
               variant="link"
               size="xs"
               disabled={locked}
-              onClick={() => onChange({ translation: choice.other }, 0)}
+              onClick={() => onChange({ userTranslation: choice.other }, 0)}
             >
               Use
             </Button>

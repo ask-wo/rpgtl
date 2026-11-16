@@ -1,4 +1,10 @@
-import { type Catalog, type Entry, type Location, Settings } from "@rpgtl/contracts";
+import { type Catalog, type Location, Settings } from "@rpgtl/contracts";
+import {
+  testCatalog,
+  type TestCatalogParts,
+  type TestEntry,
+  testTerm,
+} from "@rpgtl/domain/testUtils/catalog";
 import * as Schema from "effect/Schema";
 import { useState } from "react";
 import { page } from "vite-plus/test/browser";
@@ -9,11 +15,11 @@ import { GameContext } from "../games/GameContext.ts";
 import { TranslationActions } from "./TranslationActions.tsx";
 import { TranslationCard } from "./TranslationCard.tsx";
 
-const entry = (id: string, location: Location, translation: string): Entry => ({
+const entry = (id: string, location: Location, translation: string): TestEntry => ({
   id,
   location,
-  source: "你好",
-  translation: translation ? { user: translation } : {},
+  source: `你好${id}`,
+  ...(translation && { userTranslation: translation }),
 });
 const text = (id: string, translation: string) =>
   entry(id, { _tag: "SystemText", keys: [id] }, translation);
@@ -64,23 +70,26 @@ const fakeServer = (
         return Response.json(current);
       case "/api/catalog/translate": {
         const { on } = await request.json();
-        current = { ...current, translate: on };
+        current = { ...current, settings: { ...current.settings, isTranslationOn: on } };
         feed.changed();
         return Response.json(current);
       }
       case "/api/catalog/language": {
         const { language } = await request.json();
         languagesSet.push(language);
-        const { language: _old, ...rest } = current;
-        current = { ...rest, ...(language && { language }) };
+        const { sourceLanguage: _old, ...rest } = current.settings;
+        current = {
+          ...current,
+          settings: { ...rest, ...(language && { sourceLanguage: language }) },
+        };
         feed.changed();
         return Response.json(current);
       }
       case "/api/restore":
         current = {
           ...current,
-          translate: true,
-          entries: current.entries.map((one) => ({ ...one, translation: {} })),
+          settings: { ...current.settings, isTranslationOn: true },
+          texts: current.texts.map(({ id, source, isInImage }) => ({ id, source, isInImage })),
         };
         feed.changed();
         return Response.json(current);
@@ -141,13 +150,16 @@ const fakeServer = (
   return { requests, settingsSaved, imported, languagesSet, activity: stream.send };
 };
 
-const catalogWith = (entries: Catalog["entries"]): Catalog => ({
-  version: 1,
-  game: { id: game.id, title: game.title, engine: "MV" },
-  entries,
-  glossary: [],
-  translate: true,
-});
+const catalogWith = (
+  entries: ReadonlyArray<TestEntry>,
+  parts: Omit<TestCatalogParts, "entries" | "game"> = {},
+): Catalog =>
+  testCatalog({
+    game: { id: game.id, title: game.title, engine: "MV" },
+    entries,
+    ...parts,
+    settings: { isTranslationOn: true, ...parts.settings },
+  });
 
 const showCard = () =>
   render(
@@ -157,17 +169,16 @@ const showCard = () =>
   );
 
 test("the switch turns translation on and shows what the translation holds", async () => {
-  fakeServer({
-    version: 1,
-    game: { id: game.id, title: game.title, engine: "MV" },
-    translate: false,
-    entries: [
-      text("a", ""),
-      imageEntry("b", "img/pictures/Title", ""),
-      imageEntry("c", "img/pictures/Title", ""),
-    ],
-    glossary: [],
-  });
+  fakeServer(
+    catalogWith(
+      [
+        text("a", ""),
+        imageEntry("b", "img/pictures/Title", ""),
+        imageEntry("c", "img/pictures/Title", ""),
+      ],
+      { settings: { isTranslationOn: false } },
+    ),
+  );
   showCard();
   await expect.element(page.getByText("Switch on to translate or import.")).toBeVisible();
 
@@ -178,13 +189,11 @@ test("the switch turns translation on and shows what the translation holds", asy
 });
 
 test("a translated game keeps its translations when switched off", async () => {
-  const server = fakeServer({
-    version: 1,
-    game: { id: game.id, title: game.title, engine: "MV" },
-    translate: true,
-    entries: [text("a", "Hello"), text("b", "Bye")],
-    glossary: [{ source: "雨", translation: { user: "Rain" }, kind: { guess: { value: "name" } } }],
-  });
+  const server = fakeServer(
+    catalogWith([text("a", "Hello"), text("b", "Bye")], {
+      glossary: [testTerm("雨", { userTranslation: "Rain", rulesKind: "name" })],
+    }),
+  );
   showCard();
   await expect.element(page.getByText("2 of 2 text entries translated")).toBeVisible();
   await expect.element(page.getByText("1 glossary term")).toBeVisible();
@@ -360,7 +369,7 @@ test("Import shows what the chosen file changes, sends it once confirmed, and sa
   await picker.upload(new File([JSON.stringify(file)], "rain.json", { type: "application/json" }));
   await page.getByRole("button", { name: "Import", exact: true }).click();
   await expect
-    .element(page.getByText("Imported, after backing up", { exact: false }))
+    .element(page.getByText("Imported the translations.", { exact: false }))
     .toBeVisible();
   expect(server.imported).toEqual([file]);
 });
@@ -420,7 +429,7 @@ test("an import going counts its images on the Import button and holds the other
   await expect.element(page.getByRole("button", { name: "Import…" })).toBeEnabled();
 });
 
-test("Export writes the images' erased backgrounds as base64 patches, as the server sends them, and how many guesses or images each run made", async () => {
+test("Export writes the images' erased backgrounds as base64 patches, as the server sends them, and how many translations or images each run made", async () => {
   const read = "2026-11-02T00:00:00.000Z";
   const reader = {
     detection: "det",
@@ -438,17 +447,16 @@ test("Export writes the images' erased backgrounds as base64 patches, as the ser
   };
   const imageText = { images: { "img/pictures/Sign": sign }, runs: { [read]: reader } };
   const run = "2026-11-01T00:00:00.000Z";
-  const runs = {
-    [run]: { translator: "codex", model: "gpt-6.1-terra", glossaryModel: "gpt-6.1-sol" },
+  const models = {
+    translator: "codex",
+    model: "gpt-6.1-terra",
+    glossaryModel: "gpt-6.1-sol",
   } as const;
   fakeServer(
-    {
-      ...catalogWith([
-        { ...text("a", ""), translation: { guess: { value: "Hello", run } } },
-        text("b", "Bye"),
-      ]),
-      runs,
-    },
+    catalogWith(
+      [{ ...text("a", ""), modelTranslation: "Hello", modelOperationId: 1 }, text("b", "Bye")],
+      { operations: [{ id: 1, kind: "run", startedAt: run, models }] },
+    ),
     { imageText },
   );
   const blobs: Array<Blob | MediaSource> = [];
@@ -464,8 +472,7 @@ test("Export writes the images' erased backgrounds as base64 patches, as the ser
   const file = JSON.parse(await blob.text());
   expect(file.images).toEqual(imageText.images);
   expect(file.imageRuns).toEqual({ [read]: { ...reader, images: 1 } });
-  expect(file.translationRuns).toEqual({ [run]: { ...runs[run], guesses: 1 } });
-  expect(file.runs).toBeUndefined();
+  expect(file.operations).toEqual([{ kind: "run", startedAt: run, models, values: 1 }]);
   expect(file.imageText).toBeUndefined();
-  expect(file.entries[0].translation).toEqual({ guess: { value: "Hello", run } });
+  expect(file.texts[0]).toEqual({ source: "你好a", isInImage: false, modelTranslation: "Hello" });
 });

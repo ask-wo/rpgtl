@@ -1,16 +1,16 @@
-import type { Entry, GlossaryTerm, Pronoun, SourceLanguage } from "@rpgtl/contracts";
+import type { PronounValue, SourceLanguage, GlossaryTerm } from "@rpgtl/contracts";
+import type { EntryText } from "./catalog.ts";
 import {
   controlCodePattern,
   isPauseCode,
   speakerTagName,
   speakerTagPattern,
 } from "./controlCodes.ts";
-import { isMessage, isSettingText } from "./location.ts";
+import { isMessage, isSettingText, type Placed } from "./location.ts";
 import { firstLineSpeaker } from "./requestText.ts";
-import { showTextSpeakers } from "./reuse.ts";
 import { nameAliases } from "./shortNames.ts";
 import { hasTerm, termIndex } from "./termMatch.ts";
-import { termKind } from "./guesses.ts";
+import { termKind } from "./inUse.ts";
 
 /** The words of a language that show a character's gender. */
 interface GenderWords {
@@ -99,20 +99,20 @@ function mentions(sentence: string, names: ReadonlyArray<string>) {
   return found.toSorted((a, b) => a.start - b.start);
 }
 
-const messageSpeaker = (entry: Entry, names: ReadonlySet<string>) =>
+/** A line of the game's text with what the clues need of it. */
+type Line = Pick<EntryText, "source" | "speaker"> & Placed;
+
+const messageSpeaker = (entry: Line, names: ReadonlySet<string>) =>
   isMessage(entry) ? firstLineSpeaker(entry.source, (name) => names.has(name)) : undefined;
 
 /** A message's text without a speaker's name alone on its first line. */
-const withoutSpeakerLine = (entry: Entry, names: ReadonlySet<string>) =>
+const withoutSpeakerLine = (entry: Line, names: ReadonlySet<string>) =>
   messageSpeaker(entry, names) === undefined
     ? entry.source
     : entry.source.slice(entry.source.indexOf("\n") + 1);
 
-const speakerIn = (
-  entry: Entry,
-  speakerOf: (entry: Entry) => string | undefined,
-  names: ReadonlySet<string>,
-) => speakerTagName(entry.source) ?? messageSpeaker(entry, names) ?? speakerOf(entry);
+const speakerIn = (entry: Line, names: ReadonlySet<string>) =>
+  speakerTagName(entry.source) ?? messageSpeaker(entry, names) ?? entry.speaker;
 
 function firstPronoun(text: string, words: GenderWords) {
   const found = words.pronoun.exec(text);
@@ -126,7 +126,7 @@ function firstPronoun(text: string, words: GenderWords) {
  * not searched.
  */
 export function collectClues(
-  entries: ReadonlyArray<Entry>,
+  entries: ReadonlyArray<Line>,
   names: ReadonlyArray<string>,
   language: SourceLanguage,
 ) {
@@ -134,11 +134,10 @@ export function collectClues(
   const clues = new Map<string, Clues>(names.map((name) => [name, { she: 0, he: 0 }]));
   const aliases = nameAliases(names);
   const ordered = [...aliases.keys()].toSorted((a, b) => b.length - a.length);
-  const speakerOf = showTextSpeakers(entries);
   const known = new Set(names);
   for (const entry of entries) {
     if (isSettingText(entry)) continue;
-    const speaker = speakerIn(entry, speakerOf, known);
+    const speaker = speakerIn(entry, known);
     const spoken = speaker === undefined ? undefined : clues.get(speaker.trim());
     if (spoken) {
       if (words.femaleSays.some((word) => entry.source.includes(word))) spoken.she++;
@@ -180,7 +179,11 @@ export function collectClues(
   return clues;
 }
 
-export function pronounFromClues({ she, he }: Clues): NonNullable<Pronoun["guess"]> {
+export function pronounFromClues({ she, he }: Clues): {
+  readonly pronoun: PronounValue;
+  readonly she: number;
+  readonly he: number;
+} {
   const total = she + he;
   const value =
     total < minimumClues
@@ -190,7 +193,7 @@ export function pronounFromClues({ she, he }: Clues): NonNullable<Pronoun["guess
         : he / total >= minimumAgreement
           ? "he"
           : "unknown";
-  return { value, she, he };
+  return { pronoun: value, she, he };
 }
 
 const maxMentions = 20;
@@ -211,8 +214,8 @@ const spread = <T>(items: ReadonlyArray<T>, count: number) => {
  * spread over the game, and how many entries do either.
  */
 export function linesAbout(
-  entries: ReadonlyArray<Entry>,
-  glossary: ReadonlyArray<GlossaryTerm>,
+  entries: ReadonlyArray<Line>,
+  glossary: ReadonlyArray<Pick<GlossaryTerm, "source" | "rulesKind" | "modelKind" | "userKind">>,
   language: SourceLanguage,
 ) {
   const words = genderWords[language];
@@ -222,13 +225,12 @@ export function linesAbout(
     .map((term) => term.source.trim());
   const known = new Set(characters);
   const aliases = [...nameAliases(characters)];
-  const speakerOf = showTextSpeakers(entries);
   // Speaker names are left out, so a line that only names its speaker counts as said.
   const text = entries
     .filter((entry) => !isSettingText(entry) && !terms.has(entry.source.trim()))
     .map((entry) => ({
       line: sentences(withoutSpeakerLine(entry, known), words).join(" "),
-      speaker: speakerIn(entry, speakerOf, known)?.trim(),
+      speaker: speakerIn(entry, known)?.trim(),
     }));
   return (name: string) => {
     const own = aliases.filter(([, owner]) => owner === name).map(([alias]) => alias);

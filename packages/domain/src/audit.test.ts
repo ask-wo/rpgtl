@@ -1,16 +1,17 @@
 import { assert, it } from "@effect/vitest";
-import type { Catalog, Entry, RejectReason, RunLogLine } from "@rpgtl/contracts";
-import { audit, inUse, runAnswers, runLog, runTotals } from "./index.ts";
+import type { RejectReason, RunLogLine } from "@rpgtl/contracts";
+import { audit, runAnswers, runLog, runTotals, withTexts } from "./index.ts";
+import { testCatalog, testTerm } from "./testUtils/catalog.ts";
 
-const line = (index: number, source: string, translation: string): Entry => ({
+const line = (index: number, source: string, translation: string) => ({
   id: `entry${index}`,
   location: {
-    _tag: "Message",
-    list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 },
+    _tag: "Message" as const,
+    list: { _tag: "MapEventPage" as const, map: 1, event: 1, page: 0 },
     index: index,
   },
   source,
-  translation: translation ? { user: translation } : {},
+  ...(translation && { userTranslation: translation }),
 });
 const started = "2026-10-01T00:00:00.000Z";
 const request = (
@@ -21,11 +22,11 @@ const request = (
   type: "request",
   at: started,
   entryIds: entries.map((entry) => entry.id),
-  entries: entries.map(({ id, location, source, translation }) => ({
+  entries: entries.map(({ id, location, source, userTranslation }) => ({
     id,
     location,
     source,
-    translation: answer ?? inUse(translation) ?? "",
+    translation: answer ?? userTranslation ?? "",
   })),
   answerContexts: entries.map(() => ({})),
   request: { model: "test-model", messages: [] },
@@ -39,17 +40,10 @@ const request = (
 });
 
 const red = line(10, "\\C[2]红\\C[0]", "");
-const catalog: Catalog = {
-  version: 1,
-  game: { id: "audited", title: "Audited", engine: "MV" },
-  translate: true,
+const catalog = testCatalog({
   glossary: [
-    { source: "身体", translation: { user: "Body" }, kind: { guess: { value: "word" } } },
-    {
-      source: "林若溪",
-      translation: { user: "Lin Ruoxi" },
-      kind: { guess: { value: "character" } },
-    },
+    testTerm("身体", { userTranslation: "Body" }),
+    testTerm("林若溪", { userTranslation: "Lin Ruoxi", rulesKind: "character" }),
   ],
   entries: [
     line(0, "她的身体很冷", "Her Body is cold"),
@@ -70,15 +64,12 @@ const catalog: Catalog = {
     ),
     line(22, "画师:青木流水", "Artist: 青木流水"),
   ],
-};
+});
 
-it("The audit lists capitalised glossary words, differing translations and each check's finds", () => {
+it("The audit lists capitalised glossary words and each check's finds", () => {
   const result = audit(catalog);
   assert.deepStrictEqual(result.capitalised, [
     { source: "身体", english: "Body", lines: 1, of: 2 },
-  ]);
-  assert.deepStrictEqual(result.differing.examples, [
-    { source: "进入仓库", translations: ["Enter the storehouse", "Entering the storehouse"] },
   ]);
   const flagged = Object.fromEntries(
     result.findings.map((group) => [group.check, group.examples.map((entry) => entry.id)]),
@@ -121,33 +112,25 @@ it("With a run log, the audit summarises the run, its rejections and the answers
     { type: "warning", at: started, message: "Part of the model runs on the CPU." },
     { type: "end", at: started, translated: 1, failed: [red.id], stopped: false },
   ]);
-  const edited: Catalog = {
-    ...catalog,
-    entries: catalog.entries.map((entry) =>
-      entry.id === answered.id
-        ? {
-            ...entry,
-            translation: { guess: { value: "Go in", run: started }, user: "Enter the storehouse" },
-          }
-        : entry,
+  const fromRun = { modelTranslation: "Go in", modelOperationId: 1 };
+  const edited = {
+    ...withTexts(catalog, (text) =>
+      text.source === answered.source ? { ...text, ...fromRun } : text,
     ),
     glossary: [
       ...catalog.glossary,
-      {
-        source: answered.source,
-        translation: { guess: { value: "Go in", run: started }, user: "Enter" },
-        kind: { guess: { value: "word" } },
-      },
-      {
-        source: "雨",
-        translation: { guess: { value: "Rain", run: started } },
-        kind: { guess: { value: "name" } },
-      },
-      {
-        source: "风",
-        translation: { guess: { value: "Wind", run: "an earlier run" }, user: "Gale" },
-        kind: { guess: { value: "name" } },
-      },
+      testTerm(answered.source, { ...fromRun, userTranslation: "Enter" }),
+      testTerm("雨", { modelTranslation: "Rain", modelOperationId: 1, rulesKind: "name" }),
+      testTerm("风", {
+        modelTranslation: "Wind",
+        modelOperationId: 2,
+        userTranslation: "Gale",
+        rulesKind: "name",
+      }),
+    ],
+    operations: [
+      { id: 1, kind: "run" as const, startedAt: started },
+      { id: 2, kind: "run" as const, startedAt: "2026-09-01T00:00:00.000Z" },
     ],
   };
   const run = audit(edited, log).run;
@@ -169,14 +152,14 @@ it("With a run log, the audit summarises the run, its rejections and the answers
         of: "translation",
         id: answered.id,
         source: answered.source,
-        guess: "Go in",
+        modelTranslation: "Go in",
         user: "Enter the storehouse",
       },
       {
         of: "termTranslation",
         id: answered.source,
         source: answered.source,
-        guess: "Go in",
+        modelTranslation: "Go in",
         user: "Enter",
       },
     ],

@@ -15,7 +15,16 @@ import * as Settings from "../settings/Settings.ts";
 import { folderWith, mvGame } from "../testUtils/gameFolder.ts";
 import { writeArchive, xpImageFolder, xpImageTableFile } from "@rpgtl/domain";
 import { command, rubyObject, xpFile, xpMap, xpScripts } from "@rpgtl/domain/testUtils/xpGame";
-import { noPrograms, opened, playServices, servicesWith, StateDir } from "../testUtils/state.ts";
+import {
+  noPrograms,
+  opened,
+  playServices,
+  servicesWith,
+  StateDir,
+  typed,
+} from "../testUtils/state.ts";
+import * as GameDatabases from "../games/GameDatabases.ts";
+import * as SqlClient from "effect/sql/SqlClient";
 import { translatedSign } from "../testUtils/xpImages.ts";
 import * as Launches from "./Launches.ts";
 import * as Nwjs from "./Nwjs.ts";
@@ -186,7 +195,7 @@ it.live(
       assert.include(
         hook,
         `const rpgtl = ${JSON.stringify({
-          catalog: path.join(state, gameFiles(game.id).catalog),
+          database: path.join(state, gameFiles(game.id).database),
           data: path.join(game.webRoot, "data"),
           erased: path.join(state, gameFiles(game.id).erasedImages),
           images: path.join(state, gameFiles(game.id).imageResults),
@@ -220,8 +229,7 @@ it.live(
       const table = yield* fs.readFile(path.join(patches, xpImageTableFile));
       assert.include(new TextDecoder().decode(table), "graphics/pictures/sign");
 
-      const catalog = yield* catalogs.get(game.id);
-      yield* catalogs.save({ ...catalog, translate: false });
+      yield* catalogs.setTranslate(game.id, false);
       yield* launches.launch(game.id);
       yield* ended(game.id);
       assert.isFalse(yield* fs.exists(lettered));
@@ -244,15 +252,9 @@ it.live(
         "Data/Items.rxdata": xpFile([null, rubyObject("RPG::Item", { name: "苔藓" })]),
         "Data/Scripts.rxdata": xpFile(xpScripts({ Main: "begin_game" })),
       });
-      const { game, catalog } = yield* opened(catalogs.inspect(dir));
-      yield* catalogs.save({
-        ...catalog,
-        translate: true,
-        entries: catalog.entries.map((entry) => ({
-          ...entry,
-          translation: { user: entry.source === "你好" ? "Hello" : "" },
-        })),
-      });
+      const { game } = yield* opened(catalogs.inspect(dir));
+      yield* typed(game.id, (entry) => (entry.source === "你好" ? "Hello" : undefined));
+      yield* catalogs.setTranslate(game.id, true);
 
       const started = yield* launches.launch(game.id);
       const mkxpzDir = path.join(state, gameFiles(game.id).mkxpz);
@@ -276,14 +278,8 @@ it.live(
       const map = path.join(patches, "Data", "Map001.rxdata");
       yield* fs.writeFileString(map, "kept");
       const again = Effect.fnUntraced(function* (english: string, translate = true) {
-        const saved = yield* catalogs.get(game.id);
-        yield* catalogs.save({
-          ...saved,
-          translate,
-          entries: saved.entries.map((entry) =>
-            entry.source === "你好" ? { ...entry, translation: { user: english } } : entry,
-          ),
-        });
+        yield* typed(game.id, (entry) => (entry.source === "你好" ? english : undefined));
+        yield* catalogs.setTranslate(game.id, translate);
         yield* launches.launch(game.id);
         yield* ended(game.id);
       });
@@ -311,7 +307,7 @@ it.live(
         "Data/System.rxdata": xpFile(rubyObject("RPG::System", {})),
         "Data/Scripts.rxdata": xpFile(xpScripts({ Title: 'text = "你好"', Main: "begin_game" })),
       });
-      const { game, catalog } = yield* opened(catalogs.inspect(dir));
+      const { game } = yield* opened(catalogs.inspect(dir));
       const fixes = path.join(state, gameFiles(game.id).xpFixes);
       yield* fs.makeDirectory(fixes, { recursive: true });
       yield* fs.writeFileString(path.join(fixes, "copy.rb"), "# Copies targets\nclass A; end");
@@ -331,17 +327,18 @@ it.live(
       assert.isTrue(yield* fixed);
 
       // English whose source the game no longer has fails to apply.
-      yield* catalogs.save({
-        ...catalog,
-        translate: true,
-        entries: catalog.entries.map((entry) => ({
-          ...entry,
-          source: "再见",
-          translation: { user: "Bye" },
-        })),
-      });
+      yield* (yield* GameDatabases.GameDatabases)
+        .use(
+          game.id,
+          Effect.flatMap(
+            SqlClient.SqlClient,
+            (sql) => sql`update texts set source = '再见', user_translation = 'Bye'`,
+          ),
+        )
+        .pipe(Effect.orDie);
+      yield* catalogs.setTranslate(game.id, true);
       assert.isTrue(yield* fixed);
-      yield* catalogs.save({ ...catalog, translate: false });
+      yield* catalogs.setTranslate(game.id, false);
 
       yield* xpFixes.set(game.id, "copy.rb", false);
       yield* launches.launch(game.id);

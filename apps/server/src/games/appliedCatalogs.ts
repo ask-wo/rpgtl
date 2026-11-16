@@ -1,5 +1,6 @@
-import { Catalog, Games } from "@rpgtl/contracts";
+import { type Catalog, Games, gameFiles } from "@rpgtl/contracts";
 import {
+  entryTexts,
   applyPluginTranslations,
   applyTranslations,
   decodeGameFile,
@@ -7,10 +8,12 @@ import {
   translatedByXpFile,
 } from "@rpgtl/domain";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import type { Decoded } from "../state/decodeStateFolder.ts";
 import * as StateFolder from "../state/StateFolder.ts";
+import { readCatalogAt } from "./catalogRows.ts";
 import { type FolderGame, GameFolder } from "./GameFolder.ts";
 
 /** The game's data files that its catalog no longer applies to, by name. */
@@ -26,14 +29,15 @@ const unapplied = Effect.fnUntraced(function* (game: FolderGame, catalog: Catalo
     return failed;
   }
   const contents = yield* gameFolder.contents(game);
+  const entries = entryTexts(catalog);
   for (const { name } of contents.dataFiles) {
     const raw = new TextDecoder().decode(yield* gameFolder.readFile(game, `data/${name}`));
     const applied = Result.flatMap(decodeGameFile(name, raw), (file) =>
-      applyTranslations(name, file, catalog.entries),
+      applyTranslations(name, file, entries),
     );
     if (Result.isFailure(applied)) failed.push(name);
   }
-  if (Result.isFailure(applyPluginTranslations(contents.plugins, catalog.entries)))
+  if (Result.isFailure(applyPluginTranslations(contents.plugins, entries)))
     failed.push("plugins.js");
   return failed;
 });
@@ -48,6 +52,7 @@ const unread = () => Effect.succeedNone;
  */
 export const appliedCatalogs = Effect.fn("appliedCatalogs")(function* () {
   const folder = yield* StateFolder.StateFolder;
+  const fs = yield* FileSystem.FileSystem;
   const games = Option.getOrElse(
     yield* folder.read("games.json", Games).pipe(Effect.catchTags({ StateFileError: unread })),
     () => [],
@@ -55,11 +60,18 @@ export const appliedCatalogs = Effect.fn("appliedCatalogs")(function* () {
   const results: Array<Decoded> = [];
   for (const { id, ...game } of games) {
     const file = `games/${id} applied to ${game.root}`;
-    const catalog = yield* folder
-      .read(`games/${id}/catalog.json`, Catalog)
-      .pipe(Effect.catchTags({ StateFileError: unread }));
-    if (Option.isNone(catalog)) continue;
-    const result = yield* unapplied(game, catalog.value).pipe(
+    const database = `${folder.root}/${gameFiles(id).database}`;
+    if (!(yield* fs.exists(database))) continue;
+    const catalog = yield* readCatalogAt(database, {
+      id,
+      title: game.title,
+      engine: game.engine,
+    }).pipe(
+      // oxlint-disable-next-line rpgtl/no-catch-all -- the check of the database file itself reports why it doesn't read.
+      Effect.catchCause(() => Effect.undefined),
+    );
+    if (catalog === undefined) continue;
+    const result = yield* unapplied(game, catalog).pipe(
       Effect.map((failed): Decoded =>
         failed.length
           ? { file, problem: `no longer holds an entry's source: ${failed.join(", ")}` }

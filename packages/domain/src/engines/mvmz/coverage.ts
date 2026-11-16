@@ -8,7 +8,7 @@ import {
   sourceText,
   variableStrings,
 } from "./extract.ts";
-import { entryTranslation } from "../../guesses.ts";
+import { translationInUse } from "../../inUse.ts";
 
 /** Every data file of a game and its plugins, for searches of all of it. */
 export interface GameContents {
@@ -149,10 +149,10 @@ function visitPluginStrings(value: unknown, visit: (text: string) => void): void
 export function missingText(
   contents: GameContents,
   listed: ReadonlyArray<string>,
-  catalog: Pick<Catalog, "entries">,
+  catalog: Pick<Catalog, "texts">,
 ): ReadonlyArray<MissingText> {
-  const covered = new Set(catalog.entries.flatMap((entry) => entry.source.split("\n")));
-  const sources = new Set(catalog.entries.map((entry) => entry.source));
+  const covered = new Set(catalog.texts.flatMap((text) => text.source.split("\n")));
+  const sources = new Set(catalog.texts.map((text) => text.source));
   // Variable text in a script and drawn text in a note tag are their own entries, so the rest of
   // the script or note is what may be missing. A tag goes whole, since its key may be CJK too.
   const withoutOwnText = (text: string) =>
@@ -230,11 +230,11 @@ const words = (text: string) => text.split(/[\s<>:,;=[\]"'()]+/);
  */
 export function textInLogic(
   contents: GameContents,
-  catalog: Pick<Catalog, "entries">,
+  catalog: Pick<Catalog, "texts">,
 ): ReadonlyArray<LogicUse> {
   const translations = new Map<string, string>();
-  for (const entry of catalog.entries) {
-    const translation = entryTranslation(entry);
+  for (const entry of catalog.texts) {
+    const translation = translationInUse(entry);
     if (translation && translation !== entry.source && sourceText.test(entry.source))
       translations.set(entry.source, translation);
   }

@@ -2,7 +2,6 @@
 // plugin adds and in the real message window, which the made-up plugins resize, and a save made
 // through the menu loads again from the title screen.
 import { expect, test } from "./rpgtl.ts";
-import { entryTranslation } from "../packages/domain/src/guesses.ts";
 import {
   choose,
   closeMessage,
@@ -36,7 +35,7 @@ test("translations edited on the Text page show in the game, which saves and loa
     .click();
   await english("致谢").fill("Thanks");
   await expect(page.getByText("All changes saved")).toBeVisible();
-  expect((await opened.saved()).entries.filter(entryTranslation)).toHaveLength(2);
+  expect(opened.savedTexts().filter((text) => text.english)).toHaveLength(2);
 
   const game = await opened.play();
   await sceneIs(game, "Scene_Title");

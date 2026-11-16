@@ -21,8 +21,7 @@ it.effect(
         decoded.map(({ file, problem }) => [file, problem === undefined]),
         [
           ["games.json", true],
-          [`${files.backups}/catalog-1-0.json`, false],
-          [files.catalog, false],
+          [files.database, false],
           [files.imageResults, false],
           [`${files.logs}/translation-x.log`, false],
           [files.samples, true],
@@ -32,8 +31,8 @@ it.effect(
       Effect.provide(
         servicesWith({
           "games.json": JSON.stringify([game]),
-          [files.catalog]: JSON.stringify({ version: 1, images: {} }),
-          [`${files.backups}/catalog-1-0.json`]: "{}",
+          [files.database]: "not a database",
+          [files.catalog]: "{}",
           [files.imageResults]: JSON.stringify({ version: 1, images: { "Map001.png": {} } }),
           [`${files.logs}/translation-x.log`]: '{"type":"end"}\n',
           [`${files.logs}/nwjs.log`]: "not state",

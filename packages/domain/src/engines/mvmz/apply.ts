@@ -1,5 +1,4 @@
 import type {
-  Entry,
   EventCommand,
   EventList,
   EventListRef,
@@ -12,6 +11,7 @@ import type {
   ServedSystem,
   Table,
 } from "@rpgtl/contracts";
+import type { EntryText } from "../../catalog.ts";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -23,7 +23,7 @@ import { GameFile } from "./gameFile.ts";
 import { isMessage, listKey } from "../../location.ts";
 import { fileOf } from "./location.ts";
 import { givenNameTranslation } from "../../shortNames.ts";
-import { entryTranslation } from "../../guesses.ts";
+import { translationInUse } from "../../inUse.ts";
 
 export class GameDataChanged extends Schema.TaggedError<GameDataChanged>()("GameDataChanged", {
   file: Schema.String,
@@ -53,7 +53,7 @@ const frameTolerance = 4;
  * measures them in the game's font. Layouts are looked up by the translation with its indent, as
  * the same words may stand in different frames.
  */
-export function messageLayouts(entries: ReadonlyArray<Entry>) {
+export function messageLayouts(entries: ReadonlyArray<EntryText>) {
   const messages: { key: string | undefined; first: number; edge: number; lines: string[] }[] = [];
   const counts = new Map<number, number>();
   for (const entry of entries) {
@@ -63,7 +63,7 @@ export function messageLayouts(entries: ReadonlyArray<Entry>) {
     const content = lines.slice(first).filter((line) => line.trim());
     const indent = Math.min(...content.map((line) => /^ */.exec(line)?.[0].length ?? 0));
     if (first < 1 || indent < 8) continue;
-    const key = entryTranslation(entry).trimEnd() || undefined;
+    const key = translationInUse(entry).trimEnd() || undefined;
     messages.push({ key, first, edge: indent, lines: content.map((l) => measuredText(l.trim())) });
     counts.set(indent, (counts.get(indent) ?? 0) + 1);
   }
@@ -118,12 +118,15 @@ export function messageLayouts(entries: ReadonlyArray<Entry>) {
  * names whose other characters are ASCII count, as a plugin adds such a prefix or suffix.
  * `files` are paths under the game's web root, such as `img/battlecommands/Com_魔法技能.rpgmvp`.
  */
-export function translatedImageNames(files: ReadonlyArray<string>, entries: ReadonlyArray<Entry>) {
+export function translatedImageNames(
+  files: ReadonlyArray<string>,
+  entries: ReadonlyArray<EntryText>,
+) {
   const nonAscii = /[^ -~]+/;
   const translations = new Map<string, Set<string>>();
   for (const entry of entries) {
     const { source } = entry;
-    const translation = entryTranslation(entry);
+    const translation = translationInUse(entry);
     if (translation && nonAscii.exec(source)?.[0] === source)
       translations.set(source, (translations.get(source) ?? new Set()).add(translation));
   }
@@ -153,7 +156,7 @@ function currentName(file: GameFile, group: NameGroup, id: number): unknown {
 }
 
 /** The list with the messages starting at the given indices replaced by their translations. */
-function translateMessages(list: EventList, messages: ReadonlyMap<number, Entry>) {
+function translateMessages(list: EventList, messages: ReadonlyMap<number, EntryText>) {
   const translated: EventCommand[] = [];
   let found = 0;
   for (let index = 0; index < list.length; index++) {
@@ -169,7 +172,7 @@ function translateMessages(list: EventList, messages: ReadonlyMap<number, Entry>
     found++;
     translated.push({
       ...command,
-      parameters: [entryTranslation(entry), ...command.parameters.slice(1)],
+      parameters: [translationInUse(entry), ...command.parameters.slice(1)],
     });
     index = run.end - 1;
   }
@@ -183,11 +186,11 @@ const isSaveText = (location: Location) =>
   (location._tag === "RecordField" && location.table === "actors") ||
   (location._tag === "CommandText" && location.parameter === 1 && location.keys.length === 0);
 
-const isRecordName = (table: Table) => (entry: Entry) =>
+const isRecordName = (table: Table) => (entry: EntryText) =>
   entry.location._tag === "RecordField" &&
   entry.location.table === table &&
   entry.location.field === "name" &&
-  !!entryTranslation(entry);
+  !!translationInUse(entry);
 
 /** The images System.json tells the runtime to replace or draw English into. */
 export interface SystemImages {
@@ -210,26 +213,26 @@ export function withSystemImages(
 }
 
 /** What the runtime reads from System.json besides its text, for all of the entries. */
-function systemExtras(entries: ReadonlyArray<Entry>) {
+function systemExtras(entries: ReadonlyArray<EntryText>) {
   const extras: Types.Mutable<ServedSystem> = {};
   const layouts = messageLayouts(entries);
   if (Object.keys(layouts).length) extras.rpgtlMessageLayouts = layouts;
   const saveText = Object.fromEntries(
     entries.flatMap((entry) =>
-      entryTranslation(entry) && isSaveText(entry.location)
-        ? [[entry.source, entryTranslation(entry)]]
+      translationInUse(entry) && isSaveText(entry.location)
+        ? [[entry.source, translationInUse(entry)]]
         : [],
     ),
   );
   if (Object.keys(saveText).length) extras.rpgtlSaveText = saveText;
   const shortNames: Record<string, { source: string; short: string }> = {};
   for (const entry of entries.filter(isRecordName("actors"))) {
-    const short = givenNameTranslation(entry.source, entryTranslation(entry), entries);
-    if (short) shortNames[entryTranslation(entry)] = { source: entry.source, short };
+    const short = givenNameTranslation(entry.source, translationInUse(entry), entries);
+    if (short) shortNames[translationInUse(entry)] = { source: entry.source, short };
   }
   if (Object.keys(shortNames).length) extras.rpgtlShortNames = shortNames;
   const classNames = Object.fromEntries(
-    entries.filter(isRecordName("classes")).map((entry) => [entryTranslation(entry), entry.source]),
+    entries.filter(isRecordName("classes")).map((entry) => [translationInUse(entry), entry.source]),
   );
   if (Object.keys(classNames).length) extras.rpgtlClassNames = classNames;
   return extras;
@@ -243,24 +246,24 @@ function systemExtras(entries: ReadonlyArray<Entry>) {
 export function applyTranslations(
   file: string,
   data: GameFile,
-  entries: ReadonlyArray<Entry>,
+  entries: ReadonlyArray<EntryText>,
 ): Result.Result<GameFile, GameDataChanged> {
   const changed = Result.fail(new GameDataChanged({ file }));
   const names: Partial<Record<NameGroup, Record<string, string>>> = {};
-  const messages = new Map<string, { list: EventListRef; byIndex: Map<number, Entry> }>();
+  const messages = new Map<string, { list: EventListRef; byIndex: Map<number, EntryText> }>();
   let commandsTranslated = false;
   let translated = data;
   for (const entry of entries) {
     const { location } = entry;
-    if (!entryTranslation(entry) || fileOf(location) !== file) continue;
+    if (!translationInUse(entry) || fileOf(location) !== file) continue;
     if (location._tag === "EventName") {
       if (currentName(data, "events", location.event) === entry.source)
-        (names.events ??= {})[location.event] = entryTranslation(entry);
+        (names.events ??= {})[location.event] = translationInUse(entry);
       continue;
     }
     if (location._tag === "Name") {
       if (currentName(data, location.group, location.id) === entry.source)
-        (names[location.group] ??= {})[location.id] = entryTranslation(entry);
+        (names[location.group] ??= {})[location.id] = translationInUse(entry);
       continue;
     }
     if (location._tag === "Message") {
@@ -277,7 +280,7 @@ export function applyTranslations(
     )
       commandsTranslated = true;
     const next = Option.flatMap(textFocus(location, entry.source), (focus) =>
-      Result.getSuccess(focus.replaceResult(entryTranslation(entry), translated)),
+      Result.getSuccess(focus.replaceResult(translationInUse(entry), translated)),
     );
     if (Option.isNone(next)) return changed;
     translated = next.value;
@@ -309,14 +312,14 @@ export function applyTranslations(
 /** The plugin list with the translations of plugin settings in it. */
 export function applyPluginTranslations(
   plugins: Plugins,
-  entries: ReadonlyArray<Entry>,
+  entries: ReadonlyArray<EntryText>,
 ): Result.Result<Plugins, GameDataChanged> {
   let translated = plugins;
   for (const entry of entries) {
-    if (entry.location._tag !== "PluginSetting" || !entryTranslation(entry)) continue;
+    if (entry.location._tag !== "PluginSetting" || !translationInUse(entry)) continue;
     const { plugin, keys } = entry.location;
     const next = Option.flatMap(pluginFocus(translated, plugin, keys, entry.source), (focus) =>
-      Result.getSuccess(focus.replaceResult(entryTranslation(entry), translated)),
+      Result.getSuccess(focus.replaceResult(translationInUse(entry), translated)),
     );
     if (Option.isNone(next)) return Result.fail(new GameDataChanged({ file: "js/plugins.js" }));
     translated = next.value;
