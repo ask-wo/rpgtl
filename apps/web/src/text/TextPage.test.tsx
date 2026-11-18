@@ -325,12 +325,18 @@ test("Failed, Last run and Flagged show what a run or a check left on the entrie
     .toBeVisible();
 });
 
-test("Clear flagged clears the English runs gave the flagged entries, not English the user typed", async () => {
+test("Clear listed asks first, then clears the English runs gave the listed entries, not English the user typed", async () => {
   const server = fakeServer();
   server.findings = { ...server.findings, "3": [{ check: "length unlike the source" }] };
   showText({ show: "flagged" });
   server.activity(idle);
-  await page.getByRole("button", { name: "Clear flagged" }).click();
+  await page.getByRole("button", { name: "Clear listed" }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect.element(dialog.getByText("Clear the English of 1 text?")).toBeVisible();
+  await dialog.getByRole("button", { name: "Keep it" }).click();
+  expect(server.cleared).toEqual([]);
+  await page.getByRole("button", { name: "Clear listed" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Clear" }).click();
   await expect
     .element(page.getByRole("status"))
     .toHaveTextContent("Cleared 1 translation. Translate translates it again.");

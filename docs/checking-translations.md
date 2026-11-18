@@ -5,7 +5,7 @@ Every tool that finds problems in a game's translations goes through `pnpm run a
 ## Where problems are caught
 
 1. **While a run checks an answer** (`checkAnswer` in `packages/domain/src/answers.ts`). A rejected answer is retried and, if it keeps failing, the entry stays untranslated. Its reason goes into the run log, into the entry's `suggestion` and into the page's failed list. Some slips are fixed silently instead: a speaker name before the line, quotes the source doesn't have, a number left on a last line, em dashes. An accepted answer can get an entry `flag`: line breaks unlike the source, or too long for its image.
-2. **On a translation that is already there** (`translationChecks` in `packages/domain/src/checks.ts`). The audit, the page's **Flagged to check** filter and `pnpm run compare` all use these checks, on any translation, whoever wrote it. **Clear flagged** there clears the flagged English that runs gave, so the next run translates it again.
+2. **On a translation that is already there** (`translationChecks` in `packages/domain/src/checks.ts`). The audit, the page's **Flagged to check** filter and `pnpm run compare` all use these checks, on any translation, whoever wrote it. **Clear listed** there, with Flagged chosen, clears the flagged English that runs gave, so the next run translates it again.
 3. **In the run log** (`RunLogs` in `apps/server/src/translation/RunLogs.ts`, one file per run in `RPGTL_DIR/games/<game id>/logs/`, its lines described in `packages/contracts/src/runLog.ts`). `pnpm run audit` reads it to show the run's setup, warnings, rejections, the entries changed since the run, and to compare one run with the run before it.
 
 ## Known problems

@@ -25,6 +25,7 @@ import { useGameEdits } from "../games/edits.ts";
 import { useGame } from "../games/GameContext.ts";
 import { catalog, findings } from "../translation/atoms.ts";
 import { counted, number } from "../translation/counts.ts";
+import { ConfirmDialog } from "../app/ConfirmDialog.tsx";
 import { Pager } from "../app/Pager.tsx";
 import { clearTranslations, setEntries } from "./atoms.ts";
 import { EntryRow } from "./EntryRow.tsx";
@@ -133,6 +134,7 @@ function Text({
   const save = useAtomSet(setEntries, { mode: "promiseExit" });
   const clear = useAtomSet(clearTranslations, { mode: "promiseExit" });
   const [clearing, setClearing] = useState(false);
+  const [confirmingClear, setConfirmingClear] = useState(false);
   const [notice, setNotice] = useState<{ readonly text: string; readonly failed: boolean }>();
   const now = AsyncResult.getOrElse(useAtomValue(activity(game.id)), () => undefined);
   const locked = gameHeld(now);
@@ -278,9 +280,13 @@ function Text({
   const selectedIn = searched.filter((entry) => inSelection(entry, selection));
   const clearable = selectedIn.filter(
     (entry) =>
-      isShown(entry, "flagged", context) && !isUserTranslation(entry) && context.translates(entry),
+      isShown(entry, show, context) &&
+      !!translationInUse(entry) &&
+      !isUserTranslation(entry) &&
+      context.translates(entry),
   );
-  const clearFlagged = async () => {
+  const clearableTexts = new Set(clearable.map((entry) => entry.textId)).size;
+  const clearListed = async () => {
     setNotice(undefined);
     const unsaved = await edits.flush();
     if (unsaved) return setNotice({ text: unsaved, failed: true });
@@ -365,17 +371,26 @@ function Text({
               </Button>
             ))}
           </ButtonGroup>
-          {show === "flagged" && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={locked || clearing || clearable.length === 0}
-              title="Clears the English a run gave the flagged entries listed here, so Translate translates them again. English you typed stays."
-              onClick={() => void clearFlagged()}
-            >
-              Clear flagged
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={locked || clearing || clearable.length === 0}
+            title="Clears the English runs gave the entries listed here, so Translate translates them again. English you typed stays."
+            onClick={() => setConfirmingClear(true)}
+          >
+            Clear listed
+          </Button>
+          <ConfirmDialog
+            open={confirmingClear}
+            onOpenChange={setConfirmingClear}
+            title={`Clear the English of ${counted(clearableTexts, "text", "texts")}?`}
+            keep="Keep it"
+            confirm="Clear"
+            onConfirm={() => void clearListed()}
+          >
+            Runs gave this English to the entries listed here. Places elsewhere with the same text
+            lose it too. English you typed stays.
+          </ConfirmDialog>
           {notice && (
             <p
               role="status"
