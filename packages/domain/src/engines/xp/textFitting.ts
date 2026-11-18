@@ -1,24 +1,25 @@
 /**
- * A script that fits English into the space an XP game gives its text, measured with whatever
- * font the game draws in. Text drawn into a box gets a smaller font when it is wider than the
- * box or the bitmap's edge, down to 3/5 of its size, below which the engine squeezes it. Games
- * often give a label a box wider than the gap before what they draw next on its row, so left-aligned
- * text is drawn only when something else touches its place, the bitmap is read or the frame is
- * shown, and then fits the gap before whatever starts to its right. Right-aligned or centred text,
- * such as a number games draw into the same box as its label, starts where its ink does, before
- * or after the label is drawn. A draw a few pixels from it,
- * as for an outline, is the same label. Only a draw across its middle row draws it first: a gauge
- * along the bottom of a row then goes under the text instead of over it. Copying a bitmap whole carries its waiting text along, as
+ * A script that fits English into the space an XP game gives its text, measured with whatever font
+ * the game draws in. Text drawn into a box gets a smaller font when it is wider than the box or the
+ * bitmap's edge, down to 3/5 of its size, below which the engine squeezes it. Games often give a
+ * label a box wider than the gap before what they draw next on its row, so left-aligned text is
+ * drawn only when something else touches its place, the bitmap is read or the frame is shown, and
+ * then fits the gap before whatever starts to its right, unless that starts within a few pixels of
+ * the text's end, as the next part of a line drawn piece by piece does. Right-aligned or centred
+ * text, such as a number games draw into the same box as its label, starts where its ink does,
+ * before or after the label is drawn. A draw a few pixels from it, as for an outline, is the same
+ * label. Only a draw across its middle row draws it first: a gauge along the bottom of a row then
+ * goes under the text instead of over it. Copying a bitmap whole carries its waiting text along, as
  * games draw a label with its icon into a bitmap of its own and copy that next to the others. A
- * message whose line is too wide, or which has more than four rows, has its lines up to its
- * choices or number input broken again between words before the game draws it, a line that ends
- * in a space, as applying breaks a long line, joining the next one first; rows after the fourth
- * show as the next page, when the player goes on. Lines may be as wide as the screen, since some
- * message windows widen to fit their text. The first time the window doesn't, the message is
- * broken to the window's width and drawn again, and later ones are broken to that width from the
- * start: a game that logs messages as it draws them logs that one message twice. A message whose
- * choices or number input would fall below the fourth row stays as it is. It is written for
- * Ruby 1.8, which `Game.exe` runs, and later.
+ * message whose line is too wide, or which has more than four rows, has its lines up to its choices
+ * or number input broken again between words before the game draws it, a line that ends in a space,
+ * as applying breaks a long line, joining the next one first; rows after the fourth show as the
+ * next page, when the player goes on. Lines may be as wide as the screen, since some message
+ * windows widen to fit their text. The first time the window doesn't, the message is broken to the
+ * window's width and drawn again, and later ones are broken to that width from the start: a game
+ * that logs messages as it draws them logs that one message twice. A message whose choices or
+ * number input would fall below the fourth row stays as it is. It is written for Ruby 1.8, which
+ * `Game.exe` runs, and later.
  */
 export const textFittingScript = String.raw`class Bitmap
   RpgtlText = Struct.new(:x, :y, :w, :h, :top, :height, :text, :align, :wide, :room, :near, :font) unless defined?(RpgtlText)
@@ -108,7 +109,7 @@ export const textFittingScript = String.raw`class Bitmap
     starts = (@rpgtl_waiting || []).map { |other| [other.x, other.top, other.height] }
     (starts + (@rpgtl_placed || [])).each do |x, top, height|
       next unless rpgtl_rows?(top, height, item.top, item.height)
-      item.room = x - item.x if x > item.x + item.near && x < item.x + item.room
+      item.room = x - item.x if rpgtl_cuts?(item, x)
     end
     if @rpgtl_waiting.nil? || @rpgtl_waiting.empty?
       @rpgtl_waiting = []
@@ -186,8 +187,12 @@ export const textFittingScript = String.raw`class Bitmap
     return if @rpgtl_waiting.nil?
     @rpgtl_waiting.each do |item|
       next unless rpgtl_rows?(item.top, item.height, top, height)
-      item.room = x - item.x if x > item.x + item.near && x < item.x + item.room
+      item.room = x - item.x if rpgtl_cuts?(item, x)
     end
+  end
+
+  def rpgtl_cuts?(item, x)
+    x > item.x + item.near && x < item.x + item.room && x < item.x + item.wide - item.near / 3
   end
 
   def rpgtl_unplace(x, y, w, h)
