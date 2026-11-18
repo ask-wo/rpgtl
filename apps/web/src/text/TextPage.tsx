@@ -40,9 +40,16 @@ import {
   placeLabel,
   type Shown,
   type ShownContext,
+  type SearchedText,
   type TextSearch,
   textEntries,
 } from "./search.ts";
+
+const searchedTexts: ReadonlyArray<{ readonly within: SearchedText; readonly label: string }> = [
+  { within: "both", label: "Both" },
+  { within: "original", label: "Original" },
+  { within: "english", label: "English" },
+];
 
 const filters: ReadonlyArray<{
   readonly show: Shown;
@@ -152,6 +159,7 @@ function Text({
     search.place,
     search.area,
     search.show,
+    search.within,
     search.q?.trim().toLowerCase(),
   ]);
   const [shownView, setShownView] = useState(view);
@@ -226,15 +234,16 @@ function Text({
     translates: runTranslates(saved.settings),
   };
   const wanted = query.trim().toLowerCase();
+  const within = search.within ?? "both";
   const text = textEntries(saved);
-  const searched = text.filter((entry) => matches(entry, wanted));
+  const searched = text.filter((entry) => matches(entry, wanted, within));
   const listed = searched.filter((entry) => isShown(entry, show, context));
   const shown = text.filter(
     (entry) =>
       inSelection(entry, selection) &&
       (kept.has(entry.id) ||
         errors.has(entry.id) ||
-        (matches(entry, wanted) && isShown(entry, show, context))),
+        (matches(entry, wanted, within) && isShown(entry, show, context))),
   );
   const pages = Math.max(1, Math.ceil(shown.length / pageSize));
 
@@ -324,6 +333,19 @@ function Text({
             value={query}
             onChange={(event) => searchFor(event.target.value)}
           />
+          <ButtonGroup aria-label="Search in" className="shrink-0">
+            {searchedTexts.map((option) => (
+              <Button
+                key={option.within}
+                variant={option.within === within ? "secondary" : "outline"}
+                size="sm"
+                aria-pressed={option.within === within}
+                onClick={() => onSearch(changedSearch(search, { within: option.within }))}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </ButtonGroup>
           <ButtonGroup aria-label="Show" className="shrink-0">
             {filters.map((filter) => (
               <Button

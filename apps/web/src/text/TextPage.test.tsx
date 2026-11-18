@@ -204,6 +204,27 @@ test("the tree lists the game's text files by area, and a file or a search narro
   await expect.element(page.getByText("1 entry · page 1 of 1")).toBeVisible();
 });
 
+test("a search can look only in the original or only in the English", async () => {
+  const server = fakeServer();
+  const searches = showText({ q: "potion" });
+  server.activity(idle);
+  const searchIn = page.getByRole("group", { name: "Search in" });
+  await expect.element(tree().getByRole("button", { name: "All files 1" })).toBeVisible();
+
+  await searchIn.getByRole("button", { name: "Original" }).click();
+  expect(searches.at(-1)).toEqual({ q: "potion", within: "original" });
+  await expect.element(entries().getByText("药水")).not.toBeInTheDocument();
+  await page.getByRole("searchbox", { name: "Search the text" }).fill("药水");
+  await expect.element(entries().getByText("药水")).toBeVisible();
+
+  await searchIn.getByRole("button", { name: "English" }).click();
+  expect(searches.at(-1)).toEqual({ q: "药水", within: "english" });
+  await expect.element(entries().getByText("药水")).not.toBeInTheDocument();
+
+  await searchIn.getByRole("button", { name: "Both" }).click();
+  expect(searches.at(-1)).toEqual({ q: "药水" });
+});
+
 test("an edit saves once typing pauses, and stays listed while it leaves the filter", async () => {
   const server = fakeServer();
   const searches = showText();
@@ -327,7 +348,7 @@ test("Changed shows only the entries whose English differs from before clearing,
     .not.toBeInTheDocument();
 });
 
-test("a cleared line offers its English from before clearing, which a search finds", async () => {
+test("a cleared line offers its English from before clearing, which a search of both finds", async () => {
   const server = fakeServer();
   server.catalog = catalogOf([
     ...savedEntries,
@@ -341,6 +362,10 @@ test("a cleared line offers its English from before clearing, which a search fin
     .element(page.getByRole("textbox", { name: "English for 你好" }))
     .not.toBeInTheDocument();
   await expect.element(row.getByText("Before clearing:", { exact: false })).toBeVisible();
+  const searchIn = page.getByRole("group", { name: "Search in" });
+  await searchIn.getByRole("button", { name: "English" }).click();
+  await expect.element(row).not.toBeInTheDocument();
+  await searchIn.getByRole("button", { name: "Both" }).click();
   await row.getByRole("button", { name: "Use the old one" }).click();
   await vi.waitFor(() =>
     expect(server.saves).toEqual([[{ id: "7", userTranslation: "Good night" }]]),

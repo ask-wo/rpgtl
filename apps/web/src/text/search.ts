@@ -24,11 +24,15 @@ export const Shown = Schema.Literals([
 ]);
 export type Shown = typeof Shown.Type;
 
+export const SearchedText = Schema.Literals(["both", "original", "english"]);
+export type SearchedText = typeof SearchedText.Type;
+
 /** What the Text page shows, kept in its address: a place or an area, a search and a filter. */
 export const TextSearch = Schema.Struct({
   place: Schema.optionalKey(Schema.String),
   area: Schema.optionalKey(Area),
   q: Schema.optionalKey(Schema.String),
+  within: Schema.optionalKey(SearchedText),
   show: Schema.optionalKey(Shown),
 });
 export type TextSearch = typeof TextSearch.Type;
@@ -42,11 +46,12 @@ export const changedSearch = (
   search: TextSearch,
   change: { readonly [K in keyof TextSearch]?: TextSearch[K] | undefined },
 ): TextSearch => {
-  const { place, area, q, show } = { ...search, ...change };
+  const { place, area, q, within, show } = { ...search, ...change };
   return {
     ...(place !== undefined && { place }),
     ...(area !== undefined && { area }),
     ...(q !== undefined && q !== "" && { q }),
+    ...(within !== undefined && within !== "both" && { within }),
     ...(show !== undefined && show !== "all" && { show }),
   };
 };
@@ -160,9 +165,12 @@ export const isShown = (entry: EntryText, show: Shown, context: ShownContext) =>
   }
 };
 
-/** Whether the entry's original, English or English from before clearing holds the search, ignoring case. */
-export const matches = (entry: EntryText, query: string) =>
+/**
+ * Whether the entry holds the search, ignoring case. Both looks in its original, its English and its
+ * English from before clearing.
+ */
+export const matches = (entry: EntryText, query: string, within: SearchedText) =>
   !query ||
-  entry.source.toLowerCase().includes(query) ||
-  translationInUse(entry).toLowerCase().includes(query) ||
-  (entry.previousTranslation ?? "").toLowerCase().includes(query);
+  (within !== "english" && entry.source.toLowerCase().includes(query)) ||
+  (within !== "original" && translationInUse(entry).toLowerCase().includes(query)) ||
+  (within === "both" && (entry.previousTranslation ?? "").toLowerCase().includes(query));
