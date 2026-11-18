@@ -7,10 +7,11 @@ The Text page lists the game's text (everything but the text in images) with eac
 - `text-type` typing into an entry saves it once typing pauses; the header says "Saving…", then "All changes saved", and the sidebar's Text count (text entries with English, as `<done>/<all>` until all have it) and the run bar's counts follow.
 - `text-control-codes` English that drops one of the original's control codes is refused: the entry and the header say why, and the catalog keeps the old English.
 - `text-tree` **All files**, the areas that hold text (Maps, Database, System, Plugins, and an XP game's Scripts) and their files, each with how many entries the filter and search show; a map file shows its map's name.
-- `text-search` the search box looks through the originals, the English and the previous English of the selection.
+- `text-search` the search box looks through the originals, the English and the previous English of the selection; **Search in** narrows it to **Original** or to **English** (the current English only).
 - `text-filter` **All**, **Untranslated**, **Failed**, **Last run**, **Changed** (English that differs from before clearing) and **Flagged**, each with its count; Previous and Next page through 50 entries at a time.
 - `text-suggestion` an entry whose last answer was rejected shows it with **Use**; one the last run changed shows its English before the run with **Use the old one**.
-- `text-flagged` **Flagged** lists translations a check (`pnpm run audit`'s) or a run flagged, each with `Check: …`; editing the English clears it. **Clear flagged** (`POST /api/entries/clear`) clears the English runs gave the flagged entries listed, keeping English the user typed, so **Translate** translates them again.
+- `text-flagged` **Flagged** lists translations a check (`pnpm run audit`'s) or a run flagged, each with `Check: …`; editing the English clears it.
+- `text-clear` **Clear listed** asks with the number of texts, then (`POST /api/entries/clear`) clears the English runs gave the entries the selection, search and filter list, keeping English the user typed, so **Translate** translates them again.
 - `text-address` the place or area, search and filter are in the address (`?place=items&q=potion&show=untranslated`), so a reload keeps them.
 - `text-failed-link` after a run with failed text entries, the run bar's **Show the N failed text entries** opens the page on Failed.
 - `text-locked` the English can't be edited while a run goes.
@@ -25,7 +26,7 @@ The Text page lists the game's text (everything but the text in images) with eac
 
 Preconditions:
 
-- Fixture game open, translation switch on (`label[for="translate-game"]`). `examples/text.ts` is a complete, passing steps file for `text-type`, `text-control-codes`, `text-tree`, `text-search`, `text-filter`, `text-flagged` and `text-address`.
+- Fixture game open, translation switch on (`label[for="translate-game"]`). `examples/text.ts` is a complete, passing steps file for `text-type`, `text-control-codes`, `text-tree`, `text-search`, `text-filter`, `text-flagged` and `text-address`; it leaves out **Search in** and `text-clear`.
 
 - **Type.** `page.fill('textarea[aria-label="English for 这把剑很重，你要小心。"]', …)`, wait until `$RUN/state/games/<id>/game.db` holds it (`examples/saved.ts`), then for "All changes saved". The database gains one `edit` operation, and `fetch(run.url + "/game/<id>/data/CommonEvents.json")` serves the English.
 - **Control codes.** Fill the `Recover \V[1] HP.` box without `\V[1]`: the page shows "Keep the original's RPG Maker control codes…" and the catalog's entry stays empty.

@@ -124,6 +124,19 @@ begin
     (label_first ? draws : draws.reverse).each(&:call)
     { "label" => rightmost(b, RED), "number" => leftmost(b, GREEN) }
   end
+  named = [false, true].map do |settled_first|
+    b = red_bitmap(300)
+    w = b.text_size("Brindle Salve").width
+    b.draw_frame_text(0, 0, w + 8, 32, "Brindle Salve")
+    b.get_pixel(0, 0) if settled_first
+    b.font.color = Color.new(0, 255, 0)
+    b.draw_frame_text(1 + w, 0, 40, 32, "C")
+    [b, w]
+  end
+  same = lambda { |a, c| [a.red, a.green, a.blue, a.alpha] == [c.red, c.green, c.blue, c.alpha] }
+  r["textAfterName"] = (0...named[0][1] - 4).count do |x|
+    (0...32).any? { |y| !same.call(named[0][0].get_pixel(x, y), named[1][0].get_pixel(x, y)) }
+  end
   b = red_bitmap(300)
   b.draw_text(0, 0, 300, 32, "Room to spare")
   r["alone"] = { "natural" => b.text_size("Room to spare").width, "right" => rightmost(b, RED) }
@@ -170,6 +183,7 @@ const Report = Schema.Struct({
   overGauge: Fitted,
   copied: Schema.Tuple([Schema.Int, Schema.Int, Schema.Int]),
   alone: Fitted,
+  textAfterName: Schema.Int,
   beforeNumber: Schema.Array(Schema.Struct({ label: Schema.Int, number: Schema.Int })),
   choicesBelow: Message,
   long: Schema.Struct({
@@ -208,6 +222,7 @@ it.live.skipIf(!xvfbRun)(
       assert.isBelow(r.overGauge.right, 316);
       assert.isTrue(r.copied[0] < 160 && r.copied[1] < 288 && r.copied[2] < 416);
       assert.isAtLeast(r.alone.right, r.alone.natural - 3);
+      assert.strictEqual(r.textAfterName, 0);
       assert.lengthOf(r.beforeNumber, 2);
       for (const { label, number } of r.beforeNumber) assert.isBelow(label, number);
 
