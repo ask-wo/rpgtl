@@ -8,7 +8,7 @@ export type EntryText = Entry & Omit<Text, "id">;
 
 /** What reading a game's files gives for each entry, before it has a text. */
 export type ReadEntry = Pick<EntryText, "id" | "location" | "source"> &
-  Partial<Pick<EntryText, "speaker" | "builtinTranslation">>;
+  Partial<Pick<EntryText, "speaker" | "builtinTranslation" | "code">>;
 
 /** The catalog's texts by id. */
 export const textsById = ({ texts }: Pick<Catalog, "texts">) =>

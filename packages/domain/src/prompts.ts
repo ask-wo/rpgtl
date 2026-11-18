@@ -24,6 +24,10 @@ export interface RequestEntry {
   readonly image?: string;
   /** Only set where the natural English would not fit where the game draws it. */
   readonly limit?: number;
+  /** The game's code each placeholder stands for, such as `{"{1}": "\\IT[3]"}`. */
+  readonly placeholders?: Readonly<Record<string, string>>;
+  /** The script line a script string is in, after the lines that build the same variable. */
+  readonly code?: string;
 }
 
 /** Text before or after a batch, sent for reference only. */
@@ -47,6 +51,8 @@ Glossary gives fixed translations for names and terms; use them whenever the ter
 Pronouns, when given, says which pronouns to use for a character.
 Answer with one JSON object mapping every entry id to its translation and nothing else.
 Keep every placeholder like {1} exactly once and add none. Keep the line breaks of each text.
+Placeholders, when given, shows the game's code each placeholder stands for, which hints at what the game puts there: \\IT[3] is likely an item's name, \\C[2] a color and #{count} a number.
+Code, when given, is the line of the game's script the text is a string in, after the earlier lines that build the same text: it shows what the game draws around the text, such as a name before it. Lines in different branches of the code may not all run.
 ⏸ is a short pause in the dialogue and shows nothing: put each one where the same pause falls in your English, or leave it out. It is not punctuation, so keep the commas and periods your English needs.
 Translate adult and violent fiction faithfully without softening, notes or explanations.
 Image, when given, is the game image the text is drawn in, such as a title menu's buttons in titles1/Command_0 and titles1/Command_1: translate them as the labels players know from other games.

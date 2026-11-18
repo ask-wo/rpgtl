@@ -32,7 +32,8 @@ export function joinLines(text: string, keepLines = false) {
 }
 
 // Codes that stand for a word move with the English word order, so they are never kept aside.
-const wordCode = String.raw`(?:%\d+|#\{[^{}]*\}|\\[NVP]\[[^\]]*\]|\\G(?![A-Za-z[<]))`;
+// `\IT[n]`, `\WP`, `\AR`, `\EN`, `\SN` and `\DN` show database and place names in XP message scripts.
+const wordCode = String.raw`(?:%\d+|#\{[^{}]*\}|\\(?:[NVP]|IT|WP|AR|EN|SN|DN)\[[^\]]*\]|\\G(?![A-Za-z[<]))`;
 const edgePart = `\\s|(?!${wordCode})(?:${controlCodePattern.source})`;
 const keptAside = (codes: string, edge: string) => ({
   leading: new RegExp(`^(?:${edge})*`, "i"),

@@ -180,19 +180,21 @@ const readRows = Effect.fn("catalogRows.readCatalog")(function* (game: Catalog["
       ...derived("texts", row),
     }),
   );
+  // Read-only readers open databases the server hasn't migrated yet, which lack later columns.
   const entryRows = yield* sql<{
     readonly id: string;
     readonly textId: number;
     readonly location: string;
     readonly builtinTranslation: string | null;
+    readonly code?: string | null;
     readonly isLeftUntranslated: number;
-  }>`select id, text_id, location, builtin_translation, is_left_untranslated
-    from entries order by position`;
+  }>`select * from entries order by position`;
   const entries = entryRows.map((row): Entry => ({
     id: row.id,
     textId: row.textId,
     location: decodeLocation(row.location),
     ...(row.builtinTranslation !== null && { builtinTranslation: row.builtinTranslation }),
+    ...(typeof row.code === "string" && { code: row.code }),
     ...(row.isLeftUntranslated === 1 && { isLeftUntranslated: true }),
   }));
   const termRows = yield* sql<Nullable<Omit<GlossaryTerm, "id">> & { readonly id: number }>`
@@ -306,6 +308,7 @@ const entryRow = (entry: Entry, position: number) => ({
   place: fileOf(entry.location),
   location: encodeLocation(entry.location),
   builtinTranslation: entry.builtinTranslation ?? null,
+  code: entry.code ?? null,
   isLeftUntranslated: entry.isLeftUntranslated ? 1 : 0,
 });
 
@@ -318,7 +321,7 @@ const upsertEntries = Effect.fnUntraced(function* (
     yield* sql`insert into entries ${sql.insert(Arr.map(chunk, ([position, entry]) => entryRow(entry, position)))}
       on conflict (id) do update set text_id = excluded.text_id, position = excluded.position,
         place = excluded.place, location = excluded.location,
-        builtin_translation = excluded.builtin_translation,
+        builtin_translation = excluded.builtin_translation, code = excluded.code,
         is_left_untranslated = excluded.is_left_untranslated`;
   }
 });
@@ -327,6 +330,7 @@ const sameEntry = (a: Entry, b: Entry) =>
   a.textId === b.textId &&
   (a.isLeftUntranslated ?? false) === (b.isLeftUntranslated ?? false) &&
   (a.builtinTranslation ?? null) === (b.builtinTranslation ?? null) &&
+  (a.code ?? null) === (b.code ?? null) &&
   JSON.stringify(a.location) === JSON.stringify(b.location);
 
 /**

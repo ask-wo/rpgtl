@@ -194,6 +194,10 @@ export function batchRequest(
       text: item.text,
       ...(isImageText(item.entry) && { image: item.entry.location.image.replace(imagePath, "") }),
       ...(limit !== undefined && { limit }),
+      ...(item.codes.length > 0 && {
+        placeholders: Object.fromEntries(item.codes.map((code, at) => [`{${at + 1}}`, code])),
+      }),
+      ...(item.entry.code !== undefined && { code: item.entry.code }),
     };
   });
   return { context, entries };
