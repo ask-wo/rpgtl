@@ -1,6 +1,6 @@
 // The Text page: typed English saves itself as one edit and reaches the game's data, an edit
 // without its control codes is refused and not written, the tree, search and filters narrow the
-// list and stay over a reload, and Flagged shows a check's note.
+// list and stay over a reload, and Problems shows a check's note.
 import { keepDatabase, savedCatalog } from "./saved.ts";
 
 const until = async (what: string, check: () => boolean) => {
@@ -95,13 +95,13 @@ export default async ({ page, api, run, log }: any) => {
   );
   await page.click('[aria-label="Search the text"]');
   await page.waitUntil(
-    `[...document.querySelectorAll("button")].some((b) => b.textContent === "Flagged1")`,
+    `[...document.querySelectorAll("button")].some((b) => b.textContent === "Problems1")`,
   );
-  await page.clickText("Flagged1");
+  await page.clickText("Problems1");
   await page.waitUntil(
     `document.body.textContent.includes("Check: source text left. Editing the English clears this.")`,
   );
   log(`checks: ${JSON.stringify(await api(`checks?id=${id}`))}`);
-  await page.shot("flagged");
+  await page.shot("problems");
   keepDatabase(run.state, id, run.evidence);
 };

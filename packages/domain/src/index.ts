@@ -1,4 +1,5 @@
 export * from "./checks.ts";
+export * from "./flags.ts";
 export * from "./catalogChange.ts";
 export * from "./controlCodes.ts";
 export * from "./glossaryOrder.ts";

@@ -7,6 +7,8 @@ import {
   isImageText,
   isUserTranslation,
   Place,
+  type FlagLevel,
+  translationFlags,
   translationInUse,
 } from "@rpgtl/domain";
 
@@ -20,7 +22,8 @@ export const Shown = Schema.Literals([
   "failed",
   "last-run",
   "changed",
-  "flagged",
+  "problems",
+  "warnings",
 ]);
 export type Shown = typeof Shown.Type;
 
@@ -122,14 +125,18 @@ export const placeLabel = (place: Place, maps: ReadonlyMap<number, string>) =>
     Script: ({ script, name }) => `Script · ${name.trim() || script + 1}`,
   });
 
-/** Why an accepted translation is worth a look: its run's flag and what the checks found. */
-export const checkNotes = (entry: EntryText, findings: Findings) =>
-  [
+/** Why an accepted translation is worth a look: its run's flags and what the checks found. */
+const flagsOf = (entry: EntryText, findings: Findings) =>
+  translationFlags(
     isUserTranslation(entry) ? undefined : entry.flagReason,
-    ...(findings[entry.id] ?? []).map(({ check, detail }) =>
-      detail ? `${check} (${detail})` : check,
-    ),
-  ].filter((note): note is string => note !== undefined && note !== "");
+    findings[entry.id] ?? [],
+  );
+
+export const checkNotes = (entry: EntryText, findings: Findings) =>
+  flagsOf(entry, findings).map(({ note }) => note);
+
+const isFlagged = (entry: EntryText, findings: Findings, level: FlagLevel) =>
+  !!translationInUse(entry) && flagsOf(entry, findings).some((flag) => flag.level === level);
 
 /** What a filter needs to know beyond the entry itself. */
 export interface ShownContext {
@@ -160,8 +167,10 @@ export const isShown = (entry: EntryText, show: Shown, context: ShownContext) =>
       return context.lastRun !== undefined && entry.modelOperationId === context.lastRun;
     case "changed":
       return isChanged(entry);
-    case "flagged":
-      return !!translationInUse(entry) && checkNotes(entry, context.findings).length > 0;
+    case "problems":
+      return isFlagged(entry, context.findings, "problem");
+    case "warnings":
+      return isFlagged(entry, context.findings, "warning");
   }
 };
 
