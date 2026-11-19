@@ -270,10 +270,12 @@ export function translationChecks(
     if (lengthUnlike(source, translation)) add("length unlike the source");
     const sourceText = plainText(source);
     const text = plainText(translation);
-    for (const term of termsIn(sourceText, nearTerms(sourceText)).filter((found) =>
-      isName.has(found),
+    // An XP item's English may put a name in brackets, which read as tags: "[Vega]".
+    const whole = plainText(written);
+    for (const term of termsIn(sourceText, nearTerms(sourceText)).filter(
+      (found) => isName.has(found) && isWord(sourceText, found.source),
     ))
-      if (!mentions(text, translationInUse(term)))
+      if (!mentions(text, translationInUse(term)) && !mentions(whole, translationInUse(term)))
         add("glossary name missing", `${term.source} → ${translationInUse(term)}`);
     // In Japanese, 他 means other (他の人).
     const pronoun = language === "chinese" ? pronounUnlike(sourceText, translation) : undefined;

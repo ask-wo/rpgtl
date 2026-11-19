@@ -36,6 +36,22 @@ it("A glossary name counts as missing only when no part or form of it is in the 
   assert.deepStrictEqual(line("블랙토키가 웃었다.", "Black Toque smiled."), []);
 });
 
+it("A katakana name inside a longer katakana word, or in an XP item's brackets, isn't missing", () => {
+  const xp = translationChecks(
+    [testTerm("ベガ", { userTranslation: "Vega", rulesKind: "name" })],
+    "japanese",
+    "XP",
+  );
+  const item = { _tag: "RecordField", table: "items", record: 1, field: "description" } as const;
+  const found = (source: string, translation: string) =>
+    xp({ location: item, source }, translation).map((finding) => finding.check);
+  assert.deepStrictEqual(found("スベガルの杖。", "The staff of Svegal."), []);
+  assert.deepStrictEqual(found("【ベガ】として使う。", "Use it as [Vega]."), []);
+  assert.deepStrictEqual(found("【ベガ】として使う。", "Use it as [Rigel]."), [
+    "glossary name missing",
+  ]);
+});
+
 it("Pronouns count as unlike the source only against a lone 她 or 他", () => {
   assert.deepStrictEqual(line("她笑了。", "He smiled."), ["pronoun unlike the source"]);
   assert.deepStrictEqual(line("他笑了。", "She smiled."), ["pronoun unlike the source"]);
