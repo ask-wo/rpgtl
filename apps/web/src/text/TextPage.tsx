@@ -66,7 +66,12 @@ const filters: ReadonlyArray<{
   },
   { show: "last-run", label: "Last run", does: "Entries the last run translated" },
   { show: "changed", label: "Changed", does: "Entries whose English differs from before clearing" },
-  { show: "flagged", label: "Flagged", does: "Translations a check found worth a look" },
+  { show: "problems", label: "Problems", does: "Translations a check found a problem in" },
+  {
+    show: "warnings",
+    label: "Warnings",
+    does: "Translations a check found something odd in, which is often fine",
+  },
 ];
 
 /** How many entries a page of the list holds. */

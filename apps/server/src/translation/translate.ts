@@ -8,6 +8,7 @@ import {
   checkAnswer,
   type RunEntry,
   isSuggestible,
+  shortenedToFit,
   kindQuestion,
   isNameEntry,
   nameGroups,
@@ -360,7 +361,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
           );
           if (second._tag === "Success" && shownLength(second.success.translation) <= limit)
             draft.accept(item, second.success.translation, {
-              flag: ["shortened to fit its image", second.success.flag].filter(Boolean).join("; "),
+              flag: [shortenedToFit, second.success.flag].filter(Boolean).join("; "),
               long: translation,
               seedGlossary: names,
             });

@@ -239,7 +239,7 @@ test("an edit saves once typing pauses, and stays listed while it leaves the fil
   await expect.element(page.getByRole("button", { name: "Untranslated 1" })).toBeVisible();
   await expect.element(box).toHaveValue("Start 开始");
   // The checks are read again once the edit saved.
-  await expect.element(page.getByRole("button", { name: "Flagged 2" })).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Problems 1" })).toBeVisible();
 
   await box.fill("\\Start");
   await expect
@@ -285,7 +285,7 @@ test("keeping a script's string as it is saves apart from the English typed for 
   await expect.element(keep).toBeChecked();
 });
 
-test("Failed, Last run and Flagged show what a run or a check left on the entries", async () => {
+test("Failed, Last run, Problems and Warnings show what a run or a check left on the entries", async () => {
   const server = fakeServer();
   showText({ show: "failed" });
   const failedRun: RunStatus = {
@@ -317,7 +317,11 @@ test("Failed, Last run and Flagged show what a run or a check left on the entrie
     .element(page.getByRole("textbox", { name: "English for 再见" }))
     .toHaveValue("Farewell");
 
-  await page.getByRole("button", { name: /^Flagged/ }).click();
+  await page.getByRole("button", { name: /^Problems/ }).click();
+  await expect
+    .element(entries().getByText("Check: length unlike the source", { exact: false }))
+    .not.toBeInTheDocument();
+  await page.getByRole("button", { name: /^Warnings/ }).click();
   await expect
     .element(
       entries().getByText("Check: length unlike the source. Editing the English clears this."),
@@ -328,7 +332,7 @@ test("Failed, Last run and Flagged show what a run or a check left on the entrie
 test("Clear listed asks first, then clears the English runs gave the listed entries, not English the user typed", async () => {
   const server = fakeServer();
   server.findings = { ...server.findings, "3": [{ check: "length unlike the source" }] };
-  showText({ show: "flagged" });
+  showText({ show: "warnings" });
   server.activity(idle);
   await page.getByRole("button", { name: "Clear listed" }).click();
   const dialog = page.getByRole("alertdialog");

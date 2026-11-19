@@ -21,6 +21,9 @@ const suggestibleReasons: ReadonlyArray<RejectReason> = [
 /** Whether an answer rejected for this reason is worth showing the user to fix by hand. */
 export const isSuggestible = (reason: RejectReason) => suggestibleReasons.includes(reason);
 
+/** The flag an answer gets when its line breaks differ from its source's. */
+export const lineBreaksDiffer = "line breaks differ from the source";
+
 /** The flag an answer gets when it is longer than where the game draws it has room for. */
 export const tooLongForRoom = "longer than where the game draws it has room for";
 
@@ -136,9 +139,7 @@ export function checkAnswer(
     if (translation && !keepsControlCodes(entry.source, translation))
       return Result.fail("validation failed");
     const flags = [
-      ...(lineCount(kept) === lineCount(request.text)
-        ? []
-        : ["line breaks differ from the source"]),
+      ...(lineCount(kept) === lineCount(request.text) ? [] : [lineBreaksDiffer]),
       ...(limit !== undefined && shownLength(translation) > limit ? [tooLongForRoom] : []),
     ];
     return Result.succeed(flags.length ? { translation, flag: flags.join("; ") } : { translation });

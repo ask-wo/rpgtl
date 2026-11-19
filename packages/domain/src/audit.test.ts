@@ -85,6 +85,7 @@ it("The audit lists capitalised glossary words and each check's finds", () => {
     "glossary name missing": ["entry16"],
     "pronoun unlike the source": ["entry18"],
     "plural after a number": [],
+    "no space after a value": [],
   });
   assert.isUndefined(result.run);
 });

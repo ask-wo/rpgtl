@@ -36,6 +36,22 @@ it("A glossary name counts as missing only when no part or form of it is in the 
   assert.deepStrictEqual(line("블랙토키가 웃었다.", "Black Toque smiled."), []);
 });
 
+it("A katakana name inside a longer katakana word, or in an XP item's brackets, isn't missing", () => {
+  const xp = translationChecks(
+    [testTerm("ベガ", { userTranslation: "Vega", rulesKind: "name" })],
+    "japanese",
+    "XP",
+  );
+  const item = { _tag: "RecordField", table: "items", record: 1, field: "description" } as const;
+  const found = (source: string, translation: string) =>
+    xp({ location: item, source }, translation).map((finding) => finding.check);
+  assert.deepStrictEqual(found("スベガルの杖。", "The staff of Svegal."), []);
+  assert.deepStrictEqual(found("【ベガ】として使う。", "Use it as [Vega]."), []);
+  assert.deepStrictEqual(found("【ベガ】として使う。", "Use it as [Rigel]."), [
+    "glossary name missing",
+  ]);
+});
+
 it("Pronouns count as unlike the source only against a lone 她 or 他", () => {
   assert.deepStrictEqual(line("她笑了。", "He smiled."), ["pronoun unlike the source"]);
   assert.deepStrictEqual(line("他笑了。", "She smiled."), ["pronoun unlike the source"]);
@@ -147,4 +163,19 @@ it("a plural right after a number the game fills in is flagged, since it reads w
     line("灯笼：\\V[3]\n步数：\\V[4]", "Lanterns: \\V[3] Steps left: \\V[4]"),
     [],
   );
+});
+
+const script = (source: string, code: string, translation: string) =>
+  check(
+    { location: { _tag: "RubyScriptText", script: 1, name: "Shop", literal: 2 }, source, code },
+    translation,
+  ).map((finding) => finding.check);
+
+it("a script string appended right after a value is flagged when its English starts with a letter, since the two run together", () => {
+  const afterName = 'msg = "\\C[6]" + item.name + "\\C[0]"\nmsg += "を拾い上げた！"';
+  assert.deepStrictEqual(script("を拾い上げた！", afterName, "Picked up!"), [
+    "no space after a value",
+  ]);
+  assert.deepStrictEqual(script("を拾い上げた！", afterName, " was picked up!"), []);
+  assert.deepStrictEqual(script("なし", 'msg = "所持品："\nmsg += "なし"', "None"), []);
 });
