@@ -56,8 +56,11 @@ const filters: ReadonlyArray<{
 ];
 
 /** Whether the user set any of the term's values. */
-const isCustom = ({ userTranslation, userKind, userPronoun }: GlossaryTerm) =>
-  userTranslation !== undefined || userKind !== undefined || userPronoun !== undefined;
+const isCustom = ({ userTranslation, userKind, userPronoun, userNote }: GlossaryTerm) =>
+  userTranslation !== undefined ||
+  userKind !== undefined ||
+  userPronoun !== undefined ||
+  userNote !== undefined;
 
 /** An id for a term the user adds, below 0 and below every other new term's until it is saved. */
 const newTermId = (glossary: ReadonlyArray<GlossaryTerm>) =>

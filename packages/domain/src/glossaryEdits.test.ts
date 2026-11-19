@@ -3,6 +3,7 @@ import type { Catalog, GlossaryTerm } from "@rpgtl/contracts";
 import * as Result from "effect/Result";
 import {
   newEntry,
+  requestGlossary,
   termEdit,
   translationInUse,
   withGlossary,
@@ -111,6 +112,17 @@ it("a saved glossary drops the pronoun of a term that is no longer a character",
     withGlossary(catalog, [{ source: "阿琳", userKind: "name", userPronoun: "she" }]),
   );
   assert.deepStrictEqual(saved.glossary, [{ ...arlene, userKind: "name" }]);
+});
+
+it("a term's note is saved trimmed, goes with the term to the model, and is dropped when blank", () => {
+  const noted = Result.getOrThrow(
+    withGlossary(catalog, [{ ...termEdit(arlene), userNote: "  Plural: Arlenes " }]),
+  );
+  assert.deepStrictEqual(requestGlossary(noted.glossary, [{ text: "阿琳来了" }]), [
+    { source: "阿琳", translation: "Arlene", note: "Plural: Arlenes" },
+  ]);
+  const blank = Result.getOrThrow(withGlossary(noted, [{ source: "阿琳", userNote: " " }]));
+  assert.deepStrictEqual(blank.glossary, [arlene]);
 });
 
 it("a saved term keeps its run's values beside the user's, and without them goes back to the run's", () => {

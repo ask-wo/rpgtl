@@ -49,11 +49,13 @@ export const termEdit = ({
   userTranslation,
   userKind,
   userPronoun,
+  userNote,
 }: GlossaryTerm): TermEdit => ({
   source,
   ...(userTranslation !== undefined && { userTranslation }),
   ...(userKind !== undefined && { userKind }),
   ...(userPronoun !== undefined && { userPronoun }),
+  ...(userNote !== undefined && { userNote }),
 });
 
 /**
@@ -68,9 +70,15 @@ export function savedTerm(
   newId: number,
 ): GlossaryTerm {
   const typed = edit.userTranslation?.trim();
+  const note = edit.userNote?.trim();
   const before: GlossaryTerm = saved ?? { id: newId, source: edit.source, rulesKind: "name" };
   const { userTranslation: _, ...untyped } = before;
-  const { userKind: __, userPronoun: ___, ...kept } = typed === "" ? cleared(before) : untyped;
+  const {
+    userKind: __,
+    userPronoun: ___,
+    userNote: ____,
+    ...kept
+  } = typed === "" ? cleared(before) : untyped;
   const values = typed ? Struct.omit(kept, ["previousTranslation"]) : kept;
   return withoutStrayPronoun({
     ...values,
@@ -78,6 +86,7 @@ export function savedTerm(
     ...(typed && { userTranslation: typed }),
     ...(edit.userKind !== undefined && { userKind: edit.userKind }),
     ...(edit.userPronoun !== undefined && { userPronoun: edit.userPronoun }),
+    ...(note && { userNote: note }),
   });
 }
 

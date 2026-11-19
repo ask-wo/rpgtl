@@ -11,8 +11,9 @@ export const textColumns = [
   "userTranslation",
 ] as const satisfies ReadonlyArray<keyof Text>;
 
-/** The columns of `glossary` that runs and the user write. */
-export const termColumns = [
+// The first migration has already run in players' databases, so its statements must stay as they
+// are: it gets the glossary columns it had, and later columns get triggers in their own migration.
+const firstTermColumns = [
   "source",
   "modelTranslation",
   "userTranslation",
@@ -26,15 +27,17 @@ export const termColumns = [
   "userPronoun",
 ] as const satisfies ReadonlyArray<keyof GlossaryTerm>;
 
+/** The columns of `glossary` that runs and the user write. */
+export const termColumns = [...firstTermColumns, "userNote"] as const satisfies ReadonlyArray<
+  keyof GlossaryTerm
+>;
+
 /** The columns of `glossary` whose changes `changes` doesn't record. */
 const untrackedTermColumns: ReadonlySet<string> = new Set(["source", "sheClues", "heClues"]);
 
-const trackedColumns = {
-  texts: textColumns.map(String.camelToSnake),
-  glossary: termColumns
-    .filter((column) => !untrackedTermColumns.has(column))
-    .map(String.camelToSnake),
-};
+const tracked = (columns: ReadonlyArray<string>) =>
+  columns.filter((column) => !untrackedTermColumns.has(column)).map(String.camelToSnake);
+const trackedColumns = { texts: tracked(textColumns), glossary: tracked(termColumns) };
 
 const kinds = (column: string, values: ReadonlyArray<string>) =>
   `check (${column} in (${values.map((value) => `'${value}'`).join(", ")}))`;
@@ -112,44 +115,48 @@ create index changes_operation on changes (operation_id);
 create index changes_value on changes (table_name, row_id, column_name);
 `;
 
-const rowJson = (table: keyof typeof trackedColumns, row: "old" | "new") =>
-  `json_object(${(
-    {
-      texts: ["source", "speaker", "is_in_image", ...trackedColumns.texts],
-      glossary: ["source", ...trackedColumns.glossary, "she_clues", "he_clues"],
-    } satisfies Record<keyof typeof trackedColumns, ReadonlyArray<string>>
-  )[table]
+type Table = keyof typeof trackedColumns;
+
+const rowJson = (table: Table, columns: ReadonlyArray<string>, row: "old" | "new") =>
+  `json_object(${(table === "texts"
+    ? ["source", "speaker", "is_in_image", ...columns]
+    : ["source", ...columns, "she_clues", "he_clues"]
+  )
     .map((column) => `'${column}', ${row}.${column}`)
     .join(", ")})`;
 
 // A trigger, unlike each write path, can't forget to record a change. A new text without any
 // translation, as reading the game makes thousands of, isn't one. A delete can only name the row's
 // `last_operation_id`, so deleting a row sets it to the deleting operation first.
-const triggers = (["texts", "glossary"] as const).flatMap((table) => {
-  const columns = trackedColumns[table];
+const rowTriggers = (table: Table, columns: ReadonlyArray<string>) => {
   const anyValue = columns.map((column) => `new.${column} is not null`).join(" or ");
   return [
     `create trigger ${table}_inserted after insert on ${table}
      ${table === "texts" ? `when ${anyValue}` : ""}
      begin
        insert into changes (operation_id, table_name, row_id, new_value)
-       values (new.last_operation_id, '${table}', new.id, ${rowJson(table, "new")});
+       values (new.last_operation_id, '${table}', new.id, ${rowJson(table, columns, "new")});
      end`,
     `create trigger ${table}_deleted after delete on ${table}
      begin
        insert into changes (operation_id, table_name, row_id, old_value)
-       values (old.last_operation_id, '${table}', old.id, ${rowJson(table, "old")});
+       values (old.last_operation_id, '${table}', old.id, ${rowJson(table, columns, "old")});
      end`,
-    ...columns.map(
-      (column) => `create trigger ${table}_${column}_changed after update of ${column} on ${table}
-       when old.${column} is not new.${column}
-       begin
-         insert into changes (operation_id, table_name, row_id, column_name, old_value, new_value)
-         values (new.last_operation_id, '${table}', new.id, '${column}', old.${column}, new.${column});
-       end`,
-    ),
   ];
-});
+};
+
+const columnTrigger = (table: Table, column: string) =>
+  `create trigger ${table}_${column}_changed after update of ${column} on ${table}
+   when old.${column} is not new.${column}
+   begin
+     insert into changes (operation_id, table_name, row_id, column_name, old_value, new_value)
+     values (new.last_operation_id, '${table}', new.id, '${column}', old.${column}, new.${column});
+   end`;
+
+const tableTriggers = (table: Table, columns: ReadonlyArray<string>) => [
+  ...rowTriggers(table, columns),
+  ...columns.map((column) => columnTrigger(table, column)),
+];
 
 /**
  * The SQL statements that bring a game's database, `games/<game id>/game.db` in the state folder,
@@ -157,6 +164,17 @@ const triggers = (["texts", "glossary"] as const).flatMap((table) => {
  * the NW.js hook reads it.
  */
 export const gameDatabaseMigrations: Readonly<Record<string, ReadonlyArray<string>>> = {
-  "1_tables": [...tables.split(";").filter((statement) => statement.trim()), ...triggers],
+  "1_tables": [
+    ...tables.split(";").filter((statement) => statement.trim()),
+    ...tableTriggers("texts", trackedColumns.texts),
+    ...tableTriggers("glossary", tracked(firstTermColumns)),
+  ],
   "2_entry_code": ["alter table entries add column code text"],
+  "3_term_notes": [
+    "alter table glossary add column user_note text",
+    "drop trigger glossary_inserted",
+    "drop trigger glossary_deleted",
+    ...rowTriggers("glossary", trackedColumns.glossary),
+    columnTrigger("glossary", "user_note"),
+  ],
 };

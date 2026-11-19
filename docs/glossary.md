@@ -42,7 +42,7 @@ The words the code and these docs are built from. Use them in code, tests, docs 
 | Run kinds | Translation runs and image reading, which take turns across all games since both load models into the same memory (`RunKinds`). Translation runs go on together; images are read in one game at a time. A run that can't start yet **waits** for its turn, in the order runs were asked for. |
 | Pass | A part of a translation run with its own model: the **glossary pass** fills the translation glossary, then the **text pass** translates the rest with it. |
 | Batch | The entries one translation request asks about, from one scene or file. |
-| Translation glossary | A game's source terms with the English the translator must use. Not this file. |
+| Translation glossary | A game's source terms with the English the translator must use. Not this file. A term can carry a **note** the player writes, such as its plural, which requests send with the term. |
 | Term kinds | What a translation glossary term is: a **character** (the only kind with a pronoun), a **name** (any other proper name) or a **word** (an ordinary word or shared label). |
 | Checks | What a translation must pass, such as keeping its control codes and the glossary's English. A failed answer is asked again; `pnpm run audit` lists the findings left in a game. |
 | Comparison | Several translator setups run side by side on a sample of a game's entries. |

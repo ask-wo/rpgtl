@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import type { Catalog, Location, OperationKind, Text } from "@rpgtl/contracts";
+import type { Catalog, GlossaryTerm, Location, OperationKind, Text } from "@rpgtl/contracts";
 import { cleared, newEntry, withTexts, withTextOf, withUserTranslation } from "@rpgtl/domain";
 import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
@@ -177,6 +177,23 @@ it.effect(
         assert.strictEqual((yield* readBack).texts[0]?.previousTranslation, "Hello there");
       }),
     ).pipe(Effect.provide(services)),
+);
+
+it.effect("a term's note is saved and read back", () =>
+  inDatabase(
+    Effect.gen(function* () {
+      yield* writeInspected([read(0, "你好")], yield* startOperation("inspection"));
+      const before = yield* readBack;
+      const term: GlossaryTerm = {
+        id: -1,
+        source: "月蛾",
+        rulesKind: "word",
+        userNote: "plural: Moonmoths",
+      };
+      yield* writeChanged(before, { ...before, glossary: [term] }, yield* startOperation("edit"));
+      assert.deepStrictEqual((yield* readBack).glossary, [{ ...term, id: 1 }]);
+    }),
+  ).pipe(Effect.provide(services)),
 );
 
 it.effect("Use it clears nothing, and English the user cleared stays previous through a run", () =>

@@ -180,7 +180,8 @@ const readRows = Effect.fn("catalogRows.readCatalog")(function* (game: Catalog["
       ...derived("texts", row),
     }),
   );
-  // Read-only readers open databases the server hasn't migrated yet, which lack later columns.
+  // Read-only readers open databases the server hasn't migrated yet, which lack later columns, so
+  // entries and terms are read with `*`.
   const entryRows = yield* sql<{
     readonly id: string;
     readonly textId: number;
@@ -197,8 +198,10 @@ const readRows = Effect.fn("catalogRows.readCatalog")(function* (game: Catalog["
     ...(typeof row.code === "string" && { code: row.code }),
     ...(row.isLeftUntranslated === 1 && { isLeftUntranslated: true }),
   }));
-  const termRows = yield* sql<Nullable<Omit<GlossaryTerm, "id">> & { readonly id: number }>`
-    select id, ${columnList(sql, termColumns)} from glossary order by id`;
+  const termRows = yield* sql<
+    Partial<Nullable<Omit<GlossaryTerm, "id">>> &
+      Nullable<Pick<Text, "modelTranslation" | "userTranslation">> & { readonly id: number }
+  >`select * from glossary order by id`;
   const glossary = termRows.map((row) =>
     decodeTerm({
       ...present(row),
