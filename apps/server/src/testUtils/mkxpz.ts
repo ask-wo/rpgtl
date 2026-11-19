@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { applyXpTranslations, writeArchive } from "@rpgtl/domain";
+import { applyXpTranslations, type EntryText, writeArchive } from "@rpgtl/domain";
 import { rubyObject, xpFile, xpScripts } from "@rpgtl/domain/testUtils/xpGame";
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
@@ -51,6 +51,8 @@ export const playXpGame = Effect.fn("playXpGame")(function* (
     readonly main: (report: string) => string;
     readonly archived?: Readonly<Record<string, Uint8Array>>;
     readonly patched?: Readonly<Record<string, Uint8Array>>;
+    /** Entries whose English goes into its scripts. */
+    readonly entries?: ReadonlyArray<EntryText>;
   },
 ) {
   const fs = yield* FileSystem.FileSystem;
@@ -59,8 +61,9 @@ export const playXpGame = Effect.fn("playXpGame")(function* (
   const dir = yield* fs.makeTempDirectoryScoped();
   const report = path.join(dir, "report.json");
   const scripts = xpFile(xpScripts({ Engine: game.engine, Main: game.main(report) }));
-  const once = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", scripts, []));
-  const twice = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", once ?? scripts, []));
+  const entries = game.entries ?? [];
+  const once = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", scripts, entries));
+  const twice = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", once ?? scripts, entries));
   const patched = { "Data/Scripts.rxdata": twice ?? scripts, ...game.patched };
   for (const [file, bytes] of Object.entries(patched)) {
     yield* fs.makeDirectory(path.dirname(path.join(dir, "run/patches", file)), { recursive: true });

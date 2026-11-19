@@ -83,6 +83,24 @@ it.effect("reads messages, choices, names and script texts from an XP game's arc
   }),
 );
 
+it.effect("reads the quoted strings in source writing from an XP map's event names", () =>
+  Effect.gen(function* () {
+    const entries = yield* entriesOf({
+      "Map002.rxdata": xpMap(
+        { 4: [], 5: [], 6: [] },
+        { 4: 'Exit[3,1,"北門",0]', 5: 'Gate["Quellmark","月蛾の森"]', 6: "北門" },
+      ),
+    });
+    assert.deepStrictEqual(
+      entries.map(({ location, source }) => [location, source]),
+      [
+        [{ _tag: "EventNameQuote", map: 2, event: 4, quote: 0 }, "北門"],
+        [{ _tag: "EventNameQuote", map: 2, event: 5, quote: 1 }, "月蛾の森"],
+      ],
+    );
+  }),
+);
+
 const indented = (indent: number, code: number, ...parameters: unknown[]) =>
   rubyObject("RPG::EventCommand", { code, indent, parameters });
 

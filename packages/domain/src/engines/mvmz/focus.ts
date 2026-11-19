@@ -173,6 +173,7 @@ export const textFocus = (
       Message: () => Option.none(),
       Name: () => Option.none(),
       EventName: () => Option.none(),
+      EventNameQuote: () => Option.none(),
       PluginSetting: () => Option.none(),
       ImageLines: () => Option.none(),
       RubyScriptText: () => Option.none(),

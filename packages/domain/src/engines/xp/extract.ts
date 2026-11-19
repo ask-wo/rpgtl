@@ -1,6 +1,14 @@
-import type { EventList, EventListRef, GameRecord, Location, Table } from "@rpgtl/contracts";
+import type {
+  EventList,
+  EventListRef,
+  GameMap,
+  GameRecord,
+  Location,
+  Table,
+} from "@rpgtl/contracts";
 import type { ReadEntry } from "../../catalog.ts";
 import * as Predicate from "effect/Predicate";
+import { sourceText } from "../mvmz/extract.ts";
 import { GameFile } from "../mvmz/gameFile.ts";
 import { bilingualText } from "./englishBranches.ts";
 import { newXpEntry } from "./location.ts";
@@ -180,6 +188,21 @@ function systemText(system: Readonly<Record<string, unknown>>): ReadonlyArray<Fo
   return found;
 }
 
+/**
+ * The quoted strings in source writing in the map's event names, which some games draw, such as
+ * `"北門"` in `Exit[2,5,"北門"]`.
+ */
+const eventNameQuotes = (map: number, data: GameMap): ReadonlyArray<Found> =>
+  data.events.flatMap((event, id) => {
+    const name = event?.["name"];
+    if (!Predicate.isString(name)) return [];
+    return [...name.matchAll(/"([^"\n]*)"/g)].flatMap(([, text = ""], quote) =>
+      sourceText.test(text)
+        ? [{ location: { _tag: "EventNameQuote", map, event: id, quote } as const, text }]
+        : [],
+    );
+  });
+
 interface PlacedList {
   readonly list: EventList;
   readonly ref: EventListRef;
@@ -223,7 +246,7 @@ const fileText = (file: GameFile, speakers: ReadonlySet<string>): ReadonlyArray<
     Database: ({ table, data }) =>
       data.flatMap((record, index) => (record ? recordText(record, table, index) : [])),
     Scripts: ({ data }) => scriptsText(data),
-    Map: () => [],
+    Map: ({ map, data }) => eventNameQuotes(map, data),
     CommonEvents: () => [],
     Troops: () => [],
     Tilesets: () => [],

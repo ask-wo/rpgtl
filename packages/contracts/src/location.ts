@@ -61,6 +61,11 @@ export const Location = Schema.TaggedUnion({
   MapName: { map: Index },
   /** A map event's name, which only the map view shows. */
   EventName: { map: Index, event: Index },
+  /**
+   * The `quote`th quoted string in a map event's name, which an XP game's scripts may draw, such as
+   * a dungeon map's label for an exit. Applying never changes the name, which games use as a key.
+   */
+  EventNameQuote: { map: Index, event: Index, quote: Index },
   /** The name of a switch or variable, which only the F8 panel shows. */
   Name: { group: Schema.Literals(["switches", "variables"]), id: Index },
   /** A setting of a plugin, at `keys` inside it, which may go through JSON text. */

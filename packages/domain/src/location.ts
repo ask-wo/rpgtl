@@ -16,8 +16,12 @@ export const isImageText = <E extends Placed>(
   entry: E,
 ): entry is E & { readonly location: ImageLines } => entry.location?._tag === "ImageLines";
 
-/** Whether the entry is a string in an XP game's Ruby scripts. */
-export const isScriptText = (entry: Placed) => entry.location?._tag === "RubyScriptText";
+/**
+ * Whether the entry is text that only an XP game's scripts show, whose English RPGTL's scripts
+ * put in: a string in its Ruby scripts, or a quoted string in an event name, which they draw.
+ */
+export const isScriptText = (entry: Placed) =>
+  entry.location?._tag === "RubyScriptText" || entry.location?._tag === "EventNameQuote";
 
 /** Whether the player may keep the entry's original: an image's pixels or a script's string. */
 export const canKeepOriginal = (entry: Placed) => isImageText(entry) || isScriptText(entry);
@@ -73,6 +77,7 @@ export const placeOf: (location: Location) => Place = Location.match({
   SystemText: () => Place.System(),
   MapName: ({ map }) => Place.Map({ map }),
   EventName: ({ map }) => Place.Map({ map }),
+  EventNameQuote: ({ map }) => Place.Map({ map }),
   Name: () => Place.System(),
   PluginSetting: () => Place.Plugins(),
   ImageLines: ({ image }) => Place.Image({ image }),

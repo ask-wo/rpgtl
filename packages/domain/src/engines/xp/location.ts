@@ -35,7 +35,11 @@ const listFile = EventListRef.match({
   TroopPage: () => "Troops.rxdata",
 });
 
-/** The data file below `Data/` that holds the text at `location`; none for one XP has no text at. */
+/**
+ * The data file below `Data/` that applying writes the English of `location` into: the one that
+ * holds the text, or the scripts for a quoted string in an event name, which RPGTL's scripts draw
+ * in English. None for a location XP has no text at.
+ */
 export const xpFileOf = (location: Location) => {
   switch (location._tag) {
     case "Message":
@@ -47,6 +51,7 @@ export const xpFileOf = (location: Location) => {
     case "SystemText":
       return "System.rxdata";
     case "RubyScriptText":
+    case "EventNameQuote":
       return "Scripts.rxdata";
     default:
       return undefined;

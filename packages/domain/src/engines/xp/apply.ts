@@ -272,7 +272,8 @@ export const patchXpFile = (
 /**
  * The XP data file `file` (such as `Map001.rxdata`) with the entries' translations in it; none
  * when no entry of the file is translated, except for `Scripts.rxdata`, which always gets the
- * script that fits English, and `fixes`. Messages are wrapped to fit the default message window.
+ * script that fits English, and `fixes`. It also gets a script that draws the English of quoted
+ * strings in event names. Messages are wrapped to fit the default message window.
  * Fails when the file no longer holds an entry's source.
  */
 export function applyXpTranslations(
@@ -289,13 +290,21 @@ export function applyXpTranslations(
   });
   if (file === scriptsFile) {
     const texts = new Map<number, Map<number, LiteralText>>();
+    const drawn = new Map<string, string>();
     for (const { entry, text } of translated) {
+      if (entry.location._tag === "EventNameQuote") drawn.set(entry.source, text);
       if (entry.location._tag !== "RubyScriptText") continue;
       const { script, literal } = entry.location;
       const literals = texts.get(script) ?? new Map<number, LiteralText>();
       texts.set(script, literals.set(literal, { source: entry.source, text }));
     }
-    return applyScriptTexts(file, bytes, texts, fixes);
+    return applyScriptTexts(
+      file,
+      bytes,
+      texts,
+      fixes,
+      [...drawn].map(([source, text]) => ({ source, text })),
+    );
   }
   if (!translated.length) return Result.succeed(undefined);
   return Result.try({

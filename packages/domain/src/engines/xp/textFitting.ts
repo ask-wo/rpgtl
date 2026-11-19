@@ -53,6 +53,10 @@ export const textFittingScript = String.raw`class Bitmap
     end
   end
 
+  def self.rpgtl_smallest(size)
+    (size * 3 + 4) / 5
+  end
+
   def self.rpgtl_settle_all
     waiting = $rpgtl_waiting
     return if waiting.nil? || waiting.empty?
@@ -234,7 +238,7 @@ export const textFittingScript = String.raw`class Bitmap
         rpgtl_draw_text(item.x, item.y, item.w, item.h, item.text, item.align)
       else
         size = font.size
-        smallest = (size * 3 + 4) / 5
+        smallest = Bitmap.rpgtl_smallest(size)
         fitted = [size * room / item.wide, smallest].max
         font.size = fitted
         while fitted > smallest && text_size(item.text).width > room
