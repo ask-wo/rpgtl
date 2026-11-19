@@ -43,7 +43,7 @@ export function testCatalog({
 }: TestCatalogParts = {}): Catalog {
   const texts = new Map<string, Text>();
   const placed = entries.map((joined): Entry => {
-    const { id, location, builtinTranslation, isLeftUntranslated, ...fields } = joined;
+    const { id, location, builtinTranslation, code, isLeftUntranslated, ...fields } = joined;
     const text = { ...fields, isInImage: fields.isInImage ?? isImageText(joined) };
     const key = textKey(text);
     const known = texts.get(key) ?? { ...text, id: texts.size + 1 };
@@ -53,6 +53,7 @@ export function testCatalog({
       textId: known.id,
       location,
       ...(builtinTranslation !== undefined && { builtinTranslation }),
+      ...(code !== undefined && { code }),
       ...(isLeftUntranslated !== undefined && { isLeftUntranslated }),
     };
   });

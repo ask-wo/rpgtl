@@ -43,6 +43,52 @@ it("a menu's button images go to the translator together, each naming its image"
   ]);
 });
 
+it("a request shows the code behind each placeholder and the script line around a script string", () => {
+  const message = testEntry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index: 0 },
+    "\\IT[3]を拾った！",
+    { id: "picked-up" },
+  );
+  const script = testEntry(
+    { _tag: "RubyScriptText", script: 0, name: "Scene_Forge", literal: 1 },
+    "を鍛えた！",
+    { id: "tempered", code: 'text = "\\\\IT[" + item.id.to_s + "]"\ntext += "を鍛えた！"' },
+  );
+  const draft = new CatalogDraft(
+    testCatalog({ entries: [message, script], engine: "XP" }),
+    new Map(),
+  );
+  const prepared = [message, script].map((entry) => draft.prepare(entry));
+  assert.deepStrictEqual(batchRequest(draft, prepared, prepared, 10).entries, [
+    { id: "1", scene: 1, text: "{1}を拾った！", placeholders: { "{1}": "\\IT[3]" } },
+    {
+      id: "2",
+      scene: 2,
+      text: "を鍛えた！",
+      code: 'text = "\\\\IT[" + item.id.to_s + "]"\ntext += "を鍛えた！"',
+    },
+  ]);
+});
+
+it("a request says what the game puts in each placeholder the engine defines, with a character's English name", () => {
+  const actor = testEntry(
+    { _tag: "RecordField", table: "actors", record: 2, field: "name" },
+    "ベルカ",
+    {
+      id: "actor-2",
+      modelTranslation: "Belka",
+    },
+  );
+  const picked = line("picked", 0, 1, "\\N[2]は苔袋を摘んだ。");
+  const draft = new CatalogDraft(testCatalog({ entries: [actor, picked] }), new Map());
+  const prepared = [draft.prepare(picked)];
+  const request = batchRequest(draft, prepared, prepared, 10);
+  assert.deepStrictEqual(request.entries[0]?.placeholders, {
+    "{1}": "\\N[2]: a character's name, Belka",
+  });
+  assert.isTrue(request.slots);
+});
+
 const description = (record: number) =>
   testEntry({ _tag: "RecordField", table: "skills", record, field: "description" }, "火を放つ。", {
     id: `skill-${record}`,

@@ -22,6 +22,11 @@ export const Entry = Schema.Struct({
    */
   builtinTranslation: Schema.optionalKey(Schema.String),
   /**
+   * The line of a game's script that a script string is in, after the earlier lines of its method
+   * that build the same variable, which shows a run what the game draws around the string.
+   */
+  code: Schema.optionalKey(Schema.String),
+  /**
    * The user keeps the original here: an image block's pixels, including any decorative
    * lettering, or a script string's text. Runs leave the entry out.
    */

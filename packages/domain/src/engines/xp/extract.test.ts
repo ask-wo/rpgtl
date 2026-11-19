@@ -218,6 +218,44 @@ it.effect(
     }),
 );
 
+it.effect(
+  "gives a script string its line of code, after the lines of its method that build the same variable",
+  () =>
+    Effect.gen(function* () {
+      const forge = [
+        `def spare_text`,
+        `  text = "余り"`,
+        `end`,
+        `def tempered_item(item, count)`,
+        `  text = ""`,
+        `  text += "\\\\IT[" + item.id.to_s + "]"`,
+        `  draw_text(0, 0, 96, 32, "鍛冶場")`,
+        `  if count >= 2`,
+        `    text += "を#{count}個鍛えた！"`,
+        `  else`,
+        `    text += "を鍛えた！"`,
+        `  end`,
+        `end`,
+      ].join("\n");
+      const entries = yield* entriesOf({ "Scripts.rxdata": xpScripts({ Scene_Forge: forge }) });
+      assert.deepStrictEqual(
+        entries.map(({ source, code }) => [source, code]),
+        [
+          ["余り", 'text = "余り"'],
+          ["鍛冶場", 'draw_text(0, 0, 96, 32, "鍛冶場")'],
+          [
+            "を#{count}個鍛えた！",
+            'text = ""\ntext += "\\\\IT[" + item.id.to_s + "]"\ntext += "を#{count}個鍛えた！"',
+          ],
+          [
+            "を鍛えた！",
+            'text = ""\ntext += "\\\\IT[" + item.id.to_s + "]"\ntext += "を#{count}個鍛えた！"\ntext += "を鍛えた！"',
+          ],
+        ],
+      );
+    }),
+);
+
 it.effect("refuses an archive that ends in the middle of a file", () =>
   Effect.gen(function* () {
     const archive = xpArchive({ "Items.rxdata": [] }).slice(0, -2);

@@ -24,6 +24,10 @@ export interface RequestEntry {
   readonly image?: string;
   /** Only set where the natural English would not fit where the game draws it. */
   readonly limit?: number;
+  /** The game's code each placeholder stands for, such as `{"{1}": "\\IT[3]"}`. */
+  readonly placeholders?: Readonly<Record<string, string>>;
+  /** The script line a script string is in, after the lines that build the same variable. */
+  readonly code?: string;
 }
 
 /** Text before or after a batch, sent for reference only. */
@@ -47,6 +51,8 @@ Glossary gives fixed translations for names and terms; use them whenever the ter
 Pronouns, when given, says which pronouns to use for a character.
 Answer with one JSON object mapping every entry id to its translation and nothing else.
 Keep every placeholder like {1} exactly once and add none. Keep the line breaks of each text.
+Placeholders, when given, shows the game's code each placeholder stands for and, when known, what the game puts there. Other codes hint at it: \\IT[3] is likely an item's name and #{count} a number.
+Code, when given, is the line of the game's script the text is a string in, after the earlier lines that build the same text: it shows what the game draws around the text, such as a name before it. Lines in different branches of the code may not all run.
 ⏸ is a short pause in the dialogue and shows nothing: put each one where the same pause falls in your English, or leave it out. It is not punctuation, so keep the commas and periods your English needs.
 Translate adult and violent fiction faithfully without softening, notes or explanations.
 Image, when given, is the game image the text is drawn in, such as a title menu's buttons in titles1/Command_0 and titles1/Command_1: translate them as the labels players know from other games.
@@ -66,6 +72,11 @@ const languageInstructions: Record<SourceLanguage, ReadonlyArray<string>> = {
   ],
   korean: [],
 };
+const slotsInstruction = `The game fills placeholders that stand for a name or a number while it runs, with values you don't know. Write English that reads right whatever fills them:
+- No "a", "an" or "the" right before a name.
+- No word whose form depends on a number: write "Potion ×{1}" or "Deaths: {1}" rather than "{1} potions", and in dialogue "your win tally is {1}" rather than "you've won {1} times".
+- Keep a space between a placeholder and a word next to it.
+- Where Code shows the game puts a name or a number right before the text, start the text with a space and go on from it in lower case (" was found!"). Don't write that name or number yourself: add no placeholder the text doesn't have.`;
 const scenesInstruction =
   "Entries and context lines with a scene number come from separate scenes of the game: use only a scene's own context for its entries, and treat different scenes as unrelated.";
 /** The answer a translator gives for an entry it won't translate. */
@@ -82,6 +93,7 @@ export function translationSystemPrompt(parts: {
   readonly language: SourceLanguage;
   readonly names: boolean;
   readonly scenes: boolean;
+  readonly slots: boolean;
   readonly following: boolean;
   readonly refusals: boolean;
 }) {
@@ -89,6 +101,7 @@ export function translationSystemPrompt(parts: {
     translationInstructions,
     ...languageInstructions[parts.language],
     ...(parts.names ? [namesInstructions[parts.language]] : []),
+    ...(parts.slots ? [slotsInstruction] : []),
     ...(parts.scenes ? [scenesInstruction] : []),
     ...(parts.following ? [followingInstruction] : []),
     ...(parts.refusals ? [refusalsInstruction] : []),

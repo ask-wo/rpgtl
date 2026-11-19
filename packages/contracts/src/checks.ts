@@ -10,6 +10,7 @@ export const CheckName = Schema.Literals([
   "| unlike the source",
   "glossary name missing",
   "pronoun unlike the source",
+  "plural after a number",
 ]);
 export type CheckName = typeof CheckName.Type;
 

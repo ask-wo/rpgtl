@@ -25,6 +25,7 @@ import { isActorName, isSpeakerNameEntry } from "./nameEntries.ts";
 import { nameTerm } from "./nameTerm.ts";
 import { collectClues, linesAbout, pronounFromClues } from "./pronouns.ts";
 import { type RequestText, requestText, withoutCodes } from "./requestText.ts";
+import { slotKind } from "./slotKinds.ts";
 import { type TermInput, termInputs } from "./termKinds.ts";
 
 const hasWords = (source: string) => withoutCodes(source).trim() !== "";
@@ -265,6 +266,41 @@ export class CatalogDraft {
     const name = this.speakerName(item);
     const term = name === undefined ? undefined : this.translatedTerm(name);
     return term ? translationInUse(term) : name;
+  }
+
+  /**
+   * Each placeholder of the item with the code it stands for and, when the engine says, what the
+   * game puts there: `{"{1}": "\\N[2]: a character's name, Belka"}`.
+   */
+  placeholders(item: Prepared): Record<string, string> | undefined {
+    if (!item.codes.length) return undefined;
+    const engine = this.#catalog.game.engine;
+    return Object.fromEntries(
+      item.codes.map((code, at) => {
+        const kind = slotKind(code, item.entry, engine);
+        const actor = /^\\N\[(\d+)\]$/i.exec(code)?.[1];
+        const name = actor === undefined ? undefined : this.#actorName(Number(actor));
+        return [
+          `{${at + 1}}`,
+          kind === undefined ? code : `${code}: ${kind}${name ? `, ${name}` : ""}`,
+        ];
+      }),
+    );
+  }
+
+  /** An actor's name in English, when the run has it. */
+  #actorName(actor: number) {
+    const entry = this.#entries.find(
+      ({ location }) =>
+        location._tag === "RecordField" &&
+        location.table === "actors" &&
+        location.record === actor &&
+        location.field === "name",
+    );
+    if (!entry) return undefined;
+    const term = this.translatedTerm(entry.source);
+    const english = term ? translationInUse(term) : translationInUse(entry);
+    return english && !sourceScript.test(english) ? english : undefined;
   }
 
   /** How many characters the entry has room for where the game draws it, when that is known. */

@@ -3,7 +3,7 @@ import type { CatalogDraft, Prepared, RunEntry } from "./catalogDraft.ts";
 import { seriesName } from "./imageText.ts";
 import { isNameEntry, isSpeakerNameEntry } from "./nameEntries.ts";
 import type { ContextLine, RequestEntry } from "./prompts.ts";
-import { withoutCodes } from "./requestText.ts";
+import { isWordCode, withoutCodes } from "./requestText.ts";
 import { translationInUse } from "./inUse.ts";
 import { isImageText, listKey, type Placed, placeKey, placeOf } from "./location.ts";
 import { hasTerm } from "./termMatch.ts";
@@ -150,6 +150,8 @@ export function packGroups(groups: ReadonlyArray<ReadonlyArray<RunEntry>>, batch
 export interface BatchRequest {
   readonly context: ReadonlyArray<ContextLine>;
   readonly entries: ReadonlyArray<RequestEntry>;
+  /** Whether an entry has a placeholder the game fills with words or a number. */
+  readonly slots: boolean;
 }
 
 /**
@@ -187,6 +189,7 @@ export function batchRequest(
   });
   const entries = batch.map((item, index): RequestEntry => {
     const limit = draft.tightLimit(item);
+    const placeholders = draft.placeholders(item);
     return {
       id: String(index + 1),
       ...sceneOf(item),
@@ -194,7 +197,9 @@ export function batchRequest(
       text: item.text,
       ...(isImageText(item.entry) && { image: item.entry.location.image.replace(imagePath, "") }),
       ...(limit !== undefined && { limit }),
+      ...(placeholders && { placeholders }),
+      ...(item.entry.code !== undefined && { code: item.entry.code }),
     };
   });
-  return { context, entries };
+  return { context, entries, slots: batch.some((item) => item.codes.some(isWordCode)) };
 }

@@ -11,6 +11,7 @@ interface Found {
   readonly text: string;
   readonly speaker?: string;
   readonly english?: string;
+  readonly code?: string;
 }
 
 const hasText = (value: unknown): value is string => Predicate.isString(value) && !!value.trim();
@@ -79,11 +80,12 @@ function listText(
         .slice(index, end)
         .map(({ parameters: [line] }) => (Predicate.isString(line) ? line : ""))
         .join("\n");
-      for (const { literal, text, english } of rubyText(script))
+      for (const { literal, text, english, code: lines } of rubyText(script))
         if (text.trim())
           found.push({
             location: { _tag: "ScriptText", list: ref, index, parameter: 0, literal },
             text,
+            code: lines,
             ...(english !== undefined && { english }),
           });
       index = end - 1;
@@ -234,13 +236,14 @@ export function xpGameEntries(dataFiles: ReadonlyArray<GameFile>): ReadEntry[] {
   const speakers = speakerVariables(dataFiles.flatMap(eventLists).map(({ list }) => list));
   return dataFiles
     .flatMap((file) => fileText(file, speakers))
-    .map(({ location, text, speaker, english }) => {
+    .map(({ location, text, speaker, english, code }) => {
       const bilingual = location._tag === "Message" ? undefined : bilingualText(text);
       const builtinTranslation = bilingual?.english || english;
       return {
         ...newXpEntry(location, bilingual?.source ?? text),
         ...(speaker !== undefined && { speaker }),
         ...(builtinTranslation !== undefined && { builtinTranslation }),
+        ...(code !== undefined && { code }),
       };
     });
 }

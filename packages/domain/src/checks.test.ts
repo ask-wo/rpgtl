@@ -131,3 +131,20 @@ it("a term whose English leaves out a name inside it is flagged, though a charac
     卡洛湖西: ["卡洛湖 → Lake Carlo"],
   });
 });
+
+it("a plural right after a number the game fills in is flagged, since it reads wrong at 1", () => {
+  const source = "码头上亮着\\V[3]盏灯笼。";
+  assert.deepStrictEqual(line(source, "\\V[3] lanterns glow on the pier."), [
+    "plural after a number",
+  ]);
+  assert.deepStrictEqual(line(source, "Only \\C[2]\\V[3]\\C[0] more lanterns glow."), [
+    "plural after a number",
+  ]);
+  assert.deepStrictEqual(line(source, "Lanterns lit: \\V[3]"), []);
+  assert.deepStrictEqual(line(source, "\\V[3] is plenty."), []);
+  // The next label of a stat list whose lines the English joined.
+  assert.deepStrictEqual(
+    line("灯笼：\\V[3]\n步数：\\V[4]", "Lanterns: \\V[3] Steps left: \\V[4]"),
+    [],
+  );
+});

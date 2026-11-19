@@ -178,6 +178,34 @@ function lineBefore(code: string, literals: ReadonlyArray<RubyLiteral>, index: n
   return before + code.slice(at, start);
 }
 
+const appended = /^(@{0,2}[A-Za-z_]\w*)\s*(?:\+=|<<)/;
+const builtLines = 8;
+
+/**
+ * The lines a literal is on. When they append it to a variable, such as `text += "を作った！"`, the
+ * earlier lines of its method that set or append to the variable come first, up to `builtLines`
+ * in all, since games build a message from pieces in branches.
+ */
+function linesAround(code: string, { start, end }: RubyLiteral) {
+  const from = code.lastIndexOf("\n", start - 1) + 1;
+  const to = code.indexOf("\n", end);
+  const own = code
+    .slice(from, to < 0 ? undefined : to)
+    .split("\n")
+    .map((line) => line.trim());
+  const variable = appended.exec(own[0] ?? "")?.[1];
+  if (variable === undefined) return own.join("\n");
+  const before = code
+    .slice(0, from)
+    .split("\n")
+    .map((line) => line.trim());
+  const method = before.findLastIndex((line) => /^def\b/.test(line));
+  const writes = new RegExp(`^${variable}\\s*(?:\\+=|<<|=(?!=))`);
+  const built = before.slice(method + 1).filter((line) => writes.test(line));
+  const room = builtLines - own.length;
+  return [...(room > 0 ? built.slice(-room) : []), ...own].join("\n");
+}
+
 /**
  * The text of Ruby code: each string literal with Chinese, Japanese or Korean in it, by its index
  * among the code's literals, except those the code prints for its author or passes as a file or
@@ -188,14 +216,22 @@ export function rubyText(code: string) {
   const literals = rubyLiterals(code);
   const tables = characterTables(code, literals);
   const branches = englishBranches(code, literals);
-  return literals.flatMap(({ start, end }, literal) => {
+  return literals.flatMap((found, literal) => {
+    const { start, end } = found;
     if (tables.has(literal)) return [];
     const text = literalText(code.slice(start, end));
     if (text === undefined || !sourceText.test(text.replace(interpolation, ""))) return [];
     if (isNameOrOutput(lineBefore(code, literals, literal))) return [];
     const other = literals[branches.get(literal) ?? -1];
     const english = other && literalText(code.slice(other.start, other.end));
-    return [{ literal, text, ...(english !== undefined && { english }) }];
+    return [
+      {
+        literal,
+        text,
+        code: linesAround(code, found),
+        ...(english !== undefined && { english }),
+      },
+    ];
   });
 }
 
@@ -203,6 +239,7 @@ interface ScriptFound {
   readonly location: Extract<Location, { readonly _tag: "RubyScriptText" }>;
   readonly text: string;
   readonly english?: string;
+  readonly code: string;
 }
 
 /** The text of an XP game's scripts. */

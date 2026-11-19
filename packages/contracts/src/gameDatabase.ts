@@ -158,4 +158,5 @@ const triggers = (["texts", "glossary"] as const).flatMap((table) => {
  */
 export const gameDatabaseMigrations: Readonly<Record<string, ReadonlyArray<string>>> = {
   "1_tables": [...tables.split(";").filter((statement) => statement.trim()), ...triggers],
+  "2_entry_code": ["alter table entries add column code text"],
 };
