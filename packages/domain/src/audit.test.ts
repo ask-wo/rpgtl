@@ -84,6 +84,7 @@ it("The audit lists capitalised glossary words and each check's finds", () => {
     // The check leaves out terms the model hasn't sorted, which may be names.
     "glossary name missing": ["entry16"],
     "pronoun unlike the source": ["entry18"],
+    "plural after a number": [],
   });
   assert.isUndefined(result.run);
 });

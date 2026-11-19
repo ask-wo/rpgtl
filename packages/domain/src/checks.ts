@@ -15,6 +15,7 @@ import { hasTerm } from "./termMatch.ts";
 import { translationInUse, termKind } from "./inUse.ts";
 import { gameLanguage } from "./language.ts";
 import type { Placed } from "./location.ts";
+import { slotKind } from "./slotKinds.ts";
 
 // Game dialogue apologizes and refuses too ("I'm sorry, but", "I can't help it"), so only
 // phrases about the request itself count.
@@ -274,6 +275,8 @@ export function translationChecks(
     // In Japanese, 他 means other (他の人).
     const pronoun = language === "chinese" ? pronounUnlike(sourceText, translation) : undefined;
     if (pronoun) add("pronoun unlike the source", pronoun);
+    for (const { code, word } of pluralsAfterNumbers(entry, translation, engine))
+      add("plural after a number", `${code} ${word}`);
     return findings;
   };
 }
@@ -289,4 +292,21 @@ export function catalogFindings(
     if (findings.length) found[entry.id] = findings;
   }
   return found;
+}
+
+// A capitalised word after a number is mostly the next label of a stat list whose lines the
+// translation joined, as in "Lanterns: \V[3] Steps left: \V[4]", so only lower-case words count.
+const pluralAfter = /^[^\S\n]*(?:more[^\S\n]+)?(?!(?:is|was|has)\b)(people|\p{Ll}+s)\b/u;
+
+/** The plural nouns right after a number the game fills in, which read wrong when it is 1. */
+function pluralsAfterNumbers(entry: Placed, translation: string, engine: Engine) {
+  const shown = (text: string) =>
+    text.replace(controlCodePattern, (code) =>
+      slotKind(code, entry, engine)?.includes("no words") ? "" : code,
+    );
+  return [...translation.matchAll(controlCodePattern)].flatMap(({ 0: code, index }) => {
+    if (slotKind(code, entry, engine) !== "a number") return [];
+    const word = pluralAfter.exec(shown(translation.slice(index + code.length)))?.[1];
+    return word ? [{ code, word }] : [];
+  });
 }
