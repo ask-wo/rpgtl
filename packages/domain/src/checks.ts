@@ -307,10 +307,16 @@ const appended = /^(@{0,2}[A-Za-z_]\w*)\s*(?:\+=|<<)\s*["']/;
 // A line that ends in a value, such as a name or `\C[0]"` after an item's icon code.
 const endsWithValue = /(?:[\]}]["']|[\w)])$/;
 
+// A particle that starts a string ties it to the word before it, as を does in を拾い上げた or 를 in
+// 를 얻었다, unlike a phrase that stands alone.
+const continues = /^[をがはにのでともへや을를]/u;
+
 /**
  * The line of a script string's code that sets or appends a value to the variable the string is
  * then appended to, when its English starts with a letter, so the two run together, as in
- * "Moonmoth LampGlimmers!". The code may hold lines of other branches too, so this is a guess.
+ * "Moonmoth LampGlimmers!". The code may hold lines of other branches, where the string stands
+ * alone, so this needs a sign that the string goes on from a name: a particle at its start, or
+ * English that starts in lower case.
  */
 function valueBefore(
   entry: Pick<EntryText, "source"> & Partial<Pick<EntryText, "code">> & Placed,
@@ -320,6 +326,7 @@ function valueBefore(
   const first = entry.source[0];
   if (first === undefined || !/^\p{L}/u.test(translation) || !/^\p{L}/u.test(first))
     return undefined;
+  if (!continues.test(entry.source) && !/^\p{Ll}/u.test(translation)) return undefined;
   const lines = entry.code.split("\n");
   const own = lines.findLastIndex((line) => {
     const found = appended.exec(line);

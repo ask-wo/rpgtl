@@ -177,5 +177,13 @@ it("a script string appended right after a value is flagged when its English sta
     "no space after a value",
   ]);
   assert.deepStrictEqual(script("を拾い上げた！", afterName, " was picked up!"), []);
+  assert.deepStrictEqual(
+    script("光なし！", 'msg = item.name\nmsg += "光なし！"', "Out of light!"),
+    [],
+  );
+  assert.deepStrictEqual(
+    script("光なし！", 'msg = item.name\nmsg += "光なし！"', "is out of light!"),
+    ["no space after a value"],
+  );
   assert.deepStrictEqual(script("なし", 'msg = "所持品："\nmsg += "なし"', "None"), []);
 });
