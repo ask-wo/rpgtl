@@ -7,6 +7,7 @@ import { GameFile, GameFileInvalid } from "../mvmz/gameFile.ts";
 import { GameDataChanged } from "../mvmz/apply.ts";
 import { englishBranches, holdsSource } from "./englishBranches.ts";
 import { type RubyLiteral, rubyLiterals } from "./rubyLiterals.ts";
+import { type DrawnText, xpDrawnTextScript } from "./drawnText.ts";
 import { xpImageScript } from "./images.ts";
 import { textFittingScript } from "./textFitting.ts";
 
@@ -362,15 +363,16 @@ function beforeMain(rows: Array<Array<unknown>>, added: Array<Array<unknown>>) {
 
 /**
  * `Scripts.rxdata` with the literals of `texts`, by script and literal index, set to their text,
- * then the game's fixes and RPGTL's scripts that draw English into images and fit it into the
- * game's text boxes, before `Main`. Scripts without text keep their bytes. Fails when a literal
- * isn't its source anymore.
+ * then the game's fixes and RPGTL's scripts that draw English into images, fit it into the game's
+ * text boxes and, when there are any, draw the English of `drawn`, before `Main`. Scripts without
+ * text keep their bytes. Fails when a literal isn't its source anymore.
  */
 export const applyScriptTexts = (
   file: string,
   bytes: Uint8Array,
   texts: ReadonlyMap<number, ReadonlyMap<number, LiteralText>>,
   fixes: ReadonlyArray<RubyScript>,
+  drawn: ReadonlyArray<DrawnText> = [],
 ): Result.Result<Uint8Array, GameDataChanged | GameFileInvalid> =>
   Result.flatMap(scriptRows(file, bytes), (rows) => {
     for (const [script, literals] of texts) {
@@ -386,6 +388,7 @@ export const applyScriptTexts = (
           ...fixScripts(fixes),
           rpgtlScript("RPGTL image text", xpImageScript),
           rpgtlScript("RPGTL text fitting", textFittingScript),
+          ...(drawn.length > 0 ? [rpgtlScript("RPGTL drawn text", xpDrawnTextScript(drawn))] : []),
         ]),
       ),
     );

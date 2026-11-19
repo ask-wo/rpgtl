@@ -8,7 +8,8 @@
  * the text's end, as the next part of a line drawn piece by piece does. Right-aligned or centred
  * text, such as a number games draw into the same box as its label, starts where its ink does,
  * before or after the label is drawn. A draw a few pixels from it, as for an outline, is the same
- * label. Only a draw across its middle row draws it first: a gauge along the bottom of a row then
+ * label, and gets the size and box of the draw before it, though the bitmap's edge leaves it a
+ * pixel less room. Only a draw across its middle row draws it first: a gauge along the bottom of a row then
  * goes under the text instead of over it. Copying a bitmap whole carries its waiting text along, as
  * games draw a label with its icon into a bitmap of its own and copy that next to the others. A
  * message whose line is too wide, or which has more than four rows, has its lines up to its choices
@@ -51,6 +52,10 @@ export const textFittingScript = String.raw`class Bitmap
       rpgtl_settle
       send(raw, *args)
     end
+  end
+
+  def self.rpgtl_smallest(size)
+    (size * 3 + 4) / 5
   end
 
   def self.rpgtl_settle_all
@@ -230,17 +235,26 @@ export const textFittingScript = String.raw`class Bitmap
     item.font.each { |part, value| font.send("#{part}=", value) }
     begin
       room = item.room
-      if room <= 0 || item.wide <= room
-        rpgtl_draw_text(item.x, item.y, item.w, item.h, item.text, item.align)
+      size = font.size
+      last = @rpgtl_fitted
+      if last && last[0] == item.text && last[1] == size && (last[2] - room).abs <= 2
+        room, fitted = last[2], last[3]
+      elsif room <= 0 || item.wide <= room
+        fitted = size
       else
-        size = font.size
-        smallest = (size * 3 + 4) / 5
+        smallest = Bitmap.rpgtl_smallest(size)
         fitted = [size * room / item.wide, smallest].max
         font.size = fitted
         while fitted > smallest && text_size(item.text).width > room
           fitted -= 1
           font.size = fitted
         end
+      end
+      @rpgtl_fitted = [item.text, size, room, fitted]
+      font.size = fitted
+      if fitted == size
+        rpgtl_draw_text(item.x, item.y, item.w, item.h, item.text, item.align)
+      else
         rpgtl_draw_text(item.x, item.y, room, item.h, item.text, item.align)
       end
     ensure

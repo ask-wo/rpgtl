@@ -14,15 +14,18 @@ export function rubyObject(className: string, fields: Record<string, unknown>) {
 export const command = (code: number, ...parameters: unknown[]) =>
   rubyObject("RPG::EventCommand", { code, indent: 0, parameters });
 
-/** A map whose events each have one page with the commands given. */
-export const xpMap = (events: Record<number, ReadonlyArray<RubyObject>>) =>
+/** A map whose events each have one page with the commands given, named `EV<id>` unless `names` names them. */
+export const xpMap = (
+  events: Record<number, ReadonlyArray<RubyObject>>,
+  names: Record<number, string> = {},
+) =>
   rubyObject("RPG::Map", {
     events: new RubyHash(
       Object.entries(events).map(([id, list]) => [
         Number(id),
         rubyObject("RPG::Event", {
           id: Number(id),
-          name: `EV${id}`,
+          name: names[Number(id)] ?? `EV${id}`,
           pages: [rubyObject("RPG::Event::Page", { list: [...list, command(0)] })],
         }),
       ]),

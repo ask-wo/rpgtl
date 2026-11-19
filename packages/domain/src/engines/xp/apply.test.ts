@@ -8,6 +8,7 @@ import {
   xpGameEntries,
 } from "../../index.ts";
 import { command, xpFile, xpMap, xpScripts } from "../../testUtils/xpGame.ts";
+import { xpDrawnTextScript } from "./drawnText.ts";
 import { xpImageScript } from "./images.ts";
 import { textFittingScript } from "./textFitting.ts";
 
@@ -94,6 +95,22 @@ it("puts translations into an XP game's scripts, keeping their `#{}` code and th
     },
     { name: "RPGTL image text", code: xpImageScript },
     { name: "RPGTL text fitting", code: textFittingScript },
+    { name: "Main", code: "begin_game" },
+  ]);
+});
+
+it("draws the English of a quoted string in an event name through RPGTL's scripts, leaving the map as it is", () => {
+  const map = xpFile(xpMap({ 4: [] }, { 4: 'Exit[3,1,"北門",0]' }));
+  const scripts = xpFile(xpScripts({ Main: "begin_game" }));
+  const entries = translated(entriesOf("Map002.rxdata", map), { 北門: "North Gate" });
+  assert.isUndefined(Result.getOrThrow(applyXpTranslations("Map002.rxdata", map, entries)));
+  const result = Result.getOrThrow(applyXpTranslations("Scripts.rxdata", scripts, entries));
+  const file = Result.getOrThrow(decodeXpFile("Scripts.rxdata", result ?? new Uint8Array()));
+  assert.deepStrictEqual(file._tag === "Scripts" ? file.data.slice(-2) : undefined, [
+    {
+      name: "RPGTL drawn text",
+      code: xpDrawnTextScript([{ source: "北門", text: "North Gate" }]),
+    },
     { name: "Main", code: "begin_game" },
   ]);
 });
