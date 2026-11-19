@@ -246,7 +246,10 @@ export function translationChecks(
   engine: Engine,
 ) {
   const { isName, nearTerms } = checkedTerms(glossary);
-  return (entry: Pick<EntryText, "source"> & Placed, written: string): Finding[] => {
+  return (
+    entry: Pick<EntryText, "source"> & Partial<Pick<EntryText, "code">> & Placed,
+    written: string,
+  ): Finding[] => {
     if (!written) return [];
     const tags = keepsTags(engine, entry);
     const source = tags ? withoutTags(entry.source) : entry.source;
@@ -277,6 +280,8 @@ export function translationChecks(
     if (pronoun) add("pronoun unlike the source", pronoun);
     for (const { code, word } of pluralsAfterNumbers(entry, translation, engine))
       add("plural after a number", `${code} ${word}`);
+    const value = valueBefore(entry, translation);
+    if (value !== undefined) add("no space after a value", value);
     return findings;
   };
 }
@@ -292,6 +297,36 @@ export function catalogFindings(
     if (findings.length) found[entry.id] = findings;
   }
   return found;
+}
+
+// Applying puts a space where a script joins a string to a value with `+`, but not where it appends
+// the string to a variable with `+=` or `<<`.
+const appended = /^(@{0,2}[A-Za-z_]\w*)\s*(?:\+=|<<)\s*["']/;
+// A line that ends in a value, such as a name or `\C[0]"` after an item's icon code.
+const endsWithValue = /(?:[\]}]["']|[\w)])$/;
+
+/**
+ * The line of a script string's code that sets or appends a value to the variable the string is
+ * then appended to, when its English starts with a letter, so the two run together, as in
+ * "Moonmoth LampGlimmers!". The code may hold lines of other branches too, so this is a guess.
+ */
+function valueBefore(
+  entry: Pick<EntryText, "source"> & Partial<Pick<EntryText, "code">> & Placed,
+  translation: string,
+) {
+  if (entry.location?._tag !== "RubyScriptText" || entry.code === undefined) return undefined;
+  const first = entry.source[0];
+  if (first === undefined || !/^\p{L}/u.test(translation) || !/^\p{L}/u.test(first))
+    return undefined;
+  const lines = entry.code.split("\n");
+  const own = lines.findLastIndex((line) => {
+    const found = appended.exec(line);
+    return found !== null && line.slice(found[0].length).startsWith(first);
+  });
+  const variable = appended.exec(lines[own] ?? "")?.[1];
+  if (variable === undefined) return undefined;
+  const writes = new RegExp(`^${variable}\\s*(?:\\+=|<<|=(?!=))`);
+  return lines.slice(0, own).find((line) => writes.test(line) && endsWithValue.test(line));
 }
 
 // A capitalised word after a number is mostly the next label of a stat list whose lines the

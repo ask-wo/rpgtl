@@ -148,3 +148,18 @@ it("a plural right after a number the game fills in is flagged, since it reads w
     [],
   );
 });
+
+const script = (source: string, code: string, translation: string) =>
+  check(
+    { location: { _tag: "RubyScriptText", script: 1, name: "Shop", literal: 2 }, source, code },
+    translation,
+  ).map((finding) => finding.check);
+
+it("a script string appended right after a value is flagged when its English starts with a letter, since the two run together", () => {
+  const afterName = 'msg = "\\C[6]" + item.name + "\\C[0]"\nmsg += "を拾い上げた！"';
+  assert.deepStrictEqual(script("を拾い上げた！", afterName, "Picked up!"), [
+    "no space after a value",
+  ]);
+  assert.deepStrictEqual(script("を拾い上げた！", afterName, " was picked up!"), []);
+  assert.deepStrictEqual(script("なし", 'msg = "所持品："\nmsg += "なし"', "None"), []);
+});

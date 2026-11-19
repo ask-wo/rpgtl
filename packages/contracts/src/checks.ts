@@ -11,6 +11,7 @@ export const CheckName = Schema.Literals([
   "glossary name missing",
   "pronoun unlike the source",
   "plural after a number",
+  "no space after a value",
 ]);
 export type CheckName = typeof CheckName.Type;
 
