@@ -91,6 +91,7 @@ const termFields = [
   "userKind",
   "modelPronoun",
   "userPronoun",
+  "userNote",
 ] as const;
 
 const rulesFields = ["rulesKind", "rulesPronoun", "sheClues", "heClues"] as const;

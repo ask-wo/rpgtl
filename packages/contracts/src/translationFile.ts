@@ -57,6 +57,7 @@ export const TranslationFile = Schema.Struct({
       modelPronoun: optional(PronounValue),
       userKind: GlossaryTerm.fields.userKind,
       userPronoun: optional(PronounValue),
+      userNote: optional(NonEmpty),
     }),
   ),
   settings: Schema.Struct({

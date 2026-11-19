@@ -268,6 +268,17 @@ export function TermDetail({
               )}
           </div>
         )}
+        <Field className="col-span-2">
+          <FieldLabel htmlFor="term-note">Note</FieldLabel>
+          <Input
+            id="term-note"
+            value={term.userNote ?? ""}
+            placeholder="plural: Moonmoths"
+            onChange={(event) => onChange({ ...term, userNote: event.target.value }, typingPause)}
+            onBlur={onDone}
+          />
+          <FieldDescription>Sent with the term when translating.</FieldDescription>
+        </Field>
       </div>
       <section aria-label="Entries that use the term" className="flex flex-col gap-2 text-sm">
         <h3 className="font-medium">

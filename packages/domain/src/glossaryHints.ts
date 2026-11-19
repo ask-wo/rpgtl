@@ -34,8 +34,8 @@ function mentions(glossary: ReadonlyArray<HintTerm>) {
 
 /**
  * The glossary terms and sound hints a request sends: terms of two or more characters the entries
- * mention, the short forms of dotted character names, and the sounds the entries spell. A word's
- * English goes lowercased, as it is written in a sentence.
+ * mention, with the user's notes, the short forms of dotted character names, and the sounds the
+ * entries spell. A word's English goes lowercased, as it is written in a sentence.
  */
 export function requestGlossary(
   glossary: ReadonlyArray<HintTerm>,
@@ -58,6 +58,7 @@ export function requestGlossary(
           termKind(term) === "word"
             ? lowerOrdinaryWords(translationInUse(term))
             : translationInUse(term),
+        ...(term.userNote && { note: term.userNote }),
       });
   }
   for (const [source, translation] of shorts)

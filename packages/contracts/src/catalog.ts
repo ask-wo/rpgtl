@@ -117,6 +117,8 @@ export const GlossaryTerm = Schema.Struct({
   heClues: Schema.optionalKey(Schema.Int),
   modelPronoun: Schema.optionalKey(PronounValue),
   userPronoun: Schema.optionalKey(PronounValue),
+  /** What the user tells the model about the term, such as its plural, sent with the term. */
+  userNote: Schema.optionalKey(Schema.String),
 });
 export type GlossaryTerm = typeof GlossaryTerm.Type;
 
@@ -129,6 +131,7 @@ export const TermEdit = Schema.Struct({
   userTranslation: Schema.optionalKey(Schema.String),
   userKind: Schema.optionalKey(TermKind),
   userPronoun: Schema.optionalKey(PronounValue),
+  userNote: Schema.optionalKey(Schema.String),
 });
 export type TermEdit = typeof TermEdit.Type;
 
