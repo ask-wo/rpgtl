@@ -215,11 +215,12 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
     ),
   );
 
-  const systemPrompt = (entries: BatchRequest["entries"], names: boolean) =>
+  const systemPrompt = (request: BatchRequest, names: boolean) =>
     translationSystemPrompt({
       language: draft.language,
       names,
-      scenes: translator.cachesPrompt || entries.some((entry) => entry.scene !== undefined),
+      scenes: translator.cachesPrompt || request.entries.some((entry) => entry.scene !== undefined),
+      slots: translator.cachesPrompt || request.slots,
       following: translator.cachesPrompt,
       refusals: translator.marksRefusals,
     });
@@ -389,7 +390,7 @@ export const translateCatalog = Effect.fn("translateCatalog")(function* (
         const request = batchRequest(draft, prepared, batch, translator.contextLines);
         const keys = request.entries.map((entry) => entry.id);
         const messages: ReadonlyArray<TextMessage> = [
-          { role: "system", content: systemPrompt(request.entries, names) },
+          { role: "system", content: systemPrompt(request, names) },
           {
             role: "user",
             content: translationUserMessage({

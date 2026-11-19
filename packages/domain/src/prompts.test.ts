@@ -31,6 +31,7 @@ it("A Korean game's prompts are written for Korean, with no Chinese examples or 
       language: "korean",
       names: true,
       scenes: true,
+      slots: true,
       following: true,
       refusals: true,
     }),
@@ -73,6 +74,7 @@ it("Every request for a Japanese game asks to translate katakana that spells a J
     language: "japanese",
     names: false,
     scenes: false,
+    slots: false,
     following: false,
     refusals: false,
   });
@@ -82,6 +84,7 @@ it("Every request for a Japanese game asks to translate katakana that spells a J
       language: "chinese",
       names: true,
       scenes: false,
+      slots: false,
       following: false,
       refusals: false,
     }),

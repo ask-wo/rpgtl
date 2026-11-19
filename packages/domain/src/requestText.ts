@@ -34,6 +34,9 @@ export function joinLines(text: string, keepLines = false) {
 // Codes that stand for a word move with the English word order, so they are never kept aside.
 // `\IT[n]`, `\WP`, `\AR`, `\EN`, `\SN` and `\DN` show database and place names in XP message scripts.
 const wordCode = String.raw`(?:%\d+|#\{[^{}]*\}|\\(?:[NVP]|IT|WP|AR|EN|SN|DN)\[[^\]]*\]|\\G(?![A-Za-z[<]))`;
+const wholeWordCode = new RegExp(`^${wordCode}$`, "i");
+/** Whether a control code stands for a word or a number the game puts in while it runs. */
+export const isWordCode = (code: string) => wholeWordCode.test(code);
 const edgePart = `\\s|(?!${wordCode})(?:${controlCodePattern.source})`;
 const keptAside = (codes: string, edge: string) => ({
   leading: new RegExp(`^(?:${edge})*`, "i"),

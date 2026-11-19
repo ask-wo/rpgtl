@@ -70,6 +70,25 @@ it("a request shows the code behind each placeholder and the script line around 
   ]);
 });
 
+it("a request says what the game puts in each placeholder the engine defines, with a character's English name", () => {
+  const actor = testEntry(
+    { _tag: "RecordField", table: "actors", record: 2, field: "name" },
+    "ベルカ",
+    {
+      id: "actor-2",
+      modelTranslation: "Belka",
+    },
+  );
+  const picked = line("picked", 0, 1, "\\N[2]は苔袋を摘んだ。");
+  const draft = new CatalogDraft(testCatalog({ entries: [actor, picked] }), new Map());
+  const prepared = [draft.prepare(picked)];
+  const request = batchRequest(draft, prepared, prepared, 10);
+  assert.deepStrictEqual(request.entries[0]?.placeholders, {
+    "{1}": "\\N[2]: a character's name, Belka",
+  });
+  assert.isTrue(request.slots);
+});
+
 const description = (record: number) =>
   testEntry({ _tag: "RecordField", table: "skills", record, field: "description" }, "火を放つ。", {
     id: `skill-${record}`,
