@@ -140,6 +140,21 @@ begin
   b = red_bitmap(300)
   b.draw_text(0, 0, 300, 32, "Room to spare")
   r["alone"] = { "natural" => b.text_size("Room to spare").width, "right" => rightmost(b, RED) }
+  class Bitmap
+    alias_method :test_engine_draw_text, :rpgtl_draw_text
+    def rpgtl_draw_text(*args)
+      $sizes << font.size if $sizes
+      test_engine_draw_text(*args)
+    end
+  end
+  r["outlineSizes"] = (100..240).map do |width|
+    $sizes = []
+    b = Bitmap.new(width, 32)
+    b.draw_frame_text(0, 0, width, 32, "Equipment and accessories", 1)
+    b.get_pixel(0, 0)
+    $sizes.uniq.size
+  end.uniq
+  $sizes = nil
 
   w = Window_Message.new(false)
   r["choicesBelow"] = message(w, "Short line\nThis line of English is much longer than \nthe window of the game can show at once, so it breaks \nWWWWWWWWWW WWWWWWWWWW WWWWWWWWWW\nYes\nNo\n", 2)
@@ -183,6 +198,7 @@ const Report = Schema.Struct({
   overGauge: Fitted,
   copied: Schema.Tuple([Schema.Int, Schema.Int, Schema.Int]),
   alone: Fitted,
+  outlineSizes: Schema.Array(Schema.Int),
   textAfterName: Schema.Int,
   beforeNumber: Schema.Array(Schema.Struct({ label: Schema.Int, number: Schema.Int })),
   choicesBelow: Message,
@@ -222,6 +238,7 @@ it.live.skipIf(!xvfbRun)(
       assert.isBelow(r.overGauge.right, 316);
       assert.isTrue(r.copied[0] < 160 && r.copied[1] < 288 && r.copied[2] < 416);
       assert.isAtLeast(r.alone.right, r.alone.natural - 3);
+      assert.deepStrictEqual(r.outlineSizes, [1]);
       assert.strictEqual(r.textAfterName, 0);
       assert.lengthOf(r.beforeNumber, 2);
       for (const { label, number } of r.beforeNumber) assert.isBelow(label, number);
