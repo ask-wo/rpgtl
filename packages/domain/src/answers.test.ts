@@ -84,12 +84,39 @@ it("An answer in quotes loses them unless the source is quoted", () => {
     accepted("Morning, brother."),
   );
   assert.deepStrictEqual(
-    checkAnswer(messageEntry("「妈妈早。」"), "“Morning, brother.”"),
-    accepted("“Morning, brother.”"),
-  );
-  assert.deepStrictEqual(
     checkAnswer(messageEntry("他说“早”。"), `He said "morning".`),
     accepted(`He said "morning".`),
+  );
+});
+
+it("An answer keeps the corner brackets its source opens or closes with, in place of quotes", () => {
+  assert.deepStrictEqual(
+    checkAnswer(messageEntry("「妈妈早。」"), "“Morning, brother.”"),
+    accepted("「Morning, brother.」"),
+  );
+  assert.deepStrictEqual(
+    checkAnswer(messageEntry("\\C[2]『李子挞』"), `"Zephyrcake"`),
+    accepted("\\C[2]『Zephyrcake』"),
+  );
+  assert.deepStrictEqual(
+    checkAnswer(messageEntry("「妈妈早。今天去哪？"), `"Morning. Where to today?"`),
+    accepted("「Morning. Where to today?"),
+  );
+  assert.deepStrictEqual(
+    checkAnswer(messageEntry("「他说“早”。"), `"He said "morning".`),
+    accepted(`「He said "morning".`),
+  );
+  assert.deepStrictEqual(
+    checkAnswer(messageEntry("「还我鳗鱼饭！」他喊着。"), `"Give back my unagi!" he hollers.`),
+    accepted("「Give back my unagi!」 he hollers."),
+  );
+  assert.deepStrictEqual(
+    checkAnswer(messageEntry("鳗鱼饭没了。」"), `The unagi is gone."`),
+    accepted("The unagi is gone.」"),
+  );
+  assert.deepStrictEqual(
+    checkAnswer(messageEntry("我听过「早」。"), `I heard "morning".`),
+    accepted(`I heard "morning".`),
   );
 });
 
