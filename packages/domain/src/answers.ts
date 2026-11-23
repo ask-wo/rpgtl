@@ -85,6 +85,30 @@ function withoutQuotes(request: RequestText, answer: string) {
     : answer;
 }
 
+const leadingCodes = String.raw`\s*(?:\{\d+\})*\s*`;
+const openingBracket = new RegExp(`^${leadingCodes}([「『])`);
+const closingBracket = new RegExp(`([」』])${leadingCodes}$`);
+const openingQuote = new RegExp(`^(${leadingCodes})["“]`);
+const closingQuote = new RegExp(`["”](${leadingCodes})$`);
+const quote = /["“”]/;
+const pairs = { "「": "」", "『": "』" } as const;
+
+// Models sometimes turn the corner brackets a line opens or closes with into quotes. Games often
+// open a line with one and never close it, so a quote there would read as unbalanced.
+function withSourceBrackets(request: RequestText, answer: string) {
+  const quotes = answer.match(/["“”]/g)?.length ?? 0;
+  const open = openingBracket.exec(request.text)?.[1];
+  if (open === "「" || open === "『") {
+    if (!openingQuote.test(answer)) return answer;
+    const opened = answer.replace(openingQuote, `$1${open}`);
+    if (!request.text.includes(pairs[open]))
+      return quotes === 2 ? opened.replace(closingQuote, "$1") : opened;
+    return quotes === 2 ? opened.replace(quote, pairs[open]) : answer;
+  }
+  const close = closingBracket.exec(request.text)?.[1];
+  return close && quotes === 1 ? answer.replace(closingQuote, `${close}$1`) : answer;
+}
+
 const lineCount = (text: string) => text.split("\n").length;
 
 // Models sometimes wrap a glossary term in braces, as in "{thief}s", which the game would show.
@@ -115,7 +139,10 @@ export function checkAnswer(
           request.text,
           withoutStrayNumber(
             entry.source,
-            withoutQuotes(request, withoutSpeakerPrefix(request, answer, speaker)),
+            withSourceBrackets(
+              request,
+              withoutQuotes(request, withoutSpeakerPrefix(request, answer, speaker)),
+            ),
           ),
         );
   if (!value.trim()) return Result.fail("no answer");
