@@ -27,7 +27,7 @@ export const TranslationFile = Schema.Struct({
       source: Schema.String,
       speaker: Text.fields.speaker,
       isInImage: Text.fields.isInImage,
-      modelTranslation: optional(NonEmpty),
+      modelTranslation: optional(Schema.NonEmptyString),
       unshortenedTranslation: Text.fields.unshortenedTranslation,
       flagReason: Text.fields.flagReason,
       rejectedTranslation: Text.fields.rejectedTranslation,

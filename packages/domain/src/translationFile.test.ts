@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
-import type { Catalog, ImageReadResults } from "@rpgtl/contracts";
+import { TranslationFile, type Catalog, type ImageReadResults } from "@rpgtl/contracts";
 import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 import {
   decodeTranslationFile,
@@ -70,11 +71,16 @@ it("an export lists every text, the image entries with their text, and the runs 
 
 it("an export imported into the game it came from changes nothing", () => {
   const start = newEntry({ _tag: "ImageLines", image: "img/pictures/Title", lines: [1] }, "开使");
+  const padded = newEntry(
+    { _tag: "Message", list: { _tag: "MapEventPage", map: 1, event: 1, page: 0 }, index: 1 },
+    "\n鳗鱼饭 ",
+  );
   const catalog = testCatalog({
     entries: [
       { ...greeting, userTranslation: "Hello \\N[1]!" },
       { ...label, ...fromRun, isLeftUntranslated: true },
       { ...start, source: "开始", userTranslation: "Start" },
+      { ...padded, modelTranslation: "\nUnagi ", modelOperationId: 1 },
     ],
     glossary: [
       testTerm("星澜", {
@@ -89,7 +95,8 @@ it("an export imported into the game it came from changes nothing", () => {
     settings: { sourceLanguage: "chinese", letteringFont: "serif", untranslatedImages: ["img/a"] },
     operations: current.operations,
   });
-  const file = Result.getOrThrow(decodeTranslationFile(translationFile(catalog, undefined)));
+  const written = Schema.encodeSync(TranslationFile)(translationFile(catalog, undefined));
+  const file = Result.getOrThrow(decodeTranslationFile(JSON.parse(JSON.stringify(written))));
   const after = Result.getOrThrow(importTranslations(catalog, file));
   assert.deepStrictEqual(after.entries, catalog.entries);
   assert.deepStrictEqual(
